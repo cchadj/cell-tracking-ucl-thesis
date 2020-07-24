@@ -1,0 +1,17 @@
+   epoch  train loss  valid loss  train accuracy  valid accuracy  Best Loss?  \
+0      0    0.000209    0.000691        0.525843        0.511976        True   
+1     20    0.000057    0.000741        0.926092        0.511976       False   
+2     40    0.000048    0.000627        0.935830        0.660679        True   
+3     60    0.000035    0.000507        0.951311        0.794411        True   
+
+   Best Accuracy?  Model Recorded?  Times since last best loss  \
+0            True             True                           0   
+1           False            False                           1   
+2            True             True                           0   
+3            True             True                           0   
+
+   Times since last best accuracy  
+0                               0  
+1                               1  
+2                               0  
+3                               0  

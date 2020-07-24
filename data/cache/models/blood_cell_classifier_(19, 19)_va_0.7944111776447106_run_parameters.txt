@@ -1,0 +1,5 @@
+   learning rate  batch_size  do_early_stop  early_stop_patience  \
+0          0.001       16384           True                   80   
+
+   learning_rate_scheduler_patience  epochs  shuffle  
+0                               100    2000     True  
