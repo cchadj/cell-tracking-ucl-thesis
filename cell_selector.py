@@ -21,7 +21,6 @@ class FrameSelector(object):
                  cell_coordinates,
                  output_file,
                  frame_masks=None,
-                 stdev_image=None,
                  vessel_mask=None,
                  ):
         """
@@ -144,17 +143,31 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--video', type=argparse.FileType('r'), required=False, nargs=1,
                         help='The video that the estimated locations belong to.')
-    parser.add_argument('-m', '--mask-video', type=argparse.FileType('r'), required=False, nargs=1,
-                        help='The video with the corresponding masks. Must be of same length as the retinal video.')
+    parser.add_argument('-m', '--mask-video', type=argparse.FileType('r'), required=False, nargs='*',
+                        help='The video with the corresponding rectangle masks.'
+                             ' Must be of same length as the retinal video. Can be omitted.'
+                             ' If set but no argument given then file picker window is opened.')
+    parser.add_argument('--vessel-mask', type=argparse.FileType('r'), required=False, nargs='*',
+                        help='Mask that highlights the vessels. '
+                             'Must be the same size as the frames. Can be omitted.'
+                             'If set but no argument given then a file picker window is opened.')
     parser.add_argument('-c', '--coords', type=argparse.FileType('r'), required=False, nargs=1,
                         help='The coordinates csv. Must have 3 columns, X, Y, Slice. '
                              'X, Y is the location of the coordinate and Slice is the frame starting from 1')
     parser.add_argument('-o', '--output-directory', type=dir_path, default='.',
                         help='The directory for the output file. The created will have the same name as the video'
                              "with '_selected_coords.csv' appended to it.")
-
     args = parser.parse_args()
 
+    try:
+        video_name = args.video[0].name
+    except:
+        root = tk.Tk()
+        root.withdraw()
+        print('Select video.')
+        video_name = tk.filedialog.askopenfilename(title='Select retinal video.',
+                                                   filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
+                                                                               '*.wmv', '*.qt', '*.mkv'])])
     try:
         csv_filename = args.coords[0].name
     except:
@@ -165,42 +178,39 @@ def parse_arguments():
                                                      filetypes=[('CSV files', ['*.txt', '*.csv'])])
 
     coordinates_df = pd.read_csv(csv_filename, sep=',')
-    coords = coordinates_df[['X', 'Y']].to_numpy()
+    cell_positions = coordinates_df[['X', 'Y']].to_numpy()
     frame_indices = coordinates_df['Slice'].to_numpy()
 
-    try:
-        video_name = args.video[0].name
-    except:
-        root = tk.Tk()
-        root.withdraw()
-        print('Select video.')
-        video_name = tk.filedialog.askopenfilename(title='Select video',
-                                                   filetypes=[('Video files', ['*.avi',
-                                                                               '*.flv',
-                                                                               '*.mov',
-                                                                               '*.mp4',
-                                                                               '*.wmv',
-                                                                               '*.qt',
-                                                                               '*.mkv'])])
-    try:
-        masks_video_filename = args.video[0].name
-    except:
-        root = tk.Tk()
-        root.withdraw()
-        print('Select masks video.')
-        masks_video_filename = tk.filedialog.askopenfilename(title='Select video',
-                                                   filetypes=[('Video files', ['*.avi',
-                                                                               '*.flv',
-                                                                               '*.mov',
-                                                                               '*.mp4',
-                                                                               '*.wmv',
-                                                                               '*.qt',
-                                                                               '*.mkv'])])
-    return video_name, masks_video_filename, coords, frame_indices, args.output_directory
+    masks_video_filename = None
+    if 'masks_video_filename' in args:
+        try:
+            masks_video_filename = args.mask_video[0].name
+        except:
+            root = tk.Tk()
+            root.withdraw()
+            # --mask-video set but no argument given. Open file picker window.
+            print('Select masks video.')
+            masks_video_filename = tk.filedialog.askopenfilename(title='Select video mask',
+                                                                 filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
+                                                                                             '*.wmv', '*.qt', '*.mkv'])])
+    vessel_mask = None
+    if 'vessel_mask' in args:
+        try:
+            vessel_mask_filename = args.vessel_mask[0].name
+        except:
+            root = tk.Tk()
+            root.withdraw()
+            # --vessel-mask set but no argument given. Open file picker window.
+            vessel_mask_filename = tk.filedialog.askopenfilename(title='Select vessel mask.',
+                                                                 filetypes=[('Image',  ['*.jpg', '*.tif', '*.png', '.bmp'
+                                                                                        '*.jpeg', '*.tiff'])])
+
+        vessel_mask = np.bool8(plt.imread(vessel_mask_filename)[..., 0])
+    return video_name, masks_video_filename, vessel_mask, cell_positions, frame_indices, args.output_directory
 
 
 def main():
-    video_filename, masks_video_filename, coords, frame_indices, output_directory = parse_arguments()
+    video_filename, masks_video_filename, vessel_mask, coords, frame_indices, output_directory = parse_arguments()
 
     output_csv_filename = os.path.splitext(os.path.basename(video_filename))[0] + '_selected_coords.csv'
     output_csv_filename = os.path.join(output_directory, output_csv_filename)
@@ -221,22 +231,11 @@ def main():
 
     frame_masks = None
     if masks_video_filename:
-        frame_masks = np.bool8(get_frames_from_video(masks_video_filename)[:, 0])
-    callback = FrameSelector(frames,
-                             cell_positions,
-                             output_csv_filename,
-                             frame_masks=frame_masks)
+        frame_masks = np.bool8(get_frames_from_video(masks_video_filename)[..., 0])
+    callback = FrameSelector(frames, cell_positions, output_csv_filename,
+                             frame_masks=frame_masks, vessel_mask=vessel_mask)
 
-    # fig, ax = plt.subplots(figsize=(2, 1))
-    # ax.axes.get_xaxis().set_visible(False)
-    # ax.axes.get_yaxis().set_visible(True)
-    # ax.axes.get_xaxis().set_ticks([])
-    # ax.axes.get_yaxis().set_ticks([])
-    # ax.axis('off')
-    # for item in [fig, ax]:
-    #     item.patch.set_visible(False)
-
-    # rect = [left, bottom, width, height]
+    # ax rect -> [left, bottom, width, height]
     axprev = plt.axes([0.85, 0.65, 0.1, 0.175])
     axtxtbox = plt.axes([0.85, 0.50, 0.1, 0.075])
     axnext = plt.axes([0.85, 0.25, 0.1, 0.175])
