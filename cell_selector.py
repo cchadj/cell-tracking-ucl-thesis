@@ -159,28 +159,40 @@ def parse_arguments():
                              "with '_selected_coords.csv' appended to it.")
     args = parser.parse_args()
 
+    # Get the retinal video filename
+    video_filename = None
     try:
-        video_name = args.video[0].name
+        video_filename = args.video[0].name
     except:
         root = tk.Tk()
         root.withdraw()
         print('Select video.')
-        video_name = tk.filedialog.askopenfilename(title='Select retinal video.',
-                                                   filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
-                                                                               '*.wmv', '*.qt', '*.mkv'])])
+        while video_filename is None:
+            video_filename = tk.filedialog.askopenfilename(title='Select retinal video.',
+                                                       filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
+                                                                                   '*.wmv', '*.qt', '*.mkv'])])
+            if video_filename == "":
+                print('The retinal video is required. Please select video.')
+
+    # Get the csv with the bloodcell positions filename
+    csv_filename = None
     try:
         csv_filename = args.coords[0].name
     except:
         root = tk.Tk()
         root.withdraw()
         print('Select csv file with blood sell positions.')
-        csv_filename = tk.filedialog.askopenfilename(title='Select csv file with blood cell positions',
-                                                     filetypes=[('CSV files', ['*.txt', '*.csv'])])
+        while csv_filename is None:
+            csv_filename = tk.filedialog.askopenfilename(title='Select csv file with blood cell positions',
+                                                         filetypes=[('CSV files', ['*.txt', '*.csv'])])
+            if csv_filename == "":
+                print('The csv file with the bloodcell positions is required. Please select csv.')
 
     coordinates_df = pd.read_csv(csv_filename, sep=',')
     cell_positions = coordinates_df[['X', 'Y']].to_numpy()
     frame_indices = coordinates_df['Slice'].to_numpy()
 
+    # Optional video with the rectangle masks for each frame filename.
     masks_video_filename = None
     if 'masks_video_filename' in args:
         try:
@@ -193,6 +205,8 @@ def parse_arguments():
             masks_video_filename = tk.filedialog.askopenfilename(title='Select video mask',
                                                                  filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
                                                                                              '*.wmv', '*.qt', '*.mkv'])])
+
+    # Optional image with the vessel mask to isolate capillaries.
     vessel_mask = None
     if 'vessel_mask' in args:
         try:
@@ -206,7 +220,7 @@ def parse_arguments():
                                                                                         '*.jpeg', '*.tiff'])])
 
         vessel_mask = np.bool8(plt.imread(vessel_mask_filename)[..., 0])
-    return video_name, masks_video_filename, vessel_mask, cell_positions, frame_indices, args.output_directory
+    return video_filename, masks_video_filename, vessel_mask, cell_positions, frame_indices, args.output_directory
 
 
 def main():
