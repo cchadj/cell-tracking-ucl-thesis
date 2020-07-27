@@ -3,6 +3,7 @@ import torch
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import numbers
 
 
 def get_patch(im, x, y, patch_size):
@@ -49,8 +50,11 @@ def extract_patches(img,
     Returns:
         (np.array):  NxHxWxC
     """
-    patch_height, patch_width = patch_size
-    unpadded_image_shape = img.shape[:2]
+    if isinstance(patch_size, numbers.Number):
+        patch_height, patch_width = patch_size, patch_size
+    elif isinstance(patch_size, tuple):
+        patch_height, patch_width = patch_size
+
     if padding is not 'valid':
         padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
         img = cv2.copyMakeBorder(img,

@@ -3,6 +3,9 @@ import numpy as np
 from torch.utils.data import Dataset
 from learningutils import ImageDataset, LabeledImageDataset
 from patchextraction import extract_patches
+from imageprosessing import imextendedmax
+from matplotlib import pyplot as plt
+import mahotas as mh
 import cv2
 
 
@@ -169,4 +172,42 @@ def create_probability_map(image,
     probability_map[rows, cols] = label_probabilities[:, 1]
 
     return probability_map
+
+
+def get_cell_positions_from_probability_map(probability_map,
+                                            gauss_sigma,
+                                            extended_maxima_H,
+                                            visualise_intermediate_results=False
+                                            ):
+    pm_blurred = mh.gaussian_filter(probability_map, gauss_sigma)
+    pm_extended_max_bw = imextendedmax(pm_blurred, extended_maxima_H)
+
+    labeled, nr_objects = mh.label(pm_extended_max_bw)
+
+    # print(np.where(pm_extended_max_bw)[0])
+    pm_extended_max = probability_map.copy()
+    pm_extended_max[pm_extended_max_bw] = 0
+
+    # print(pm_extended_max)
+    # Notice, the positions from the csv is x,y. The result from the probability is y,x so we swap.
+    predicted_cell_positions = mh.center_of_mass(pm_extended_max_bw, labeled)[:, [1, 0]]
+    if visualise_intermediate_results:
+        fig, axes = plt.subplots(1, 3)
+        fig_size = fig.get_size_inches()
+        fig.set_size_inches((fig_size[0] * 5,
+                             fig_size[1] * 5))
+
+        axes[0].imshow(probability_map)
+        axes[0].set_title('Unprocessed probability map')
+
+        axes[1].imshow(pm_blurred)
+        axes[1].set_title(f'Gaussian Blurring with sigma={gauss_sigma}')
+
+        axes[2].imshow(pm_extended_max_bw)
+        axes[2].set_title(f'Extended maximum, H={extended_maxima_H}')
+
+        axes[2].scatter(predicted_cell_positions[:, 0], predicted_cell_positions[:, 1], s=4)
+        # axes[2].scatter(predicted_cell_positions[:, 0], predicted_cell_positions[:, 1], s=9)
+
+    return predicted_cell_positions[1:, ...]
 

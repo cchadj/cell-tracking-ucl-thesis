@@ -1,0 +1,40 @@
+    epoch    train loss  valid loss  train accuracy  valid accuracy  \
+0       0  5.902064e-05    0.000215        0.456891        0.495353   
+1      20  3.400129e-05    0.000205        0.818421        0.547708   
+2      40  2.694157e-05    0.000376        0.859555        0.506506   
+3      60  2.413944e-05    0.000213        0.872879        0.624535   
+4      80  2.286807e-05    0.000134        0.881168        0.798947   
+..    ...           ...         ...             ...             ...   
+84   1680  7.825895e-08    0.000241        0.999768        0.857497   
+85   1700  7.875776e-08    0.000240        0.999768        0.855948   
+86   1720  9.393960e-08    0.000258        0.999768        0.853160   
+87   1740  3.551325e-05    0.000861        0.813696        0.503098   
+88   1760  2.549319e-05    0.000627        0.870246        0.504027   
+
+    Best Loss?  Best Accuracy?  Model Recorded?  Times since last best loss  \
+0         True            True             True                           0   
+1         True            True             True                           0   
+2        False           False            False                           1   
+3        False            True             True                           2   
+4         True            True             True                           0   
+..         ...             ...              ...                         ...   
+84       False           False            False                          76   
+85       False           False            False                          77   
+86       False           False            False                          78   
+87       False           False            False                          79   
+88       False           False            False                          80   
+
+    Times since last best accuracy  
+0                                0  
+1                                0  
+2                                1  
+3                                0  
+4                                0  
+..                             ...  
+84                              40  
+85                              41  
+86                              42  
+87                              43  
+88                              44  
+
+[89 rows x 10 columns]

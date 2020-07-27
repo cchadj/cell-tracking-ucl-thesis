@@ -6,44 +6,6 @@ import mahotas as mh
 from imageprosessing import imextendedmax
 
 
-def get_cell_positions_from_probability_map(probability_map,
-                                            gauss_sigma,
-                                            extended_maxima_H,
-                                            visualise_intermediate_results=False
-                                            ):
-    pm_blurred = mh.gaussian_filter(probability_map, gauss_sigma)
-    pm_extended_max_bw = imextendedmax(pm_blurred, extended_maxima_H)
-
-    labeled, nr_objects = mh.label(pm_extended_max_bw)
-
-    # print(np.where(pm_extended_max_bw)[0])
-    pm_extended_max = probability_map.copy()
-    pm_extended_max[pm_extended_max_bw] = 0
-
-    # print(pm_extended_max)
-    # Notice, the positions from the csv is x,y. The result from the probability is y,x so we swap.
-    predicted_cell_positions = mh.center_of_mass(pm_extended_max_bw, labeled)[:, [1, 0]]
-    if visualise_intermediate_results:
-        fig, axes = plt.subplots(1, 3)
-        fig_size = fig.get_size_inches()
-        fig.set_size_inches((fig_size[0] * 5,
-                             fig_size[1] * 5))
-
-        axes[0].imshow(probability_map)
-        axes[0].set_title('Unprocessed probability map')
-
-        axes[1].imshow(pm_blurred)
-        axes[1].set_title(f'Gaussian Blurring with sigma={gauss_sigma}')
-
-        axes[2].imshow(pm_extended_max_bw)
-        axes[2].set_title(f'Extended maximum, H={extended_maxima_H}')
-
-        axes[2].scatter(predicted_cell_positions[:, 0], predicted_cell_positions[:, 1], s=4)
-        # axes[2].scatter(predicted_cell_positions[:, 0], predicted_cell_positions[:, 1], s=9)
-
-    return predicted_cell_positions[1:, ...]
-
-
 def get_positions_too_close_to_border(patch_positions, image_shape, patch_size=(33, 33)):
     half_patch_height, half_patch_width = np.uint8(np.ceil(patch_size[0] / 2)), np.uint8(np.ceil(patch_size[1] / 2)),
 
@@ -210,3 +172,36 @@ def evaluate_results(ground_truth_positions,
 
     return dices_coefficient, true_positive_rate, false_discovery_rate
 
+
+# https://gist.github.com/JDWarner/6730747
+def dice(mask1, mask2):
+    """ Computes the Dice coefficient, a measure of set similarity.
+
+    Parameters
+    ----------
+    mask1 : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    mask2 : array-like, bool
+        Any other array of identical size. If not boolean, will be converted.
+    Returns
+    -------
+    dice : float
+        Dice coefficient as a float on range [0,1].
+        Maximum similarity = 1
+        No similarity = 0
+
+    Notes
+    -----
+    The order of inputs for `dice` is irrelevant. The result will be
+    identical if `im1` and `im2` are switched.
+    """
+    mask1 = np.asarray(mask1).astype(np.bool)
+    mask2 = np.asarray(mask2).astype(np.bool)
+
+    if mask1.shape != mask2.shape:
+        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
+
+    # Compute Dice coefficient
+    intersection = np.logical_and(mask1, mask2)
+
+    return 2 * intersection.sum() / (mask1.sum() + mask2.sum())

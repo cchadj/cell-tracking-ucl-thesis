@@ -12,13 +12,13 @@ import pandas as pd
 import cv2
 
 from IPython import display
-from evaluation import get_cell_positions_from_probability_map, evaluate_results
-from learningutils import ImageDataset, LabeledImageDataset
+from evaluation import evaluate_results
+from learningutils import LabeledImageDataset
 from cnnlearning import CNN, train
 import collections
-from patchextraction import extract_patches, get_patch, extract_patches_at_positions
+from patchextraction import extract_patches_at_positions
 from sharedvariables import *
-from classificationutils import classify_images, classify_labeled_dataset, create_probability_map
+from classificationutils import classify_labeled_dataset, create_probability_map, get_cell_positions_from_probability_map
 import guitools
 
 
@@ -89,7 +89,7 @@ def get_frames_from_video(video_filename, normalise=False):
     return frames
 
 
-def plot_images_as_grid(images, title=None):
+def plot_images_as_grid(images, ax=None, title=None):
     """
     Plots a stack of images in a grid.
 
@@ -104,12 +104,13 @@ def plot_images_as_grid(images, title=None):
     # NxHxWxC -> NxCxHxW
     batch_tensor = batch_tensor.permute(0, -1, 1, 2)
     grid_img = torchvision.utils.make_grid(batch_tensor, nrow=50)
+    if ax is None:
+        _, ax = plt.subplots(num=None, figsize=(70, 50), dpi=80, facecolor='w', edgecolor='k')
+    if title is not None:
+        ax.set_title(title)
 
-    plt.figure(num=None, figsize=(70, 50), dpi=80, facecolor='w', edgecolor='k')
-    plt.title(title)
     plt.grid(b=None)
-    plt.imshow(grid_img.permute(1, 2, 0))
-    plt.show()
+    ax.imshow(grid_img.permute(1, 2, 0))
 
 
 def get_random_point_on_rectangle(cx, cy, rect_size):
@@ -169,7 +170,9 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
                                             csv_filename,
                                             patch_size=(21, 21),
                                             padding='valid',
-                                            normalise=True):
+                                            normalise=True,
+                                            visualize_patches=False,
+                                            ):
     """ Get the cell and non cell patches from video.
 
     TODO: PADDING DOES NOT CURRENTLY WORK
@@ -192,10 +195,10 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
        tuple: Cell and no cell patches, both with NxHxWxC shape.
     """
     patch_height, patch_width = patch_size
-    csv_cell_positions = np.genfromtxt(csv_filename, delimiter=',')
+    # csv_cell_positions = np.genfromtxt(csv_filename, delimiter=',')
 
-    # Remove index and column labels
-    csv_cell_positions = csv_cell_positions[1:, 1:]
+    csv_cell_positions_df = pd.read_csv(csv_filename, delimiter=',')
+    csv_cell_positions = csv_cell_positions_df[['X', 'Y', 'Slice']].to_numpy()
 
     # Sort array based on slice index
     csv_cell_positions = csv_cell_positions[np.argsort(csv_cell_positions[:, -1])]
@@ -254,7 +257,7 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
         cell_count += len(curr_frame_cell_patches)
         non_cell_count += len(curr_frame_non_cell_patches)
 
-        if frame_idx == 1:
+        if visualize_patches and frame_idx == 1:
             padding_height, padding_width = 0, 0
             if padding is not 'valid':
                 padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
