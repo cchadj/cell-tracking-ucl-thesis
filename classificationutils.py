@@ -43,41 +43,6 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
 
 
 @torch.no_grad()
-def classify_images(images, model, device="cuda"):
-    """ Classify images.
-
-    Arguments:
-        images -- NxHxWxC or NxHxW. The images
-        model  -- The model to do the prediction
-
-    Returns:
-        N predictions. A prediction (label) for each image.
-    """
-    if len(images.shape) == 3:
-        # Add channel dimension when image is single channel grayscale
-        # i.e (Nx100x123 -> Nx100x123x1)
-        images = images[..., None]
-
-    image_dataset = ImageDataset(images)
-    loader = torch.utils.data.DataLoader(
-        image_dataset,
-        batch_size=1024 * 3,
-    )
-
-    c = 0
-    predictions = torch.zeros(len(image_dataset), dtype=torch.uint8)
-    for batch in loader:
-        pred = model(batch.to(device))
-        pred = torch.nn.functional.softmax(pred, dim=1)
-        pred = torch.argmax(pred, dim=1)
-        predictions[c:pred.shape[0]] = pred
-
-        c += pred.shape[0]
-
-    return predictions
-
-
-@torch.no_grad()
 def label_probability(images, model, device='cuda'):
     """ Make a prediction for the images giving probabilities for each labels.
 
@@ -156,6 +121,7 @@ def create_probability_map(image,
     if mask is None:
         mask = np.ones(image.shape[:2], dtype=np.bool)
 
+
     model = model.eval()
     model = model.to(device)
 
@@ -211,3 +177,38 @@ def get_cell_positions_from_probability_map(probability_map,
 
     return predicted_cell_positions[1:, ...]
 
+
+@torch.no_grad()
+def classify_images(images, model, device="cuda"):
+    """ Classify images.
+
+    Arguments:
+        images -- NxHxWxC or NxHxW. The images
+        model  -- The model to do the prediction
+
+    Returns:
+        N predictions. A prediction (label) for each image.
+    """
+    if len(images.shape) == 3:
+        # Add channel dimension when image is single channel grayscale
+        # i.e (Nx100x123 -> Nx100x123x1)
+        images = images[..., None]
+
+    image_dataset = ImageDataset(images)
+    loader = torch.utils.data.DataLoader(
+        image_dataset,
+        batch_size=1024 * 3,
+        shuffle=False
+    )
+
+    c = 0
+    predictions = torch.zeros(len(image_dataset), dtype=torch.uint8)
+    for batch in loader:
+        pred = model(batch.to(device))
+        pred = torch.nn.functional.softmax(pred, dim=1)
+        pred = torch.argmax(pred, dim=1)
+        predictions[c:c + len(pred)] = pred
+
+        c += len(pred)
+
+    return predictions

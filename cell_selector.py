@@ -160,14 +160,14 @@ def parse_arguments():
     args = parser.parse_args()
 
     # Get the retinal video filename
-    video_filename = None
+    video_filename = ""
     try:
         video_filename = args.video[0].name
     except:
         root = tk.Tk()
         root.withdraw()
         print('Select video.')
-        while video_filename is None:
+        while video_filename == "":
             video_filename = tk.filedialog.askopenfilename(title='Select retinal video.',
                                                        filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
                                                                                    '*.wmv', '*.qt', '*.mkv'])])
@@ -175,14 +175,14 @@ def parse_arguments():
                 print('The retinal video is required. Please select video.')
 
     # Get the csv with the bloodcell positions filename
-    csv_filename = None
+    csv_filename = ""
     try:
         csv_filename = args.coords[0].name
     except:
         root = tk.Tk()
         root.withdraw()
         print('Select csv file with blood sell positions.')
-        while csv_filename is None:
+        while csv_filename == "":
             csv_filename = tk.filedialog.askopenfilename(title='Select csv file with blood cell positions',
                                                          filetypes=[('CSV files', ['*.txt', '*.csv'])])
             if csv_filename == "":
