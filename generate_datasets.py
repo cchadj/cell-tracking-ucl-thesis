@@ -140,32 +140,13 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
     csv_cell_positions_frame_indices = np.int32(csv_cell_positions_df[['Slice']].to_numpy())
     n_cells_in_vid = len(csv_cell_positions_coordinates)
 
-    # Get the slices and the index where the slice was first found
-    frame_idxs = np.unique(csv_cell_positions_frame_indices)
+    frame_indices = np.unique(csv_cell_positions_frame_indices)
 
     # Number of cells in videos is the same as the number of entries in the csv_file
     cell_positions = {}
-    for frame_idx in frame_idxs:
+    for frame_idx in frame_indices:
         curr_coordinates = csv_cell_positions_coordinates[np.where(csv_cell_positions_frame_indices == frame_idx)[0]]
         cell_positions[frame_idx] = curr_coordinates
-
-    # [frame_idxs, idxs] = np.unique(csv_cell_positions[:, -1], return_index=True)
-    # Sort array based on slice index
-    # csv_cell_positions = csv_cell_positions_df[['X', 'Y', 'Slice']].to_numpy()
-    # csv_cell_positions = csv_cell_positions[np.argsort(csv_cell_positions[:, -1])]
-    # # cell_positions[frame_idx] will contain 2xN_cells_in_frame array for each frame
-    # cell_positions = {}
-    # for i in range(len(frame_idxs)):
-    #     curr_idx = idxs[i]
-    #     frame_idx = frame_idxs[i]
-    #
-    #     if i == len(frame_idxs) - 1:
-    #         cell_positions[frame_idx] = csv_cell_positions[curr_idx:-1, :-1]
-    #     else:
-    #         cell_positions[frame_idx] = csv_cell_positions[curr_idx:idxs[i + 1], :-1]
-    #
-    #
-    #     assert np.array_equal(cell_positions[frame_idx], cell_positions_1[frame_idx])
 
     frames = get_frames_from_video(video_filename, normalise)
 
@@ -174,7 +155,7 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
 
     cell_count = 0
     non_cell_count = 0
-    for i, frame_idx in enumerate(frame_idxs):
+    for i, frame_idx in enumerate(frame_indices):
         # Slices in the csv file start from 1, we - 1 to match python 0 indexing
         frame = frames[int(frame_idx) - 1, ...]
         curr_frame_cell_positions = cell_positions[frame_idx].astype(np.int)
@@ -362,10 +343,10 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21), n_negatives_per_positive=3
 
         print('Creating dataset from cell and non cell patches')
         print('-----------------------------------------------')
-        dataset_size = cell_images.shape[0]
+
         dataset = LabeledImageDataset(
-            np.concatenate((cell_images[:dataset_size, ...], non_cell_images[:dataset_size, ...]), axis=0),
-            np.concatenate((np.ones(dataset_size).astype(np.int), np.zeros(dataset_size).astype(np.int)), axis=0)
+            np.concatenate((cell_images[:len(cell_images), ...],      non_cell_images[:len(non_cell_images), ...]),   axis=0),
+            np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)), axis=0)
         )
         print('Splitting into training set and validation set')
         trainset_size = int(len(dataset) * 0.80)
