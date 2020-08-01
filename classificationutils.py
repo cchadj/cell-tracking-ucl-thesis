@@ -143,8 +143,7 @@ def create_probability_map(image,
 def get_cell_positions_from_probability_map(probability_map,
                                             gauss_sigma,
                                             extended_maxima_H,
-                                            visualise_intermediate_results=False
-                                            ):
+                                            visualise_intermediate_results=False):
     pm_blurred = mh.gaussian_filter(probability_map, gauss_sigma)
     pm_extended_max_bw = imextendedmax(pm_blurred, extended_maxima_H)
 

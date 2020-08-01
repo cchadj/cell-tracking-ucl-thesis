@@ -247,12 +247,20 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
     return cell_patches, non_cell_patches
 
 
+def get_positions_from_csv(csv_file, frame_idx):
+    df = pd.read_csv(csv_file)
+    all_cell_positions = df[['X', 'Y']].to_numpy().astype(np.int32)
+    all_cell_frame_indices = df[['Slice']].to_numpy().astype(np.int32)
+
+    return all_cell_positions[np.where(all_cell_frame_indices == frame_idx)[0]]
+
+
 def get_cell_and_no_cell_patches(patch_size=(21, 21), n_negatives_per_positive=3, do_hist_match=False):
     # Input
     height, width = patch_size
     print(f'patch size {(height, width)}')
     print(f'do hist match: {do_hist_match}')
-    print(f'Negatives per positive {n_negatives_per_positive}')
+    print(f'Negatives per positive: {n_negatives_per_positive}')
     print()
 
     patch_size = (height, width)

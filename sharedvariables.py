@@ -92,29 +92,38 @@ std_images_confocal = [f for f in std_images if 'Confocal' in f]
 # TODO: Currently adding two empty strings for the two videos without std images in shared_video
 std_confocal_images_for_labeled_OA790 = []
 for labeled_video_file in unmarked_labeled_video_OA790_filenames:
+    file_found = False
     for std_image in std_images_confocal:
         if files_of_same_source(std_image, labeled_video_file):
+            file_found = True
             std_confocal_images_for_labeled_OA790.append(std_image)
             break
+    if not file_found:
         std_confocal_images_for_labeled_OA790.append('')
 
 # TODO: Currently adding two empty strings for the two videos without mask videos in shared_video
 mask_video_filenames_for_labeled_O790 = []
 for labeled_video_file in unmarked_labeled_video_OA790_filenames:
+    file_found = False
     for mask_video in mask_video_filenames:
         if 'OA790' in mask_video and files_of_same_source(mask_video, labeled_video_file):
+            file_found = True
             mask_video_filenames_for_labeled_O790.append(mask_video)
             break
+    if not file_found:
         mask_video_filenames_for_labeled_O790.append('')
 
 # Create a list of std images that correspond to the labeled videos
 # TODO: Currently adding two empty strings for the two videos without std image in shared_video
 std_OA850_images_for_labeled_OA790 = []
 for labeled_video_file in unmarked_labeled_video_OA790_filenames:
+    file_found = False
     for std_image in std_images_OA850:
         if files_of_same_source(std_image, labeled_video_file):
+            file_found = True
             std_OA850_images_for_labeled_OA790.append(std_image)
             break
+    if not file_found:
         std_OA850_images_for_labeled_OA790.append('')
 
 if __name__ == '__main__':

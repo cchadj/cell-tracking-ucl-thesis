@@ -107,6 +107,7 @@ def extract_patches_at_positions(image,
                                  positions,
                                  patch_size=(21, 21),
                                  padding='valid',
+                                 mask=None,
                                  visualize_patches=False):
     """ Extract patches from images at positions
 
@@ -150,9 +151,17 @@ def extract_patches_at_positions(image,
     if visualize_patches:
         fig, ax = plt.subplots(1, figsize=(20, 10))
 
+    if mask is None:
+        print('-')
+        mask = np.ones_like(image, dtype=np.bool8)
+        print(image.shape)
+        print(mask.shape)
+
     patch_count = 0
-    # print("Positions", positions.shape)
+    print("Positions", positions.shape)
     for x, y in np.int32(positions.round()):
+        if not mask[y, x]:
+            continue
         # Offset to adjust for padding
         x, y = x + padding_width, y + padding_height
         patch = get_patch(image, x, y, patch_size)
