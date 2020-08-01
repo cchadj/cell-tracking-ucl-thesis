@@ -309,7 +309,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21), n_negatives_per_positive=3
         non_cell_images_marked = np.zeros_like(cell_images)
 
         print('Creating cell and no cell images from videos...')
-        for video_file, csv_file in tzip(unmarked_video_OA790_filenames, csv_OA790_filenames):
+        for video_file, csv_file in tzip(unmarked_labeled_video_OA790_filenames, csv_cell_cords_OA790_filenames):
             print(video_file, csv_file, sep='<->\n')
             curr_cell_images, curr_non_cell_images = get_cell_and_no_cell_patches_from_video(
                 video_file, csv_file,
@@ -327,7 +327,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21), n_negatives_per_positive=3
             cell_images_marked = hist_match_images(cell_images_marked, hist_match_template)
 
         print('Creating cell patches from marked videos for debugging...')
-        for video_file, csv_file in tzip(marked_video_OA790_filenames, csv_OA790_filenames):
+        for video_file, csv_file in tzip(marked_video_OA790_filenames, csv_cell_cords_OA790_filenames):
             print(video_file, csv_file, sep='<->\n')
             curr_cell_images_marked, curr_non_cell_images_marked = get_cell_and_no_cell_patches_from_video(
                 video_file, csv_file,

@@ -67,7 +67,7 @@ def parse_arguments():
     args = parser.parse_args()
 
     if args.videos is None:
-        video_filenames = unmarked_video_OA790_filenames
+        video_filenames = unmarked_labeled_video_OA790_filenames
     else:
         video_filenames = [f.name for f in args.videos]
 
