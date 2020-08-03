@@ -2,8 +2,13 @@ import numpy as np
 import mahotas as mh
 from skimage.morphology import extrema
 
+import skimage
+def imhmaxima(I, H):
+    dtype_orig = I.dtype
+    I = np.float32(I)
+    return skimage.morphology.reconstruction((I - H), I).astype(dtype_orig)
 
-def imextendedmax(I, H, conn=4):
+def imextendedmax(I, H, conn=8):
     if conn == 4:
         structuring_element = np.array([[0, 1, 0],
                                         [1, 1, 1],
@@ -13,7 +18,7 @@ def imextendedmax(I, H, conn=4):
         structuring_element = np.ones([3, 3],
                                       dtype=np.bool)
 
-    h_maxima_result = extrema.h_maxima(I, H, selem=structuring_element)
+    h_maxima_result = imhmaxima(I, H)
     extended_maxima_result = mh.regmax(h_maxima_result, Bc=structuring_element)
 
     return extended_maxima_result
