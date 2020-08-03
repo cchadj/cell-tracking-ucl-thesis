@@ -1,10 +1,10 @@
 *.jpg
+*.png
 *.tif
 /Cones
 /Cones2
 /Cones3
 *.tiff
-*.jpg
 *.mp3
 *.mp4
 *.avi
