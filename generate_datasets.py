@@ -339,7 +339,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         if do_hist_match:
             if v:
                 print(f"loading histogram matching template image (npy array)")
-            hist_match_template = np.load(template_image_filename)
+            hist_match_template = np.load(template_image_filename + '.npy')
 
         if v:
             print('Done')
