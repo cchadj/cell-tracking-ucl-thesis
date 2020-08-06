@@ -73,13 +73,12 @@ def get_random_point_on_rectangle(cx, cy, rect_size):
 
 def get_cell_and_no_cell_patches_from_video(video_filename,
                                             csv_filename,
-                                            patch_size=(21, 21),
+                                            patch_size=21,
                                             padding='valid',
                                             n_negatives_per_positive=1,
                                             normalise=True,
                                             visualize_patches=False,
-                                            visualize_frame_idx=None,
-                                            ):
+                                            visualize_frame_idx=None):
     """ Get the cell and non cell patches from video.
 
     TODO: PADDING DOES NOT CURRENTLY WORK
@@ -88,7 +87,7 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
     Args:
         video_filename (str): The filename of the video.
         csv_filename (str): The filename of the csv file with the cell position centres.
-        patch_size (tuple): The height, width of the patches to be extracted.
+        patch_size (tuple, int): The height, width of the patches to be extracted. If int then square.
         n_negatives_per_positive (int):  Number of negative patches to extract per positive patch
         padding:
             CURRENTLY NOT IMPLEMENTED
@@ -112,7 +111,15 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
     Returns:
        tuple: Cell and no cell patches, both with NxHxWxC shape.
     """
-    patch_height, patch_width = patch_size
+    if type(patch_size) is tuple:
+        patch_height, patch_width = patch_size
+    elif type(patch_size) is int:
+        patch_height, patch_width = patch_size, patch_size
+    if patch_height != patch_width:
+        raise NotImplementedError('Uneven patch size not currently implemented yet.'
+                                  'Patch height must be same as patch width.'
+                                  f'Height: {patch_height} != Width: {patch_width}')
+
     csv_cell_positions_df = pd.read_csv(csv_filename, delimiter=',')
 
     csv_cell_positions_coordinates = np.int32(csv_cell_positions_df[['X', 'Y']].to_numpy())
