@@ -55,7 +55,7 @@ def extract_patches(img,
     elif isinstance(patch_size, tuple):
         patch_height, patch_width = patch_size
 
-    if padding is not 'valid':
+    if padding != 'valid':
         padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
         img = cv2.copyMakeBorder(img,
                                  padding_height,
@@ -138,7 +138,7 @@ def extract_patches_at_positions(image,
     padding_height, padding_width = 0, 0
     n_patches_max = positions.shape[0]
 
-    if padding is not 'valid':
+    if padding != 'valid':
         padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
         image = cv2.copyMakeBorder(image,
                                    padding_height,
