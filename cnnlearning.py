@@ -207,9 +207,9 @@ class TrainingTracker:
                      "early_stop_patience", "learning_rate_scheduler_patience",
                      "epochs", "shuffle"]:
                 run_parameters[k] = v
-            elif k is "trainset":
+            elif k == "trainset":
                 run_parameters["Trainset size"] = len(self.run_params[k])
-            elif k is "validset":
+            elif k == "validset":
                 run_parameters["Validset size "] = len(self.run_params[k])
             elif k not in ["trainset", "validset", "testset", "optimizer"]:
                 results[k] = v
