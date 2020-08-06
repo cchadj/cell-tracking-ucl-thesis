@@ -128,7 +128,13 @@ def extract_patches_at_positions(image,
         (np.array): NxHxWxC patches.
     """
     assert 2 <= len(image.shape) <= 3
-    patch_height, patch_width = patch_size
+    if type(patch_size) is tuple:
+        patch_height, patch_width = patch_size
+    elif type(patch_size) is int:
+        patch_height, patch_width = patch_size, patch_size
+    else:
+        raise TypeError('Patch_size must be int or type. Type given: ', type(patch_size))
+
     padding_height, padding_width = 0, 0
     n_patches_max = positions.shape[0]
 

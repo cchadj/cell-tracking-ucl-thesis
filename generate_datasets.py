@@ -16,6 +16,7 @@ from learningutils import LabeledImageDataset
 from videoutils import get_frames_from_video
 from sharedvariables import get_video_file_dictionaries, CACHED_DATASETS_FOLDER
 from patchextraction import extract_patches_at_positions
+from PIL import Image
 
 
 def get_random_point_on_rectangle(cx, cy, rect_size):
@@ -246,13 +247,41 @@ def get_positions_from_csv(csv_file, frame_idx):
     return all_cell_positions[np.where(all_cell_frame_indices == frame_idx)[0]]
 
 
-def get_cell_and_no_cell_patches_new(patch_size=(21, 21), n_negatives_per_positive=3, do_hist_match=False):
+def get_cell_and_no_cell_patches(patch_size=(21, 21),
+                                 n_negatives_per_positive=3,
+                                 do_hist_match=False,
+                                 v=False,
+                                 vv=False):
+    """
+
+    Args:
+        patch_size (int, tuple): The patch size (height, width) or int for square.
+        n_negatives_per_positive (int):  How many non cells per cell patch.
+        do_hist_match (bool):  Whether to histogram matching or not.
+        v (bool):  Verbose description of what is currently happening.
+        vv (bool):  Very Verbose.
+
+    Returns:
+        trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
+
+        Training set and validation set can be used by torch DataLoader.
+        Cell images and non cell images are numpy arrays n x patch_height x patch_width.
+        Cell images marked and non marked images are the same but from the marked videos for debugging.
+        Histogram match template is the template used for histogram matching. If do_hist_match is False then
+        None is returned.
+    """
     # Input
     height, width = patch_size
-    print(f'patch size {(height, width)}')
-    print(f'do hist match: {do_hist_match}')
-    print(f'Negatives per positive: {n_negatives_per_positive}')
-    print()
+    if v:
+        print(f'patch size {(height, width)}')
+        print(f'do hist match: {do_hist_match}')
+        print(f'Negatives per positive: {n_negatives_per_positive}')
+        print()
+    if vv:
+        v = True
+
+    if not do_hist_match:
+        hist_match_template = None
 
     patch_size = (height, width)
 
@@ -280,31 +309,45 @@ def get_cell_and_no_cell_patches_new(patch_size=(21, 21), n_negatives_per_positi
     non_cell_images_marked_filename = os.path.join(
         dataset_folder,
         f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
+    template_image_filename = os.path.join(
+        dataset_folder,
+        f'hist_match_template_image'
+    )
 
     try:
-        print('Dataset loading from cache')
-        print('--------------------------')
-        print(f"loading training set from '{trainset_filename}'...")
+        if v:
+            print('Dataset loading from cache')
+            print('--------------------------')
+            print(f"loading training set from '{trainset_filename}'...")
         trainset = torch.load(trainset_filename)
-        print(f"loading validation set from '{validset_filename}'...")
+        if v:
+            print(f"loading validation set from '{validset_filename}'...")
         validset = torch.load(validset_filename)
 
-        #
-        print(f"loading bloodcell patches from '{cell_images_filename}'...")
+        if v:
+            print(f"loading bloodcell patches from '{cell_images_filename}'...")
         cell_images = np.load(cell_images_filename)
-        print(f"loading non bloodcell patches from '{non_cell_images_filename}'...")
+        if v:
+            print(f"loading non bloodcell patches from '{non_cell_images_filename}'...")
         non_cell_images = np.load(non_cell_images_filename)
 
-        print(f"loading marked bloodcell patches from '{cell_images_marked_filename}'...")
+        if v:
+            print(f"loading marked bloodcell patches from '{cell_images_marked_filename}'...")
         cell_images_marked = np.load(cell_images_marked_filename)
-        print(f"loading marked non bloodcell patches from '{non_cell_images_marked_filename}'")
+        if v:
+            print(f"loading marked non bloodcell patches from '{non_cell_images_marked_filename}'")
         non_cell_images_marked = np.load(non_cell_images_marked_filename)
+        if do_hist_match:
+            if v:
+                print(f"loading histogram matching template image (npy array)")
+            hist_match_template = np.load(template_image_filename)
 
-        print('Done')
-        print()
+        if v:
+            print('Done')
+            print()
     except FileNotFoundError:
         print('Not all data found fom cache. Creating datasets...')
-        video_file_OA790_dictionaries = get_video_file_dictionaries('oa790')
+        video_file_OA790_dictionaries = get_video_file_dictionaries('oa790', should_have_marked_video=True)
 
         cell_images = np.zeros([0, *patch_size], dtype=np.float32)
         cell_images_marked = np.zeros_like(cell_images)
@@ -312,13 +355,16 @@ def get_cell_and_no_cell_patches_new(patch_size=(21, 21), n_negatives_per_positi
         non_cell_images = np.zeros_like(cell_images)
         non_cell_images_marked = np.zeros_like(cell_images)
 
-        print('Creating cell and no cell images from videos...')
+        if v:
+            print('Creating cell and no cell images from videos...')
         for video_file_dict in tqdm.tqdm(video_file_OA790_dictionaries):
-            if not video_file_dict['is_marked']:
-                continue
-            video_file = video_file_dict['video_filename']
-            marked_video_file = video_file_dict['video_marked_790_filename']
-            csv_cell_coord_files = video_file_dict['coordinate_csv_filenames']
+            assert video_file_dict['has_marked_video'], 'Something went wrong.' \
+                                                        ' get_video_file_dictionaries() should have ' \
+                                                        ' returned that have corresponding marked videos.'
+
+            video_file = video_file_dict['video_file']
+            marked_video_file = video_file_dict['marked_video_oa790_file']
+            csv_cell_coord_files = video_file_dict['cell_position_csv_files']
 
             for csv_file in csv_cell_coord_files:
                 print('Unmarked', basename(video_file), basename(csv_file), sep='<->\n')
@@ -349,178 +395,50 @@ def get_cell_and_no_cell_patches_new(patch_size=(21, 21), n_negatives_per_positi
             non_cell_images = hist_match_images(non_cell_images, hist_match_template)
             cell_images_marked = hist_match_images(cell_images_marked, hist_match_template)
 
-        print('Creating dataset from cell and non cell patches')
-        print('-----------------------------------------------')
+        if v:
+            print('Creating dataset from cell and non cell patches')
+            print('-----------------------------------------------')
         dataset = LabeledImageDataset(
             np.concatenate((cell_images[:len(cell_images), ...],      non_cell_images[:len(non_cell_images), ...]),   axis=0),
             np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)), axis=0)
         )
-        print('Splitting into training set and validation set')
+        if v:
+            print('Splitting into training set and validation set')
         trainset_size = int(len(dataset) * 0.80)
         validset_size = len(dataset) - trainset_size
         trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
-        print()
+        if v:
+            print()
 
-        print('Saving datasets')
-        print('---------------')
+        if v:
+            print('Saving datasets')
+            print('---------------')
+
         torch.save(trainset, os.path.join(trainset_filename))
         torch.save(validset, os.path.join(validset_filename))
-        print(f"Saved training set as: '{trainset_filename}'")
-        print(f"Saved validation set as: '{validset_filename}'")
-
-        print('Saving cell and non cell images')
         np.save(cell_images_filename, cell_images)
-        print(f"Saved cell images as: '{cell_images_filename}'")
         np.save(non_cell_images_filename, non_cell_images)
-        print(f"Saved non cell images as: '{non_cell_images_filename}'")
         np.save(cell_images_marked_filename, cell_images_marked)
-        print(f"Saved marked cell images (for debugging) as: '{cell_images_marked_filename}'")
         np.save(non_cell_images_marked_filename, non_cell_images_marked)
-        print(f"Saved marked non cell images (for debugging) as: '{non_cell_images_marked_filename}'")
-
-    print("Cell images:", cell_images.shape)
-    print("Non cell images", non_cell_images.shape)
-
-    hist_match_template = cell_images[0]
-    return trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
-
-
-def get_cell_and_no_cell_patches(patch_size=(21, 21), n_negatives_per_positive=3, do_hist_match=False):
-    # Input
-    height, width = patch_size
-    print(f'patch size {(height, width)}')
-    print(f'do hist match: {do_hist_match}')
-    print(f'Negatives per positive: {n_negatives_per_positive}')
-    print()
-
-    patch_size = (height, width)
-
-    pathlib.Path(CACHED_DATASETS_FOLDER).mkdir(parents=True, exist_ok=True)
-
-    trainset_filename = os.path.join(
-        CACHED_DATASETS_FOLDER,
-        f'trainset_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.pt')
-    validset_filename = os.path.join(
-        CACHED_DATASETS_FOLDER,
-        f'validset_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.pt')
-
-    cell_images_filename = os.path.join(
-        CACHED_DATASETS_FOLDER,
-        f'bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.npy')
-    non_cell_images_filename = os.path.join(
-        CACHED_DATASETS_FOLDER,
-        f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.npy')
-    cell_images_marked_filename = os.path.join(
-        CACHED_DATASETS_FOLDER,
-        f'bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
-    non_cell_images_marked_filename = os.path.join(
-        CACHED_DATASETS_FOLDER,
-        f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
-
-    try:
-        print('Dataset loading from cache')
-        print('--------------------------')
-        print(f"loading training set from '{trainset_filename}'...")
-        trainset = torch.load(trainset_filename)
-        print(f"loading validation set from '{validset_filename}'...")
-        validset = torch.load(validset_filename)
-
-        #
-        print(f"loading bloodcell patches from '{cell_images_filename}'...")
-        cell_images = np.load(cell_images_filename)
-        print(f"loading non bloodcell patches from '{non_cell_images_filename}'...")
-        non_cell_images = np.load(non_cell_images_filename)
-
-        print(f"loading marked bloodcell patches from '{cell_images_marked_filename}'...")
-        cell_images_marked = np.load(cell_images_marked_filename)
-        print(f"loading marked non bloodcell patches from '{non_cell_images_marked_filename}'")
-        non_cell_images_marked = np.load(non_cell_images_marked_filename)
-
-        print('Done')
-        print()
-    except FileNotFoundError:
-        print('Not all data found fom cache. Creating datasets...')
-        cell_images = np.zeros([0, *patch_size], dtype=np.float32)
-        cell_images_marked = np.zeros_like(cell_images)
-
-        non_cell_images = np.zeros_like(cell_images)
-        non_cell_images_marked = np.zeros_like(cell_images)
-
-        print('Creating cell and no cell images from videos...')
-        for video_file, csv_file in tzip(unmarked_labeled_video_OA790_filenames, csv_cell_cords_OA790_filenames):
-            print(video_file, csv_file, sep='<->\n')
-            curr_cell_images, curr_non_cell_images = get_cell_and_no_cell_patches_from_video(
-                video_file, csv_file,
-                patch_size=patch_size,
-                n_negatives_per_positive=n_negatives_per_positive,
-                normalise=True)
-
-            cell_images = np.concatenate((cell_images, curr_cell_images), axis=0).astype(np.float32)
-            non_cell_images = np.concatenate((non_cell_images, curr_non_cell_images), axis=0).astype(np.float32)
-
-        hist_match_template = cell_images[0]
         if do_hist_match:
-            cell_images = hist_match_images(cell_images, hist_match_template)
-            non_cell_images = hist_match_images(non_cell_images, hist_match_template)
-            cell_images_marked = hist_match_images(cell_images_marked, hist_match_template)
+            Image.fromarray(np.uint8(hist_match_template * 255)).save(template_image_filename + '.png')
+            np.save(template_image_filename + '.npy', hist_match_template)
 
-        print('Creating cell patches from marked videos for debugging...')
-        for video_file, csv_file in tzip(marked_video_OA790_files, csv_cell_cords_OA790_filenames):
-            print(video_file, csv_file, sep='<->\n')
-            curr_cell_images_marked, curr_non_cell_images_marked = get_cell_and_no_cell_patches_from_video(
-                video_file, csv_file,
-                patch_size=patch_size,
-                n_negatives_per_positive=n_negatives_per_positive,
-                normalise=True)
+        if v:
+            print(f"Saved training set as: '{trainset_filename}'")
+            print(f"Saved validation set as: '{validset_filename}'")
+            print('Saving cell and non cell images')
+            print(f"Saved cell images as: '{cell_images_filename}'")
+            print(f"Saved non cell images as: '{non_cell_images_filename}'")
+            print(f"Saved marked cell images (for debugging) as: '{cell_images_marked_filename}'")
+            print(f"Saved marked non cell images (for debugging) as: '{non_cell_images_marked_filename}'")
+            if do_hist_match:
+                print(f"Saved histogram matching template as: {template_image_filename}.png")
+                print(f"Saved histogram matching template (npy array) as: {template_image_filename}.npy")
 
-            cell_images_marked = np.concatenate((cell_images_marked, curr_cell_images_marked),
-                                                axis=0).astype(np.float32)
-            non_cell_images_marked = np.concatenate((non_cell_images_marked, curr_non_cell_images_marked),
-                                                    axis=0).astype(np.float32)
-        print()
+            print("Cell images array shape:", cell_images.shape)
+            print("Non cell images array shape:", non_cell_images.shape)
 
-        print('Creating dataset from cell and non cell patches')
-        print('-----------------------------------------------')
-
-        dataset = LabeledImageDataset(
-            np.concatenate((cell_images[:len(cell_images), ...],      non_cell_images[:len(non_cell_images), ...]),   axis=0),
-            np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)), axis=0)
-        )
-        print('Splitting into training set and validation set')
-        trainset_size = int(len(dataset) * 0.80)
-        validset_size = len(dataset) - trainset_size
-        trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
-        print()
-
-        print('Saving datasets')
-        print('---------------')
-        torch.save(trainset, os.path.join(trainset_filename))
-        torch.save(validset, os.path.join(validset_filename))
-        print(f"Saved training set as: '{trainset_filename}'")
-        print(f"Saved validation set as: '{validset_filename}'")
-
-        print('Saving cell and non cell images')
-        np.save(cell_images_filename, cell_images)
-        print(f"Saved cell images as: '{cell_images_filename}'")
-        np.save(non_cell_images_filename, non_cell_images)
-        print(f"Saved non cell images as: '{non_cell_images_filename}'")
-        np.save(cell_images_marked_filename, cell_images_marked)
-        print(f"Saved marked cell images (for debugging) as: '{cell_images_marked_filename}'")
-        np.save(non_cell_images_marked_filename, non_cell_images_marked)
-        print(f"Saved marked non cell images (for debugging) as: '{non_cell_images_marked_filename}'")
-
-    print("Cell images:", cell_images.shape)
-    print("Non cell images", non_cell_images.shape)
-
-    hist_match_template = cell_images[0]
     return trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
 
-
-def main():
-    get_cell_and_no_cell_patches_new()
-    pass
-
-
-if __name__ == '__main__':
-    main()
 
