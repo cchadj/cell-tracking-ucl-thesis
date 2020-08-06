@@ -147,7 +147,7 @@ def get_video_file_dictionaries(channel_type, should_have_marked_video=False):
             'std_image_oa790_file': find_filename_of_same_source(video_filename, std_image_oa790_files),
             'std_image_oa850_file': find_filename_of_same_source(video_filename, std_image_oa850_files),
             'cell_position_csv_files': [csv_file for csv_file
-                                    in csv_cell_cords_oa790_filenames if files_of_same_source(csv_file, video_filename)]
+                                       in csv_cell_cords_oa790_filenames if files_of_same_source(csv_file, video_filename)]
         }
         video_file_dictionaries.append(video_file_dict)
     return video_file_dictionaries
