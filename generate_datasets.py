@@ -1,10 +1,11 @@
+import os
+from os.path import basename
 import pathlib
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-import cv2
 
 import matplotlib
 import tqdm
@@ -12,41 +13,9 @@ from tqdm.contrib import tzip
 
 from imageprosessing import hist_match_images
 from learningutils import LabeledImageDataset
-from sharedvariables import *
+from videoutils import get_frames_from_video
+from sharedvariables import get_video_file_dictionaries, CACHED_DATASETS_FOLDER
 from patchextraction import extract_patches_at_positions
-
-
-def get_frames_from_video(video_filename, normalise=False):
-    """
-    Get the frames of a video as an array.
-
-    Arguments:
-        video_filename: The path of the video.
-        normalise: Normalise frame values between 0 and 1.
-            If normalised, the return numpy array type is float32 instead of uint8.
-
-    Returns:
-        frames as a NxHxWxC array (Number of frames x Height x Width x Channels)
-    """
-    vidcap = cv2.VideoCapture(video_filename)
-    n_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    success, image = vidcap.read()
-
-    frame_type = np.uint8
-    if normalise:
-        frame_type = np.float32
-    frames = np.zeros([n_frames] + list(image.shape), dtype=frame_type)
-
-    count = 0
-    while success:
-        if normalise:
-            image = image.astype(frame_type) / 255
-        frames[count, ...] = image
-        success, image = vidcap.read()
-        count += 1
-
-    return frames
 
 
 def get_random_point_on_rectangle(cx, cy, rect_size):
@@ -328,6 +297,8 @@ def get_cell_and_no_cell_patches_new(patch_size=(21, 21), n_negatives_per_positi
         print()
     except FileNotFoundError:
         print('Not all data found fom cache. Creating datasets...')
+        video_file_OA790_dictionaries = get_video_file_dictionaries('oa790')
+
         cell_images = np.zeros([0, *patch_size], dtype=np.float32)
         cell_images_marked = np.zeros_like(cell_images)
 
@@ -487,7 +458,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21), n_negatives_per_positive=3
             cell_images_marked = hist_match_images(cell_images_marked, hist_match_template)
 
         print('Creating cell patches from marked videos for debugging...')
-        for video_file, csv_file in tzip(marked_video_OA790_filenames, csv_cell_cords_OA790_filenames):
+        for video_file, csv_file in tzip(marked_video_OA790_files, csv_cell_cords_OA790_filenames):
             print(video_file, csv_file, sep='<->\n')
             curr_cell_images_marked, curr_non_cell_images_marked = get_cell_and_no_cell_patches_from_video(
                 video_file, csv_file,
