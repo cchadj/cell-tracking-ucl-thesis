@@ -67,8 +67,10 @@ def create_vessel_mask(vessel_image,
                        n_iterations=1,
                        opening_kernel_size=5,
                        closing_kernel_size=13,
+                       padding=cv2.BORDER_REPLICATE,
                        visualise_intermediate_steps=False):
     vessel_image = vessel_image.copy()
+    vessel_image = cv2.copyMakeBorder(vessel_image, dst, top, bottom, left, right, borderType, value)
 
     try:
         opening_kernel_size = opening_kernel_size, opening_kernel_size
@@ -93,6 +95,7 @@ def create_vessel_mask(vessel_image,
 
         minLineLength = 1
         maxLineGap = 150
+
 
         binary_threshold = skimage.filters.threshold_otsu(frangi_image_normalised, nbins=256)
         BW = np.zeros_like(frangi_image_normalised)

@@ -1,3 +1,4 @@
+import cv2
 from matplotlib import pyplot as plt
 import numpy as np
 import matplotlib.colors
@@ -137,6 +138,77 @@ def scatter_plot_point_selector(points, ax=None, image=None):
     point_selector.activate()
     plt.show()
     return point_selector.selected_point_indices
+
+
+class CvGuiSelector(object):
+    def __init__(self, window_name, image):
+        self.window_name = window_name
+        self.image = image.copy()
+        self.empty_image = image.copy()
+        self.modified_image = image.copy()
+        self.points_selected = []
+
+    def point_select(self, event, x, y, flags, param):
+        pass
+
+    def activate(self):
+        ESC = 25
+        cv2.namedWindow(self.window_name)
+        cv2.setMouseCallback(self.window_name, self.point_select)
+
+        # keep looping until the 'q' key is pressed
+        while True:
+            # display the image and wait for a keypress
+            cv2.imshow(self.window_name, self.modified_image)
+            key = cv2.waitKey(1) & 0xFF
+            # if the 'r' key is pressed, reset the cropping region
+            if key == ord("r"):
+                self.modified_image = self.empty_image.copy()
+                self.points_selected = []
+            # if the 'c' key is pressed, break from the loop
+            elif key in [ord('c'), ord('q'), ord('\n'), ord('\r'), ESC]:
+                cv2.destroyAllWindows()
+                break
+
+
+class CvPointSelector(CvGuiSelector):
+    def __init__(self, window_name, image, point_thickness=5):
+        super(CvPointSelector, self).__init__(window_name, image)
+        self.points_thickness = point_thickness
+
+    def point_select(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            refPt = [(x, y)]
+            self.points_selected.append((x, y))
+            self.modified_image = cv2.circle(self.modified_image,
+                                             (x, y), radius=0, color=(0, 0, 255), thickness=self.points_thickness)
+
+
+class CvRoipolySelector(CvGuiSelector):
+    def __init__(self, window_name, image, point_thickness=5):
+        super(CvRoipolySelector, self).__init__(window_name, image)
+        self.points_thickness = point_thickness
+        self._mask = np.zeros_like(self.image, dtype=np.uint8)
+
+    def point_select(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            refPt = [(x, y)]
+            self.points_selected.append((x, y))
+            self.modified_image = cv2.circle(self.empty_image.copy(), (x, y), radius=0, color=(0, 0, 255), thickness=5)
+            if len(self.points_selected) < 3:
+                self.modified_image = cv2.polylines(self.empty_image.copy(), np.int32([self.points_selected]), color=(0, 0, 255), isClosed=False)
+            else:
+                self.modified_image = cv2.polylines(self.empty_image.copy(), np.int32([self.points_selected]), color=(0, 0, 255), isClosed=True)
+
+    @property
+    def mask(self):
+        if len(self.points_selected) > 2:
+            self._mask = cv2.fillPoly(self._mask, np.int32([self.points_selected]), color=(1, 1, 1))
+        return self._mask.astype(np.bool8)
+
+    @mask.setter
+    def mask(self, value):
+        self._mask = value
 
 
 if __name__ == '__main__':

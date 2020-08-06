@@ -113,7 +113,7 @@ def extract_patches_at_positions(image,
 
     Arguments:
         image: HxW or HxWxC image
-        positions: shape:(2,) list of positions
+        positions: shape:(2,) list of (x, y) positions. x left to right, y top to bottom
         patch_size (tuple):  Size of each patch.
         padding:
             'valid' If you want only patches that are entirely inside the image.
@@ -140,6 +140,8 @@ def extract_patches_at_positions(image,
                                    padding_width,
                                    padding_width,
                                    padding)
+    assert positions[:, 1].max() < image.shape[0] and positions[:, 0].max() < image.shape[1],\
+        'Position coordinates must not go outside of image boundaries.'
     if len(image.shape) == 2:
         n_channels = 1
         image = image[:, :, np.newaxis]
@@ -152,14 +154,10 @@ def extract_patches_at_positions(image,
         fig, ax = plt.subplots(1, figsize=(20, 10))
 
     if mask is None:
-        print('-')
         mask = np.ones_like(image, dtype=np.bool8)
-        print(image.shape)
-        print(mask.shape)
 
     patch_count = 0
-    print("Positions", positions.shape)
-    for x, y in np.int32(positions.round()):
+    for x, y in np.int32(positions):
         if not mask[y, x]:
             continue
         # Offset to adjust for padding
