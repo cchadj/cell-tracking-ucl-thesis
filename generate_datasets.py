@@ -170,7 +170,7 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
         # print(curr_frame_cell_positions.shape)
         # print(curr_frame_non_cell_positions.shape)
 
-        if padding is not 'valid':
+        if padding != 'valid':
             raise NotImplementedError("Padding other than 'valid', not implemented")
         #     padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
         #
@@ -191,7 +191,7 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
 
         if visualize_patches and frame_idx == visualize_frame_idx:
             padding_height, padding_width = 0, 0
-            if padding is not 'valid':
+            if padding != 'valid':
                 raise NotImplementedError('Padding not implemented for generating datasets')
 
             fig, ax = plt.subplots(1, figsize=(20, 10))
