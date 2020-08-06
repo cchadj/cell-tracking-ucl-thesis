@@ -9,7 +9,6 @@ import torch
 
 import matplotlib
 import tqdm
-from tqdm.contrib import tzip
 
 from imageprosessing import hist_match_images
 from learningutils import LabeledImageDataset
@@ -367,14 +366,15 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             csv_cell_coord_files = video_file_dict['cell_position_csv_files']
 
             for csv_file in csv_cell_coord_files:
-                print('Unmarked', basename(video_file), basename(csv_file), sep='<->\n')
+                if vv:
+                    print('Unmarked', basename(video_file), basename(csv_file), sep='<->\n')
                 curr_cell_images, curr_non_cell_images = get_cell_and_no_cell_patches_from_video(
                     video_file, csv_file,
                     patch_size=patch_size,
                     n_negatives_per_positive=n_negatives_per_positive,
                     normalise=True)
-
-                print('Marked', basename(marked_video_file), basename(csv_file), sep='<->\n')
+                if vv:
+                    print('Marked', basename(marked_video_file), basename(csv_file), sep='<->\n')
                 curr_cell_images_marked, curr_non_cell_images_marked = get_cell_and_no_cell_patches_from_video(
                     marked_video_file, csv_file,
                     patch_size=patch_size,
