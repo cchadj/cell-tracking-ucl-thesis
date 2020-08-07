@@ -236,7 +236,10 @@ class VideoSession(object):
         if self._vessel_mask_oa790 is None:
             if self.vessel_mask_oa790_file == '':
                 raise Exception(f"No vessel mask found fr session {self.video_oa790_file}")
-            self._vessel_mask_oa790 = np.bool8(plt.imread(self.vessel_mask_oa790_file)[..., 0])
+            vessel_mask = plt.imread(self.vessel_mask_confocal_file)
+            if len(vessel_mask.shape) == 3:
+                vessel_mask = vessel_mask[..., 0]
+            self._vessel_mask_oa790 = np.bool8(vessel_mask)
         return self._vessel_mask_oa790
 
     @property
@@ -244,7 +247,10 @@ class VideoSession(object):
         if self._vessel_mask_oa850 is None:
             if self.vessel_mask_oa850_file == '':
                 raise Exception(f"No vessel mask found fr session {self.video_oa790_file}")
-            self._vessel_mask_oa850 = np.bool8(plt.imread(self.vessel_mask_oa850_file)[..., 0])
+            vessel_mask = plt.imread(self.vessel_mask_oa850_file)
+            if len(vessel_mask.shape) == 3:
+                vessel_mask = vessel_mask[..., 0]
+            self._vessel_mask_oa850 = np.bool8(vessel_mask)
         return self._vessel_mask_oa850
 
     @property
@@ -252,7 +258,10 @@ class VideoSession(object):
         if self._vessel_mask_confocal is None:
             if self.vessel_mask_confocal_file == '':
                 raise Exception(f"No vessel mask found for session {self.video_oa790_file}")
-            self._vessel_mask_confocal = np.bool8(plt.imread(self.vessel_mask_confocal_file)[..., 0])
+            vessel_mask = plt.imread(self.vessel_mask_confocal_file)
+            if len(vessel_mask.shape) == 3:
+                vessel_mask = vessel_mask[..., 0]
+            self._vessel_mask_confocal = np.bool8(vessel_mask)
         return self._vessel_mask_confocal
 
     @property

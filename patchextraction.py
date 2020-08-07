@@ -4,6 +4,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import numbers
+from sharedvariables import VideoSession
 
 
 def get_patch(im, x, y, patch_size):
@@ -190,3 +191,98 @@ def extract_patches_at_positions(image,
 
     patches = patches[:patch_count, ...]
     return patches.squeeze()
+
+
+class SessionPatchExtractor(object):
+    def __init__(self,
+                 session,
+                 patch_size=21,
+                 n_negatives_per_positives=3,):
+        """
+
+        Args:
+            session (VideoSession):  The video session to extract patches from
+        """
+        self.session = session
+        assert type(patch_size) is int or type(patch_size) is tuple
+
+        if type(patch_size) is tuple:
+            self.patch_size = patch_size
+        if type(patch_size) is int:
+            self.patch_size = patch_size, patch_size
+
+        self._all_patches_oa790 = None
+        self._all_patches_oa850 = None
+
+        self._cell_patches_oa790 = None
+        self._cell_patches_oa850 = None
+
+        self._marked_cell_patches_oa790 = None
+        self._marked_cell_patches_oa850 = None
+
+    @property
+    def all_patches_oa790(self):
+        if self._all_patches_oa790 is None:
+            self._all_patches_oa790 = np.zeros((0, *self.patch_size), dtype=self.session.frames_oa790.dtype)
+            for frame in self.session.frames_oa790:
+                cur_frame_patches = extract_patches(frame, patch_size=self.patch_size)
+                self._all_patches_oa790 = np.concatenate((self._all_patches_oa790, cur_frame_patches), axis=0)
+
+        return self._all_patches_oa790
+
+    @property
+    def all_patches_oa850(self):
+        if self._all_patches_oa850 is None:
+            self._all_patches_oa850 = np.zeros((0, *self.patch_size), dtype=self.session.frames_oa850.dtype)
+            for frame in self.session.frames_oa850:
+                cur_frame_patches = extract_patches(frame, patch_size=self.patch_size)
+                self._all_patches_oa850 = np.concatenate((self._all_patches_oa850, cur_frame_patches), axis=0)
+
+        return self._all_patches_oa850
+
+    def _extract_cell_patches(self, session_frames, cell_positions):
+        cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
+        # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
+        for frame_idx, cell_positions in cell_positions.items():
+            frame = session_frames[frame_idx - 1]
+            cur_frame_cell_patches = extract_patches_at_positions(frame, cell_positions, patch_size=self.patch_size)
+            cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)
+
+        return cell_patches
+
+    def _extract_cell_patches_single_frame(self, session_frames, cell_positions, frame_idx):
+        # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
+        frame = session_frames[frame_idx - 1]
+        return extract_patches_at_positions(frame, cell_positions[frame_idx], patch_size=self.patch_size)
+
+    def cell_patches_oa790_at_frame(self, frame_idx):
+        return self._extract_cell_patches_single_frame(self.session.frames_oa790, self.session.cell_positions, frame_idx)
+
+    @property
+    def cell_patches_oa790(self):
+        if self._cell_patches_oa790 is None:
+            self._cell_patches_oa790 = self._extract_cell_patches(self.session.frames_oa790, self.session.cell_positions)
+        return self._cell_patches_oa790
+
+    @property
+    def marked_cell_patches_oa790(self):
+        if self._marked_cell_patches_oa790 is None:
+            self._marked_cell_patches_oa790 = self._extract_cell_patches(self.session.marked_frames_oa790,
+                                                                         self.session.cell_positions)
+        return self._marked_cell_patches_oa790
+
+    @property
+    def cell_patches_oa850(self):
+        raise NotImplementedError('Cell patches only for oa790 channel currently')
+        # if self._cell_patches_oa850 is None:
+        #     self._cell_patches_oa850 = self._extract_cell_patches(self.session.frames_oa850,
+        #                                                           self.session.cell_positions)
+        # return self._cell_patches_oa850
+
+    @property
+    def marked_cell_patches_oa850(self):
+        raise NotImplementedError('Cell patches only for oa790 channel currently')
+        # if self._marked_cell_patches_oa850 is None:
+        #     self._marked_cell_patches_oa850 = self._extract_cell_patches(self.session.marked_frames_oa850,
+        #                                                                  self.session.cell_positions)
+        # return self._marked_cell_patches_oa850

@@ -18,57 +18,71 @@ from patchextraction import extract_patches_at_positions
 from PIL import Image
 
 
-def get_random_point_on_rectangle(cx, cy, rect_size):
-    """
+def get_random_point_on_rectangle(cx, cy, rect_size, n_points_per_rect=1):
+    """ Get random points at patch perimeter.
 
     Args:
+        n_points_per_rect: How many points to get on rectangle.
         cx: Rectangle center x component.
         cy: Rectangle center y component.
-        rect_size (tuple): Rectangle height, width.
+        rect_size (tuple, int): Rectangle height, width.
 
     Returns:
         Random points on the rectangles defined by centre cx, cy and height, width
 
     """
+    assert type(rect_size) is int or type(rect_size) is tuple
+    if type(rect_size) is int:
+        rect_size = rect_size, rect_size
     height, width = rect_size
-    if isinstance(cx, int):
+    if type(cx) is int:
         cx, cy = np.array([cx]), np.array([cy])
 
     assert len(cx) == len(cy)
 
-    # random number to select edge along which to get the random point (up/down, left/right)
-    # (0 or 1 displacement)
-    r1 = np.random.rand(len(cx))
+    rxs = np.zeros(0, dtype=np.int32)
+    rys = np.zeros(0, dtype=np.int32)
+    for i in range(n_points_per_rect):
+        # random number to select edge along which to get the random point (up/down, left/right)
+        # (0 or 1 displacement)
+        r1 = np.random.rand(len(cx))
 
-    # random  number for swapping displacements
-    r2 = np.random.rand(len(cy))
+        # random  number for swapping displacements
+        r2 = np.random.rand(len(cy))
 
-    # Controls 0 or 1 displacement
-    t = np.zeros(len(cx))
-    t[r1 > 0.5] = 1
+        # Controls 0 or 1 displacement
+        t = np.zeros(len(cx))
+        t[r1 > 0.5] = 1
 
-    dx = t * width
-    dy = np.random.rand(len(cx)) * width
+        dx = t * width
+        dy = np.random.rand(len(cx)) * width
 
-    # print('dx', dx)
-    # print('dy', dy)
+        # print('dx', dx)
+        # print('dy', dy)
 
-    dx[r2 > 0.5], dy[r2 > 0.5] = dy[r2 > 0.5], dx[r2 > 0.5]
+        dx[r2 > 0.5], dy[r2 > 0.5] = dy[r2 > 0.5], dx[r2 > 0.5]
 
-    # print("r1", r1)
-    # print("r2", r2)
-    # print("t", t)
-    #
-    # print('dx', dx)
-    # print('dy', dy)
+        # print("r1", r1)
+        # print("r2", r2)
+        # print("t", t)
+        #
+        # print('dx', dx)
+        # print('dy', dy)
 
-    # if r2 > 0.5:
-    #     dy, dx = dx, dy
+        # if r2 > 0.5:
+        #     dy, dx = dx, dy
 
-    rx = (cx - width / 2) + dx
-    ry = (cy - height / 2) + dy
+        rx = (cx - width / 2) + dx
+        ry = (cy - height / 2) + dy
+        # print(rx.shape)
+        # print(ry.shape)
 
-    return rx, ry
+        rxs = np.concatenate((rxs, rx))
+        rys = np.concatenate((rys, ry))
+        # print(rxs.shape)
+        # print(rys.shape)
+
+    return rxs, rys
 
 
 def get_cell_and_no_cell_patches_from_video(video_filename,

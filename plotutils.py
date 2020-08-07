@@ -1,6 +1,33 @@
 import torch
 import matplotlib.pyplot as plt
 import torchvision
+from matplotlib.patches import Rectangle
+import numpy as np
+
+
+def plot_patch_rois_at_positions(positions, patch_size=(21, 21),
+                                 edgecolor='r', pointcolor='b', label=None,
+                                 ax=None, image=None):
+    assert type(patch_size) is int or type(patch_size) is tuple
+    if type(patch_size) is int:
+        patch_size = patch_size, patch_size
+    patch_height, patch_width = patch_size
+
+    if ax is None:
+        _, ax = plt.subplots()
+    if image is not None:
+        ax.imshow(image, cmap='gray')
+
+    positions = positions.astype(np.int32)
+    ax.scatter(positions[:, 0], positions[:, 1], label=label, c=pointcolor)
+    for patch_count, (x, y) in enumerate(positions.astype(np.int32)):
+        rect = Rectangle((x - patch_width / 2,
+                          y - patch_height / 2),
+                         patch_width, patch_height,
+                         linewidth=1, edgecolor=edgecolor, facecolor='none')
+
+        ax.add_patch(rect)
+        ax.annotate(patch_count - 1, (x, y))
 
 
 def plot_dataset_as_grid(dataset, title=None):
