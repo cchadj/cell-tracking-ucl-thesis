@@ -72,7 +72,7 @@ def plot_images_as_grid(images, ax=None, title=None):
     batch_tensor = torch.from_numpy(images)
     # NxHxWxC -> NxCxHxW
     batch_tensor = batch_tensor.permute(0, -1, 1, 2)
-    grid_img = torchvision.utils.make_grid(batch_tensor, nrow=50)
+    grid_img = torchvision.utils.make_grid(batch_tensor, nrow=90)
     if ax is None:
         _, ax = plt.subplots(num=None, figsize=(70, 50), dpi=80, facecolor='w', edgecolor='k')
     if title is not None:
@@ -80,3 +80,12 @@ def plot_images_as_grid(images, ax=None, title=None):
 
     plt.grid(b=None)
     ax.imshow(grid_img.permute(1, 2, 0))
+    ax.tick_params(
+        axis='both',
+        which='both',
+        left=False,
+        right=False,
+        labelleft=False,
+        bottom=False,
+        top=False,
+        labelbottom=False)

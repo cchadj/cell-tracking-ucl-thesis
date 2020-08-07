@@ -41,6 +41,18 @@ image_file_extensions = ('.jpg', '.jpeg', '.tif', '.tiff', '.png', '.bmp')
 
 # find all files in data folder
 all_files = glob.glob(os.path.join(DATA_FOLDER, '**', '*.*'), recursive=True)
+
+# # Remove duplicates based on the file basename.
+all_files_basenames = [basename(f) for f in all_files]
+seen = set()
+all_files_uniq = []
+for i, file in enumerate(all_files_basenames):
+    if file not in seen:
+        all_files_uniq.append(all_files[i])
+        seen.add(file)
+all_files = all_files_uniq
+## end remove duplicates ##
+
 all_video_files = [f for f in all_files if f.lower().endswith(video_file_extensions)]
 all_csv_files = [f for f in all_files if f.lower().endswith(csv_file_extension)]
 all_image_files = [f for f in all_files if f.lower().endswith(image_file_extensions)]
@@ -365,4 +377,10 @@ def get_video_file_dictionaries(channel_type, should_have_marked_video=False):
 
 
 if __name__ == '__main__':
+    # Make sure that all_files is unique based on the basename of the file (being at different path doesn't matter)
+    all_files_basenames_unique = list(set([basename(f) for f in all_files]))
+    assert len(all_files_basenames_unique) == len(all_files) and \
+        [basename(f1) == f2 for f1, f2 in zip(sorted(all_files), sorted(all_files_basenames_unique))], \
+        'all_files is not unique, there is one or more duplicates.'
+
     sys.exit(0)

@@ -4,7 +4,77 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import numbers
+
 from sharedvariables import VideoSession
+
+
+def get_random_points_on_rectangles(cx, cy, rect_size, n_points_per_rect=1):
+    """ Get random points at patch perimeter.
+
+    Args:
+        n_points_per_rect: How many points to get on rectangle.
+        cx: Rectangle center x component.
+        cy: Rectangle center y component.
+        rect_size (tuple, int): Rectangle height, width.
+
+    Returns:
+        Random points on the rectangles defined by centre cx, cy and height, width
+
+    """
+    assert type(rect_size) is int or type(rect_size) is tuple
+    if type(rect_size) is int:
+        rect_size = rect_size, rect_size
+    height, width = rect_size
+    if type(cx) is int:
+        cx, cy = np.array([cx]), np.array([cy])
+
+    assert len(cx) == len(cy)
+
+    rxs = np.zeros(0, dtype=np.int32)
+    rys = np.zeros(0, dtype=np.int32)
+    for i in range(n_points_per_rect):
+        # random number to select edge along which to get the random point (up/down, left/right)
+        # (0 or 1 displacement)
+        r1 = np.random.rand(len(cx))
+
+        # random  number for swapping displacements
+        r2 = np.random.rand(len(cy))
+
+        # Controls 0 or 1 displacement
+        t = np.zeros(len(cx))
+        t[r1 > 0.5] = 1
+
+        dx = t * width
+        dy = np.random.rand(len(cx)) * width
+
+        # print('dx', dx)
+        # print('dy', dy)
+
+        dx[r2 > 0.5], dy[r2 > 0.5] = dy[r2 > 0.5], dx[r2 > 0.5]
+
+        # print("r1", r1)
+        # print("r2", r2)
+        # print("t", t)
+        #
+        # print('dx', dx)
+        # print('dy', dy)
+
+        # if r2 > 0.5:
+        #     dy, dx = dx, dy
+
+        rx = (cx - width / 2) + dx
+        ry = (cy - height / 2) + dy
+        # print(rx.shape)
+        # print(ry.shape)
+
+        rxs = np.concatenate((rxs, rx))
+        rys = np.concatenate((rys, ry))
+        # print(rxs.shape)
+        # print(rys.shape)
+
+    return rxs, rys
+
+
 
 
 def get_patch(im, x, y, patch_size):
@@ -197,7 +267,7 @@ class SessionPatchExtractor(object):
     def __init__(self,
                  session,
                  patch_size=21,
-                 n_negatives_per_positives=3,):
+                 n_negatives_per_positive=1):
         """
 
         Args:
@@ -211,6 +281,7 @@ class SessionPatchExtractor(object):
         if type(patch_size) is int:
             self.patch_size = patch_size, patch_size
 
+        self.n_negatives_per_positive = n_negatives_per_positive
         self._all_patches_oa790 = None
         self._all_patches_oa850 = None
 
@@ -219,6 +290,15 @@ class SessionPatchExtractor(object):
 
         self._marked_cell_patches_oa790 = None
         self._marked_cell_patches_oa850 = None
+
+        self._non_cell_patches_oa790 = None
+        self._marked_non_cell_patches_oa790 = None
+
+        self._cell_patches_oa790_at_frame = {}
+        self._marked_cell_patches_oa790_at_frame = {}
+
+        self._non_cell_patches_oa790_at_frame = {}
+        self._marked_non_cell_patches_oa790_at_frame = {}
 
     @property
     def all_patches_oa790(self):
@@ -240,35 +320,65 @@ class SessionPatchExtractor(object):
 
         return self._all_patches_oa850
 
-    def _extract_cell_patches(self, session_frames, cell_positions):
+    def _extract_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
+        non_cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
+        # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
+        for frame_idx, cell_positions in cell_positions.items():
+            frame = session_frames[frame_idx - 1]
+            # get non cell positions at random points along the perimeter of the patch.
+            cx, cy = cell_positions[:, 0], cell_positions[:, 1]
+            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.patch_size,
+                                                     n_points_per_rect=self.n_negatives_per_positive)
+
+            non_cell_positions = np.int32(np.array([rx, ry]).T)
+            non_cell_positions = np.delete(non_cell_positions, np.where(non_cell_positions[:, 0] >= frame.shape[1])[0], axis=0)
+            non_cell_positions = np.delete(non_cell_positions, np.where(non_cell_positions[:, 1] >= frame.shape[0])[0], axis=0)
+
+            cur_frame_patches = extract_patches_at_positions(frame, non_cell_positions, patch_size=self.patch_size)
+            frame_idx_to_patch_dict[frame_idx] = cur_frame_patches
+            non_cell_patches = np.concatenate((non_cell_patches, cur_frame_patches), axis=0)
+        return non_cell_patches
+
+    @property
+    def non_cell_patches_oa790(self):
+        if self._non_cell_patches_oa790 is None:
+            self._non_cell_patches_oa790 = self._extract_non_cell_patches(self.session.frames_oa790,
+                                                                          self.session.cell_positions,
+                                                                          self._non_cell_patches_oa790_at_frame)
+        return self._non_cell_patches_oa790
+
+    @property
+    def marked_non_cell_patches_oa790(self):
+        if self._marked_non_cell_patches_oa790 is None:
+            self._marked_non_cell_patches_oa790 = self._extract_non_cell_patches(self.session.marked_frames_oa790,
+                                                                                 self.session.cell_positions,
+                                                                                 self._marked_non_cell_patches_oa790_at_frame)
+        return self._marked_non_cell_patches_oa790
+
+    def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
         cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
         # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
         for frame_idx, cell_positions in cell_positions.items():
             frame = session_frames[frame_idx - 1]
             cur_frame_cell_patches = extract_patches_at_positions(frame, cell_positions, patch_size=self.patch_size)
+            frame_idx_to_patch_dict[frame_idx] = cur_frame_cell_patches
             cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)
-
         return cell_patches
-
-    def _extract_cell_patches_single_frame(self, session_frames, cell_positions, frame_idx):
-        # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
-        frame = session_frames[frame_idx - 1]
-        return extract_patches_at_positions(frame, cell_positions[frame_idx], patch_size=self.patch_size)
-
-    def cell_patches_oa790_at_frame(self, frame_idx):
-        return self._extract_cell_patches_single_frame(self.session.frames_oa790, self.session.cell_positions, frame_idx)
 
     @property
     def cell_patches_oa790(self):
         if self._cell_patches_oa790 is None:
-            self._cell_patches_oa790 = self._extract_cell_patches(self.session.frames_oa790, self.session.cell_positions)
+            self._cell_patches_oa790 = self._extract_cell_patches(self.session.frames_oa790,
+                                                                  self.session.cell_positions,
+                                                                  self._cell_patches_oa790_at_frame)
         return self._cell_patches_oa790
 
     @property
     def marked_cell_patches_oa790(self):
         if self._marked_cell_patches_oa790 is None:
             self._marked_cell_patches_oa790 = self._extract_cell_patches(self.session.marked_frames_oa790,
-                                                                         self.session.cell_positions)
+                                                                         self.session.cell_positions,
+                                                                         self._marked_cell_patches_oa790_at_frame)
         return self._marked_cell_patches_oa790
 
     @property
@@ -286,3 +396,28 @@ class SessionPatchExtractor(object):
         #     self._marked_cell_patches_oa850 = self._extract_cell_patches(self.session.marked_frames_oa850,
         #                                                                  self.session.cell_positions)
         # return self._marked_cell_patches_oa850
+
+    @property
+    def cell_patches_oa790_at_frame(self):
+        # for the cell patches creation ot fill the dict
+        tmp = self.cell_patches_oa790
+        return self._cell_patches_oa790_at_frame
+
+    @property
+    def marked_cell_patches_oa790_at_frame(self):
+        # for the cell patches creation ot fill the dict
+        tmp = self.cell_patches_oa790
+        return self._marked_cell_patches_oa790_at_frame
+
+    @property
+    def non_cell_patches_oa790_at_frame(self):
+        # for the cell patches creation ot fill the dict
+        tmp = self.non_cell_patches_oa790
+        return self._non_cell_patches_oa790_at_frame
+
+    @property
+    def marked_non_cell_patches_oa790_at_frame(self):
+        # for the cell patches creation ot fill the dict
+        tmp = self.marked_non_cell_patches_oa790
+        return self._marked_non_cell_patches_oa790_at_frame
+

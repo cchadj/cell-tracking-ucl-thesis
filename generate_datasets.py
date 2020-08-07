@@ -1,5 +1,6 @@
 import os
 from os.path import basename
+import shutil
 import pathlib
 
 import matplotlib.pyplot as plt
@@ -10,79 +11,24 @@ import torch
 import matplotlib
 import tqdm
 
-from imageprosessing import hist_match_images
+from imageprosessing import hist_match_images, normalize_data
 from learningutils import LabeledImageDataset
 from videoutils import get_frames_from_video
-from sharedvariables import get_video_file_dictionaries, CACHED_DATASETS_FOLDER
-from patchextraction import extract_patches_at_positions
+from sharedvariables import get_video_sessions, get_video_file_dictionaries, CACHED_DATASETS_FOLDER
+from patchextraction import extract_patches_at_positions, SessionPatchExtractor, get_random_points_on_rectangles
 from PIL import Image
 
 
-def get_random_point_on_rectangle(cx, cy, rect_size, n_points_per_rect=1):
-    """ Get random points at patch perimeter.
-
-    Args:
-        n_points_per_rect: How many points to get on rectangle.
-        cx: Rectangle center x component.
-        cy: Rectangle center y component.
-        rect_size (tuple, int): Rectangle height, width.
-
-    Returns:
-        Random points on the rectangles defined by centre cx, cy and height, width
-
-    """
-    assert type(rect_size) is int or type(rect_size) is tuple
-    if type(rect_size) is int:
-        rect_size = rect_size, rect_size
-    height, width = rect_size
-    if type(cx) is int:
-        cx, cy = np.array([cx]), np.array([cy])
-
-    assert len(cx) == len(cy)
-
-    rxs = np.zeros(0, dtype=np.int32)
-    rys = np.zeros(0, dtype=np.int32)
-    for i in range(n_points_per_rect):
-        # random number to select edge along which to get the random point (up/down, left/right)
-        # (0 or 1 displacement)
-        r1 = np.random.rand(len(cx))
-
-        # random  number for swapping displacements
-        r2 = np.random.rand(len(cy))
-
-        # Controls 0 or 1 displacement
-        t = np.zeros(len(cx))
-        t[r1 > 0.5] = 1
-
-        dx = t * width
-        dy = np.random.rand(len(cx)) * width
-
-        # print('dx', dx)
-        # print('dy', dy)
-
-        dx[r2 > 0.5], dy[r2 > 0.5] = dy[r2 > 0.5], dx[r2 > 0.5]
-
-        # print("r1", r1)
-        # print("r2", r2)
-        # print("t", t)
-        #
-        # print('dx', dx)
-        # print('dy', dy)
-
-        # if r2 > 0.5:
-        #     dy, dx = dx, dy
-
-        rx = (cx - width / 2) + dx
-        ry = (cy - height / 2) + dy
-        # print(rx.shape)
-        # print(ry.shape)
-
-        rxs = np.concatenate((rxs, rx))
-        rys = np.concatenate((rys, ry))
-        # print(rxs.shape)
-        # print(rys.shape)
-
-    return rxs, rys
+def clean_folder(folder):
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            raise Exception('Failed to delete %s. Reason: %s' % (file_path, e))
 
 
 def get_cell_and_no_cell_patches_from_video(video_filename,
@@ -167,18 +113,20 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
 
         curr_frame_non_cell_positions = np.empty([0, 2], dtype=np.int32)
         for _ in range(n_negatives_per_positive):
-            rxs, rys = get_random_point_on_rectangle(cell_xs, cell_ys, patch_size)
+            rxs, rys = get_random_points_on_rectangles(cell_xs, cell_ys, patch_size)
             new_pos = np.array([rxs, rys]).T
             curr_frame_non_cell_positions = np.concatenate((curr_frame_non_cell_positions, new_pos), axis=0)
 
         # Remove positions that get out of image boundaries
         curr_frame_non_cell_positions = np.delete(curr_frame_non_cell_positions,
-                                                  np.where(curr_frame_non_cell_positions[:, 0] >= frame.shape[1])[0], axis=0)
+                                                  np.where(curr_frame_non_cell_positions[:, 0] >= frame.shape[1])[0],
+                                                  axis=0)
         curr_frame_non_cell_positions = np.delete(curr_frame_non_cell_positions,
-                                                  np.where(curr_frame_non_cell_positions[:, 1] >= frame.shape[0])[0], axis=0)
+                                                  np.where(curr_frame_non_cell_positions[:, 1] >= frame.shape[0])[0],
+                                                  axis=0)
 
         assert curr_frame_non_cell_positions[:, 1].max() < frame.shape[0] and \
-           curr_frame_non_cell_positions[:, 0].max() < frame.shape[1], \
+               curr_frame_non_cell_positions[:, 0].max() < frame.shape[1], \
             'Position coordinates must not go outside of image boundaries.'
         # print(curr_frame_cell_positions.shape)
         # print(curr_frame_non_cell_positions.shape)
@@ -197,7 +145,8 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
                                                                    patch_size, padding)
 
         cell_patches[cell_count:cell_count + len(curr_frame_cell_patches), ...] = curr_frame_cell_patches
-        non_cell_patches[non_cell_count:non_cell_count + len(curr_frame_non_cell_patches), ...] = curr_frame_non_cell_patches
+        non_cell_patches[non_cell_count:non_cell_count + len(curr_frame_non_cell_patches),
+        ...] = curr_frame_non_cell_patches
 
         cell_count += len(curr_frame_cell_patches)
         non_cell_count += len(curr_frame_non_cell_patches)
@@ -252,21 +201,12 @@ def get_cell_and_no_cell_patches_from_video(video_filename,
     return cell_patches, non_cell_patches
 
 
-def get_positions_from_csv(csv_file, frame_idx):
-    df = pd.read_csv(csv_file)
-    all_cell_positions = df[['X', 'Y']].to_numpy().astype(np.int32)
-    all_cell_frame_indices = df[['Slice']].to_numpy().astype(np.int32)
-
-    return all_cell_positions[np.where(all_cell_frame_indices == frame_idx)[0]]
-
-
-def get_cell_and_no_cell_patches(patch_size=(21, 21),
-                                 n_negatives_per_positive=3,
-                                 do_hist_match=False,
-                                 v=False,
-                                 vv=False):
+def get_cell_and_no_cell_patches_old(patch_size=(21, 21),
+                                     n_negatives_per_positive=3,
+                                     do_hist_match=False,
+                                     v=False,
+                                     vv=False):
     """
-
     Args:
         patch_size (int, tuple): The patch size (height, width) or int for square.
         n_negatives_per_positive (int):  How many non cells per cell patch.
@@ -413,8 +353,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             print('Creating dataset from cell and non cell patches')
             print('-----------------------------------------------')
         dataset = LabeledImageDataset(
-            np.concatenate((cell_images[:len(cell_images), ...],      non_cell_images[:len(non_cell_images), ...]),   axis=0),
-            np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)), axis=0)
+            np.concatenate((cell_images[:len(cell_images), ...], non_cell_images[:len(non_cell_images), ...]), axis=0),
+            np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)),
+                           axis=0)
         )
         if v:
             print('Splitting into training set and validation set')
@@ -456,3 +397,219 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
     return trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
 
 
+# noinspection DuplicatedCode
+def get_cell_and_no_cell_patches(patch_size=(21, 21),
+                                 n_negatives_per_positive=3,
+                                 do_hist_match=False,
+                                 overwrite_cache=False,
+                                 v=False,
+                                 vv=False):
+    """ Convenience function to get cell and no cell patches and their corresponding marked(for debugging),
+        the torch Datasets, and the template image for histogram matching.
+
+        Firstly checks the cache folder with the datasets to see if the dataset with the exact parameters was already
+        created and if not then it creates it and saves it in cache.
+
+    Args:
+        patch_size (int, tuple): The patch size (height, width) or int for square.
+        n_negatives_per_positive (int):  How many non cells per cell patch.
+        do_hist_match (bool):  Whether to histogram matching or not.
+        overwrite_cache (bool): Set to true to skip attempting to read from cache and create new dataset overwriting
+                                the old data.
+        v (bool):  Verbose description of what is currently happening.
+        vv (bool):  Very Verbose.
+
+    Returns:
+        (Dataset, Dataset, np array NxHxW, np array,      np array,           np.array,             , np.array h x w of template)
+        trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
+
+        Training set and validation set can be used by torch DataLoader.
+        Cell images and non cell images are numpy arrays n x patch_height x patch_width.
+        Cell images marked and non marked images are the same but from the marked videos for debugging.
+        Histogram match template is the template used for histogram matching. If do_hist_match is False then
+        None is returned.
+    """
+    # Input
+    height, width = patch_size
+    if v:
+        print(f'patch size {(height, width)}')
+        print(f'do hist match: {do_hist_match}')
+        print(f'Negatives per positive: {n_negatives_per_positive}')
+        print()
+    if vv:
+        v = True
+
+    if not do_hist_match:
+        hist_match_template = None
+
+    patch_size = (height, width)
+
+    dataset_folder = os.path.join(
+        CACHED_DATASETS_FOLDER,
+        f'dataset_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}')
+    pathlib.Path(dataset_folder).mkdir(parents=True, exist_ok=True)
+
+    trainset_filename = os.path.join(
+        dataset_folder,
+        f'trainset_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.pt')
+    validset_filename = os.path.join(
+        dataset_folder,
+        f'validset_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.pt')
+
+    cell_images_filename = os.path.join(
+        dataset_folder,
+        f'bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.npy')
+    non_cell_images_filename = os.path.join(
+        dataset_folder,
+        f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.npy')
+    cell_images_marked_filename = os.path.join(
+        dataset_folder,
+        f'bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
+    non_cell_images_marked_filename = os.path.join(
+        dataset_folder,
+        f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
+    template_image_filename = os.path.join(
+        dataset_folder,
+        f'hist_match_template_image'
+    )
+
+    try:
+        if overwrite_cache:
+            if v:
+                print('Not checking cache. Overwriting any old data in the cache.')
+            clean_folder(dataset_folder)
+            # raise exception to go to catch scope
+            raise FileNotFoundError
+
+        if v:
+            print('Dataset loading from cache')
+            print('--------------------------')
+            print(f"loading training set from '{trainset_filename}'...")
+        trainset = torch.load(trainset_filename)
+        if v:
+            print(f"loading validation set from '{validset_filename}'...")
+        validset = torch.load(validset_filename)
+
+        if v:
+            print(f"loading bloodcell patches from '{cell_images_filename}'...")
+        cell_images = np.load(cell_images_filename)
+        if v:
+            print(f"loading non bloodcell patches from '{non_cell_images_filename}'...")
+        non_cell_images = np.load(non_cell_images_filename)
+
+        if v:
+            print(f"loading marked bloodcell patches from '{cell_images_marked_filename}'...")
+        cell_images_marked = np.load(cell_images_marked_filename)
+        if v:
+            print(f"loading marked non bloodcell patches from '{non_cell_images_marked_filename}'")
+        non_cell_images_marked = np.load(non_cell_images_marked_filename)
+        if do_hist_match:
+            if v:
+                print(f"loading histogram matching template image (npy array)")
+            hist_match_template = np.load(template_image_filename + '.npy')
+
+        if v:
+            print('Done')
+            print()
+    except FileNotFoundError:
+        print('Not all data found fom cache. Creating datasets...')
+        video_sessions = get_video_sessions(should_have_marked_video=True)
+
+        cell_images = np.zeros([0, *patch_size], dtype=np.float32)
+        cell_images_marked = np.zeros_like(cell_images)
+
+        non_cell_images = np.zeros_like(cell_images, dtype=np.uint8)
+        non_cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
+
+        if v:
+            print('Creating cell and no cell images from videos...')
+        for session in tqdm.tqdm(video_sessions):
+            assert session.has_marked_video, 'Something went wrong.' \
+                                             ' get_video_sessions() should have ' \
+                                             ' returned that have corresponding marked videos.'
+
+            video_file = session.video_file
+            marked_video_file = session.marked_video_oa790_file
+            csv_cell_coord_files = session.cell_position_csv_files
+
+            patch_extractor = SessionPatchExtractor(session, patch_size, n_negatives_per_positive)
+
+            if vv:
+                print('Unmarked', basename(video_file), '<->')
+                print(*[basename(f) for f in csv_cell_coord_files], sep='\n')
+
+            cur_session_cell_images = patch_extractor.cell_patches_oa790.astype(np.float32)
+            cur_session_non_cell_images = patch_extractor.non_cell_patches_oa790.astype(np.float32)
+
+            cell_images = np.concatenate((cell_images, cur_session_cell_images), axis=0)
+            non_cell_images = np.concatenate((non_cell_images, cur_session_non_cell_images), axis=0)
+
+            if vv:
+                print('Marked', basename(marked_video_file), '<->')
+                print(*[basename(f) for f in csv_cell_coord_files], sep='\n')
+
+            cur_session_marked_cell_images = patch_extractor.marked_cell_patches_oa790
+            cur_session_non_marked_cell_images = patch_extractor.marked_non_cell_patches_oa790
+
+            cell_images_marked = np.concatenate((cell_images_marked, cur_session_marked_cell_images), axis=0)
+            non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_non_marked_cell_images),
+                                                    axis=0)
+
+        cell_images = normalize_data(cell_images, target_range=(0, 1), data_range=(0, 255))
+        non_cell_images = normalize_data(non_cell_images, target_range=(0, 1), data_range=(0, 255))
+
+        if do_hist_match:
+            hist_match_template = cell_images[0]
+            cell_images = hist_match_images(cell_images, hist_match_template)
+            non_cell_images = hist_match_images(non_cell_images, hist_match_template)
+
+        if v:
+            print('Creating dataset from cell and non cell patches')
+            print('-----------------------------------------------')
+        dataset = LabeledImageDataset(
+            np.concatenate((cell_images[:len(cell_images), ...], non_cell_images[:len(non_cell_images), ...]), axis=0),
+            np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)),
+                           axis=0)
+        )
+        if v:
+            print('Splitting into training set and validation set')
+        trainset_size = int(len(dataset) * 0.80)
+        validset_size = len(dataset) - trainset_size
+        trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
+        if v:
+            print()
+
+        if v:
+            print('Saving datasets')
+            print('---------------')
+
+        torch.save(trainset, os.path.join(trainset_filename))
+        torch.save(validset, os.path.join(validset_filename))
+        np.save(cell_images_filename, cell_images)
+        np.save(non_cell_images_filename, non_cell_images)
+        np.save(cell_images_marked_filename, cell_images_marked)
+        np.save(non_cell_images_marked_filename, non_cell_images_marked)
+        if do_hist_match:
+            Image.fromarray(np.uint8(hist_match_template * 255)).save(template_image_filename + '.png')
+            np.save(template_image_filename + '.npy', hist_match_template)
+
+        if v:
+            print(f"Saved training set as: '{trainset_filename}'")
+            print(f"Saved validation set as: '{validset_filename}'")
+            print('Saving cell and non cell images')
+            print(f"Saved cell images as: '{cell_images_filename}'")
+            print(f"Saved non cell images as: '{non_cell_images_filename}'")
+            print(f"Saved marked cell images (for debugging) as: '{cell_images_marked_filename}'")
+            print(f"Saved marked non cell images (for debugging) as: '{non_cell_images_marked_filename}'")
+            if do_hist_match:
+                print(f"Saved histogram matching template as: {template_image_filename}.png")
+                print(f"Saved histogram matching template (npy array) as: {template_image_filename}.npy")
+
+            print("Cell images array shape:", cell_images.shape)
+            print("Non cell images array shape:", non_cell_images.shape)
+
+    return trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
+
+
+if __name__ == '__main__':
+    get_cell_and_no_cell_patches()

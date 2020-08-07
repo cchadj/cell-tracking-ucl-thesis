@@ -66,8 +66,29 @@ def hist_match(source, template):
     return interp_t_values[bin_idx].reshape(oldshape)
 
 
-def normalize_data(data, alpha=0, beta=1):
-    return (beta - alpha) * ((data - data.min()) / (data.max() - data.min())) + alpha
+def normalize_data(data, target_range=(0, 1), data_range=None):
+    """ Normalizes data to a given target range
+
+    Args:
+        data: The data to normalise. Can be of any shape.
+        target_range (tuple): (a, b) The target lowest and highest value
+        data_range (float): Current data min and max.
+                          If None then uses the data minimum and maximum value.
+                          Useful when max value may not be observed in the data given.
+    Returns:
+        Normalised data within target range.
+
+    """
+    if data_range is None:
+        data_range = data.min(), data.max()
+
+    data_min, data_max = data_range
+    alpha, beta = target_range
+
+    assert alpha < beta, f'Target range should be from small to big, target range given: {target_range}.'
+    assert data_min < data_max, f'Data range should be from small to big, data range given: {data_range}.'
+
+    return (beta - alpha) * ((data - data_min) / (data_max - data_min)) + alpha
 
 
 def image_histogram_equalization(image, number_bins=256):
