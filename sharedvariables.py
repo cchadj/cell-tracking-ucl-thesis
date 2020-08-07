@@ -46,11 +46,15 @@ all_files = glob.glob(os.path.join(DATA_FOLDER, '**', '*.*'), recursive=True)
 all_files_basenames = [basename(f) for f in all_files]
 seen = set()
 all_files_uniq = []
+all_files_basenames_uniq = []
 for i, file in enumerate(all_files_basenames):
     if file not in seen:
+        all_files_basenames_uniq.append(file)
         all_files_uniq.append(all_files[i])
         seen.add(file)
 all_files = all_files_uniq
+# sort based on basename
+all_files = [f for _, f in sorted(zip(all_files_basenames_uniq, all_files))]
 ## end remove duplicates ##
 
 all_video_files = [f for f in all_files if f.lower().endswith(video_file_extensions)]
