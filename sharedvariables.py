@@ -3,6 +3,9 @@ import sys
 from os.path import basename
 import re
 import glob
+from videoutils import get_frames_from_video
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def files_of_same_source(f1, f2):
@@ -43,7 +46,8 @@ all_csv_files = [f for f in all_files if f.lower().endswith(csv_file_extension)]
 all_image_files = [f for f in all_files if f.lower().endswith(image_file_extensions)]
 
 # unmarked videos. Must not have '_marked' or 'mask in them.
-all_video_files_unmarked = [f for f in all_video_files if '_marked' not in basename(f).lower() and 'mask' not in basename(f)]
+all_video_files_unmarked = [f for f in all_video_files if
+                            '_marked' not in basename(f).lower() and 'mask' not in basename(f)]
 unmarked_video_oa790_filenames = [f for f in all_video_files_unmarked if 'oa790' in basename(f).lower()]
 unmarked_video_oa850_filenames = [f for f in all_video_files_unmarked if 'oa850' in basename(f).lower()]
 
@@ -92,6 +96,203 @@ def find_filename_of_same_source(target_filename, filenames):
         if files_of_same_source(target_filename, filename):
             return filename
     return ''
+
+
+class VideoSession(object):
+    def __init__(self, video_filename):
+        channel_type = ''
+        if 'confocal' in video_filename.lower():
+            channel_type = 'confocal'
+        elif 'oa790' in video_filename.lower():
+            channel_type = 'oa790'
+        elif 'oa850' in video_filename.lower():
+            channel_type = 'oa790'
+
+        vid_marked_790_filename = find_filename_of_same_source(video_filename, marked_video_oa790_files)
+        vid_marked_850_filename = find_filename_of_same_source(video_filename, marked_video_oa850_files)
+
+        has_marked_video = vid_marked_790_filename != '' or vid_marked_850_filename != ''
+
+        subject_number = -1
+        session_number = -1
+        for string in video_filename.split('_'):
+            if 'Subject' in string:
+                subject_number = int(re.search(r'\d+', string).group())
+            if 'Session' in string:
+                session_number = int(re.search(r'\d+', string).group())
+
+        self.type = channel_type
+        self.has_marked_video = has_marked_video
+        self.subject_number = subject_number
+        self.session_number = session_number
+        self.video_file = video_filename
+        self.video_oa790_file = find_filename_of_same_source(video_filename, unmarked_video_oa790_filenames)
+        self.video_850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
+        self.marked_video_oa790_file = vid_marked_790_filename
+        self.marked_video_oa850_file = vid_marked_850_filename
+        self.mask_video_oa790_file = find_filename_of_same_source(video_filename, mask_video_oa790_files)
+        self.mask_video_oa850_file = find_filename_of_same_source(video_filename, mask_video_oa850_files)
+        self.mask_video_confocal_file = find_filename_of_same_source(video_filename, mask_video_confocal_files)
+        self.vessel_mask_confocal_file = find_filename_of_same_source(video_filename, vessel_mask_confocal_files)
+        self.vessel_mask_oa790_file = find_filename_of_same_source(video_filename, vessel_mask_oa790_files)
+        self.vessel_mask_oa850_file = find_filename_of_same_source(video_filename, vessel_mask_oa850_files)
+        self.std_image_confocal_file = find_filename_of_same_source(video_filename, std_image_confocal_files)
+        self.std_image_oa790_file = find_filename_of_same_source(video_filename, std_image_oa790_files)
+        self.std_image_oa850_file = find_filename_of_same_source(video_filename, std_image_oa850_files)
+        self.cell_position_csv_files = [csv_file for csv_file
+                                        in csv_cell_cords_oa790_filenames
+                                        if files_of_same_source(csv_file, video_filename)]
+
+        self._frames_oa790 = None
+        self._frames_oa850 = None
+        self._mask_frames_oa790 = None
+        self._mask_frames_oa850 = None
+        self._marked_frames_oa790 = None
+        self._marked_frames_oa850 = None
+        self._cell_positions = None
+        self._std_image_oa790 = None
+        self._std_image_oa850 = None
+        self._std_image_confocal = None
+        self._vessel_mask_oa790 = None
+        self._vessel_mask_oa850 = None
+        self._vessel_mask_confocal = None
+
+    @property
+    def frames_oa790(self):
+        if self._frames_oa790 is None:
+            self._frames_oa790 = get_frames_from_video(self.video_oa790_file)[..., 0]
+        return self._frames_oa790
+
+    @property
+    def frames_oa850(self):
+        if self._frames_oa850 is None:
+            self._frames_oa850 = get_frames_from_video(self.video_850_file)[..., 0]
+        return self._frames_oa850
+
+    @property
+    def mask_frames_oa790(self):
+        if self._mask_frames_oa790 is None:
+            if self.mask_video_oa790_file == '':
+                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
+            self._mask_frames_oa790 = get_frames_from_video(self.mask_video_oa790_file)
+        return self._mask_frames_oa790
+
+    @property
+    def mask_frames_oa850(self):
+        if self._mask_frames_oa850 is None:
+            if self.mask_video_oa850_file == '':
+                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
+            self._mask_frames_oa850 = get_frames_from_video(self.mask_video_oa850_file)
+        return self._mask_frames_oa850
+
+    @property
+    def marked_frames_oa790(self):
+        if self._marked_frames_oa790 is None:
+            if not self.has_marked_video:
+                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no marked video.")
+            self._marked_frames_oa790 = get_frames_from_video(self.marked_video_oa790_file)[..., 0]
+        return self._marked_frames_oa790
+
+    @property
+    def marked_frames_oa850(self):
+        if self._marked_frames_oa850 is None:
+            if self.marked_video_oa850_file == '':
+                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no oa850 marked video.")
+            self._marked_frames_oa850 = get_frames_from_video(self.marked_video_oa850_file)[..., 0]
+        return self._marked_frames_oa850
+
+    @property
+    def cell_positions(self):
+        """ A dictionary with frame index -> Nx2 x,y cell positions.
+
+        Returns the positions of the blood cells as a dictionary indexed by the frame index as is in the csv file.
+        The csv file is 1 indexed while python is 0 indexed so if you want to pick the first frame then use
+        session.cell_positions[1] instead of session.cell_positions[0].
+        """
+        import pandas as pd
+        import numpy as np
+        if len(self.cell_position_csv_files) == 0:
+            raise Exception(f"No csv found with cell positions for video session {basename(self.video_oa790_file)}")
+
+        cell_positions = {}
+        if self._cell_positions is None:
+            for csv_file in self.cell_position_csv_files:
+                csv_cell_positions_df = pd.read_csv(csv_file, delimiter=',')
+
+                csv_cell_positions_coordinates = np.int32(csv_cell_positions_df[['X', 'Y']].to_numpy())
+                csv_cell_positions_frame_indices = np.int32(csv_cell_positions_df[['Slice']].to_numpy())
+
+                frame_indices = np.unique(csv_cell_positions_frame_indices)
+
+                # Number of cells in videos is the same as the number of entries in the csv_file
+                for frame_idx in frame_indices:
+                    curr_coordinates = csv_cell_positions_coordinates[
+                        np.where(csv_cell_positions_frame_indices == frame_idx)[0]]
+                    cell_positions[frame_idx] = curr_coordinates
+        return cell_positions
+
+    @property
+    def vessel_mask_oa790(self):
+        if self._vessel_mask_oa790 is None:
+            if self.vessel_mask_oa790_file == '':
+                raise Exception(f"No vessel mask found fr session {self.video_oa790_file}")
+            self._vessel_mask_oa790 = np.bool8(plt.imread(self.vessel_mask_oa790_file)[..., 0])
+        return self._vessel_mask_oa790
+
+    @property
+    def vessel_mask_oa850(self):
+        if self._vessel_mask_oa850 is None:
+            if self.vessel_mask_oa850_file == '':
+                raise Exception(f"No vessel mask found fr session {self.video_oa790_file}")
+            self._vessel_mask_oa850 = np.bool8(plt.imread(self.vessel_mask_oa850_file)[..., 0])
+        return self._vessel_mask_oa850
+
+    @property
+    def vessel_mask_confocal(self):
+        if self._vessel_mask_confocal is None:
+            if self.vessel_mask_confocal_file == '':
+                raise Exception(f"No vessel mask found for session {self.video_oa790_file}")
+            self._vessel_mask_confocal = np.bool8(plt.imread(self.vessel_mask_confocal_file)[..., 0])
+        return self._vessel_mask_confocal
+
+    @property
+    def std_image_oa790(self):
+        if self._std_image_oa790 is None:
+            if self.std_image_oa790_file == '':
+                raise Exception(f"No standard deviation image oa790 found for session '{self.video_oa790_file}'")
+            self._std_image_oa790 = plt.imread(self.std_image_oa790_file)
+        return self._std_image_oa790
+
+    @property
+    def std_image_oa850(self):
+        if self._std_image_oa850 is None:
+            if self.std_image_oa850_file == '':
+                raise Exception(f"No standard deviation image oa850 found for session '{self.video_oa790_file}'")
+            self._std_image_oa850 = plt.imread(self.std_image_oa850_file)
+        return self._std_image_oa850
+
+    @property
+    def std_image_confocal(self):
+        if self._std_image_confocal is None:
+            if self.std_image_confocal_file == '':
+                raise Exception(f"No standard deviation image confocal found for session '{self.video_oa790_file}'")
+            self._std_image_confocal = plt.imread(self.std_image_confocal_file)
+        return self._std_image_confocal
+
+
+def get_video_sessions(should_have_marked_video=False):
+    available_channel_type = ['oa790', 'oa850', 'confocal']
+
+    video_sessions = []
+    for video_filename in unmarked_video_oa790_filenames:
+
+        vid_session = VideoSession(video_filename)
+        if should_have_marked_video and not vid_session.has_marked_video:
+            continue
+        else:
+            video_sessions.append(vid_session)
+
+    return video_sessions
 
 
 def get_video_file_dictionaries(channel_type, should_have_marked_video=False):
@@ -147,7 +348,8 @@ def get_video_file_dictionaries(channel_type, should_have_marked_video=False):
             'std_image_oa790_file': find_filename_of_same_source(video_filename, std_image_oa790_files),
             'std_image_oa850_file': find_filename_of_same_source(video_filename, std_image_oa850_files),
             'cell_position_csv_files': [csv_file for csv_file
-                                       in csv_cell_cords_oa790_filenames if files_of_same_source(csv_file, video_filename)]
+                                        in csv_cell_cords_oa790_filenames if
+                                        files_of_same_source(csv_file, video_filename)]
         }
         video_file_dictionaries.append(video_file_dict)
     return video_file_dictionaries
