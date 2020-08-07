@@ -1,5 +1,9 @@
 *.jpg
+*.JPG
+*.jpeg
+*.JPEG
 *.png
+*.PNG
 *.tif
 /Cones
 /Cones2
