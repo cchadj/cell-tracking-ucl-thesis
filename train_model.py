@@ -153,6 +153,9 @@ def train_model_demo(patch_size=(21, 21),
                 trainset=trainset,
                 validset=validset,
             )
+        else:
+            train_params['trainset'] = trainset
+            train_params['validset'] = validset
 
         results = train(model, train_params, criterion=torch.nn.CrossEntropyLoss(), device=device)
 
