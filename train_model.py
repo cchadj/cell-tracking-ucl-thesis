@@ -11,10 +11,6 @@ from generate_datasets import get_cell_and_no_cell_patches
 from classificationutils import classify_images, classify_labeled_dataset
 from sharedvariables import CACHED_MODELS_FOLDER
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print('Using device:', device)
-print()
-
 
 def extract_value_from_string(string, value_prefix, delimiter='_'):
     strings = pathlib.Path(string).with_suffix('').name.split(delimiter)
@@ -215,4 +211,8 @@ def main():
 
 
 if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print('Using device:', device)
+    print()
+
     main()

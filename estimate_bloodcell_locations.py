@@ -1,7 +1,6 @@
 from sharedvariables import *
 import argparse
 import pathlib
-from cell_no_cell import get_frames_from_video
 import re
 from sys import exit
 import numpy as np
@@ -12,10 +11,7 @@ from classificationutils import create_probability_map, get_cell_positions_from_
 from cnnlearning import CNN
 import tqdm
 from tqdm.contrib import tzip
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print('Using device:', device)
-print()
+from sharedvariables import unmarked_video_oa790_filenames
 
 DEFAULT_N_FRAMES_PER_VIDEO = 10
 
@@ -67,7 +63,7 @@ def parse_arguments():
     args = parser.parse_args()
 
     if args.videos is None:
-        video_filenames = unmarked_labeled_video_OA790_filenames
+        video_filenames = unmarked_video_oa790_filenames
     else:
         video_filenames = [f.name for f in args.videos]
 
@@ -176,5 +172,9 @@ def main():
 
 
 if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print('Using device:', device)
+    print()
+
     exit(main())
 
