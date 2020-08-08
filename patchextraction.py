@@ -75,8 +75,6 @@ def get_random_points_on_rectangles(cx, cy, rect_size, n_points_per_rect=1):
     return rxs, rys
 
 
-
-
 def get_patch(im, x, y, patch_size):
     """ Get a patch from image
 
@@ -89,6 +87,8 @@ def get_patch(im, x, y, patch_size):
     Returns:
         height x width x C
     """
+    if type(patch_size) == int:
+        patch_size = patch_size, patch_size
     height, width = patch_size
     return im[int(y - height / 2):int(y + height / 2), int(x - width / 2):int(x + width / 2), ...]
 

@@ -188,7 +188,7 @@ class CvRoipolySelector(CvGuiSelector):
     def __init__(self, window_name, image, point_thickness=5):
         super(CvRoipolySelector, self).__init__(window_name, image)
         self.points_thickness = point_thickness
-        self._mask = np.zeros_like(self.image, dtype=np.uint8)
+        self._mask = np.zeros(self.image.shape[:2], dtype=np.uint8)
 
     def point_select(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
