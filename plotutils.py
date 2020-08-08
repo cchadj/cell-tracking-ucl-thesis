@@ -5,6 +5,30 @@ from matplotlib.patches import Rectangle
 import numpy as np
 
 
+def no_ticks(axes=None):
+    if axes is not None:
+        for ax in axes.flatten():
+            ax.tick_params(
+                axis='both',
+                which='both',
+                left=False,
+                right=False,
+                labelleft=False,
+                bottom=False,
+                top=False,
+                labelbottom=False)
+    else:
+        plt.tick_params(
+                axis='both',
+                which='both',
+                left=False,
+                right=False,
+                labelleft=False,
+                bottom=False,
+                top=False,
+                labelbottom=False)
+
+
 def plot_patch_rois_at_positions(positions, patch_size=(21, 21),
                                  edgecolor='r', pointcolor='b', label=None,
                                  ax=None, image=None):
