@@ -200,6 +200,7 @@ class TrainingTracker:
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
             run_parameters["learning rate"] = param_group["lr"]
+            run_parameters["weight decay"] = param_group["weight_decay"]
 
         # Record hyper-params into 'results'
         for k, v in self.run_params.items():
@@ -436,8 +437,13 @@ def train(cnn, params, device="cuda", criterion=nn.BCELoss()):
 
     # Set up Optimizer
     if 'optimizer' not in params:
-        assert 'lr' in params
-        params['optimizer'] = torch.optim.Adam(cnn.parameters(), lr=params['lr'])
+        lr = .001
+        weight_decay = 5e-4
+        if 'lr' in params:
+            lr = params['lr']
+        if 'weight_decay' in params:
+            weight_decay = params['weight_decay']
+        params['optimizer'] = torch.optim.Adam(cnn.parameters(), lr=lr, weight_decay=weight_decay)
     optimizer = params['optimizer']
 
     # Set up learning rate scheduler

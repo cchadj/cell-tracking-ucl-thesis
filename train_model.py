@@ -66,6 +66,7 @@ def load_model_from_cache(model, patch_size=(21, 21), n_negatives_per_positive=3
 def train_model_demo(patch_size=(21, 21),
                      do_hist_match=False,
                      n_negatives_per_positive=3,
+                     device='cuda',
                      load_from_cache=True,
                      train_params=None,
                      ):
