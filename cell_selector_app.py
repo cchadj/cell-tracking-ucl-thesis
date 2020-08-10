@@ -1,24 +1,25 @@
-# MyApp.py
-# D. Thiebaut
-from typing import List, Any
+import sys
+import os
+from os.path import basename
+from matplotlib import pyplot as plt
 
-from PyQt5.QtWidgets import QFileDialog
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import QUrl
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
 from cell_selector import MplFrameSelector
-from sharedvariables import image_file_extensions, video_file_extensions
+from sharedvariables import csv_file_extensions, video_file_extensions, DATA_FOLDER, OUTPUT_FOLDER
 
 from cell_selector_ui import Ui_MainWindow
 from cell_selector_model import CellSelectorModel
-# MyApp.py
-# D. Thiebaut
-from PyQt5 import QtCore, QtGui, QtWidgets
-import sys
-from matplotlib import pyplot as plt
-from os.path import basename
+
+# type hinting
+from typing import List
 
 
+# noinspection PyBroadException
 class MainWindowUIClass(Ui_MainWindow):
-    btns: List[QtWidgets.QPushButton]
+    widgets: List[QtWidgets.QWidget]
     model: CellSelectorModel
     frame_selector: MplFrameSelector
 
@@ -28,7 +29,8 @@ class MainWindowUIClass(Ui_MainWindow):
         super().__init__()
         self.model = CellSelectorModel()
         self.frame_selector = None
-        self.btns = []
+        self.widgets = []
+        self.not_implemented_widgets = []
 
     def setupUi(self, MW):
         ''' Setup the UI of the super class, and add here code
@@ -38,60 +40,81 @@ class MainWindowUIClass(Ui_MainWindow):
         self.cell_positions_csv_target_lbl.setText('')
         self.mask_video_file_target_lbl.setText('')
         self.vessel_mask_loaded_target_lbl.setText('')
-        self.debugDisplay.append('Please select avi')
+        self.debugDisplay.append("Please select avi. 'File -> New' or 'Ctr + N'")
 
-        self.btns.append(self.next_marked_frame_btn)
-        self.btns.append(self.prev_marked_frame_btn)
-        self.btns.append(self.next_frame_btn)
-        self.btns.append(self.prev_frame_btn)
-        self.btns.append(self.load_cell_positions_csv_btn)
-        self.btns.append(self.load_mask_video_btn)
-        self.btns.append(self.load_vessel_mask_btn)
+        self.widgets.append(self.next_marked_frame_btn)
+        self.widgets.append(self.prev_marked_frame_btn)
+        self.widgets.append(self.next_frame_btn)
+        self.widgets.append(self.prev_frame_btn)
+        self.widgets.append(self.load_cell_positions_csv_btn)
+        self.widgets.append(self.load_mask_video_btn)
+        self.widgets.append(self.load_vessel_mask_btn)
+        self.widgets.append(self.cur_frame_txt)
 
-        for btn in self.btns:
-            btn.setDisabled(True)
+        self.not_implemented_widgets.append(self.load_vessel_mask_btn)
+        self.not_implemented_widgets.append(self.load_cell_positions_csv_btn)
+        self.not_implemented_widgets.append(self.load_mask_video_btn)
+
+        for widget in self.widgets:
+            widget.setDisabled(True)
+
+        for widget in self.not_implemented_widgets:
+            widget.setDisabled(True)
 
     def newVideoSlot(self):
         dialog = QFileDialog()
+
+        data_folder_full_path = os.path.abspath(DATA_FOLDER)
+        dialog.setDirectoryUrl(QUrl('file:///' + data_folder_full_path))
         dialog.setFileMode(QFileDialog.ExistingFile)
         file_extensions = 'Videos ('
         for extension in video_file_extensions:
             file_extensions += f'*{extension} '
         file_extensions += ')'
         dialog.setNameFilter(file_extensions)
-        dialog.setViewMode(QFileDialog.Detail)
+        dialog.setViewMode(QFileDialog.List)
         if dialog.exec_():
             file_names = dialog.selectedFiles()
+        else:
+            self.debugDisplay.append(f'No file selected.')
+            return
+
+        if len(file_names) == 0:
+            self.debugDisplay.append(f'No file selected.')
+            return
+
         try:
             self.model.create_video_session(file_names[0])
             self.frame_selector = MplFrameSelector.fromvideosession(self.model.video_session)
             self.frame_selector.activate()
             self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
             plt.show()
-            for btn in self.btns:
+            for btn in self.widgets:
                 btn.setEnabled(True)
 
-            self.file_loaded_target_lbl.setText(basename(self.model.video_session.video_oa790_file))
-            self.vessel_mask_loaded_target_lbl.setText(basename(self.model.video_session.video_850_file))
+            self.filed_loaded_target_lbl.setText(basename(self.model.video_session.video_oa790_file))
+            self.vessel_mask_loaded_target_lbl.setText(basename(self.model.video_session.vessel_mask_confocal_file))
             self.cell_positions_csv_target_lbl.setText(basename(self.model.video_session.cell_position_csv_files[0]))
             self.mask_video_file_target_lbl.setText(basename(self.model.video_session.mask_video_oa790_file))
-        except FileNotFoundError:
+            self.debugDisplay.append(f"Output csv file will be saved as: '{self.frame_selector.output_file}'")
+            self.debugDisplay.append("'Ctr + S' to save")
+            self.debugDisplay.append("'File -> Save' as to change output file")
+        except:
             print('No such file or file is not readable. Please select other video.')
+            self.debugDisplay.append('No such file or file is not readable. Please select other video.')
+
         print(f'Selected files {file_names}')
 
     def loadVesselMaskSlot(self):
-        raise NotImplementedError
+        self.debugDisplay.append('Functionality not yet implemented')
 
     def loadCellPositionsCsvSlot(self):
-        print('Loading cell position csv')
-        pass
+        self.debugDisplay.append('Functionality not yet implemented')
 
     def loadMaskVidSlot(self):
-        print('Loading mask video')
-        pass
+        self.debugDisplay.append('Functionality not yet implemented')
 
     def goToNextFrameSlot(self):
-        # type self.fra
         self.frame_selector.frame_idx += 1
         self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
         print('Next frame')
@@ -116,12 +139,48 @@ class MainWindowUIClass(Ui_MainWindow):
         pass
 
     def saveSlot(self):
-        print('Saving File')
+        self.frame_selector.save()
+        print(f'Saved output to {self.frame_selector.output_file}')
         pass
 
     def saveAsSlot(self):
-        print('Saving file as')
-        pass
+        dialog = QFileDialog()
+        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setDirectoryUrl(QUrl(os.path.join('file:', os.path.dirname(self.frame_selector.output_file))))
+        file_extensions = 'Csv files ('
+        for extension in csv_file_extensions:
+            file_extensions += f'*{extension} '
+        file_extensions += ')'
+        dialog.setNameFilter(file_extensions)
+        dialog.setViewMode(QFileDialog.List)
+        if dialog.exec_():
+            filenames = dialog.selectedFiles()
+        else:
+            self.debugDisplay.append(f'No file selected.')
+            return
+
+        if len(filenames) > 0:
+            if os.path.exists(filenames[0]):
+                # Ask user if it's ok to overwrite existing document
+                msg_box = QMessageBox()
+                msg_box.setText('File with that name already exists.')
+                msg_box.setInformativeText('Are you sure you want to overwrite?')
+                msg_box.setStandardButtons(QMessageBox.Save | QMessageBox.Cancel)
+                msg_box.setDefaultButton(QMessageBox.Save)
+                ret = msg_box.exec()
+
+                if ret == QMessageBox.Save:
+                    is_file_safe_to_save = True
+                elif ret == QMessageBox.Cancel:
+                    is_file_safe_to_save = False
+                    self.debugDisplay.append('File not saved.')
+            if is_file_safe_to_save:
+                self.frame_selector.output_file = filenames[0]
+                self.frame_selector.save()
+                self.debugDisplay.append(f'Saved output as: {self.frame_selector.output_file}')
+        else:
+            self.debugDisplay.append(f'No file selected.')
+
 
 def main():
     """

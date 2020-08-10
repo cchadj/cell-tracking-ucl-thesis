@@ -31,11 +31,11 @@ CACHED_MODELS_FOLDER = os.path.join(CACHE_FOLDER, 'models')
 CACHED_DATASETS_FOLDER = os.path.join(CACHE_FOLDER, 'datasets')
 CACHED_DICE = os.path.join(CACHE_FOLDER, 'dice')
 
-OUTPUT_FOLDER = os.path.join(DATA_FOLDER, 'output')
+OUTPUT_FOLDER = os.path.join('.', 'output')
 OUTPUT_ESTIMATED_POSITIONS_FOLDER = os.path.join(OUTPUT_FOLDER, 'estimated-positions')
 
 # Set up file extensions here. All extensions must be lowercase.
-csv_file_extension = ('.csv', '.txt')
+csv_file_extensions = ('.csv', '.txt')
 video_file_extensions = ('.avi', '.webm', '.mp4')
 image_file_extensions = ('.jpg', '.jpeg', '.tif', '.tiff', '.png', '.bmp')
 
@@ -58,7 +58,7 @@ all_files = [f for _, f in sorted(zip(all_files_basenames_uniq, all_files))]
 ## end remove duplicates ##
 
 all_video_files = [f for f in all_files if f.lower().endswith(video_file_extensions)]
-all_csv_files = [f for f in all_files if f.lower().endswith(csv_file_extension)]
+all_csv_files = [f for f in all_files if f.lower().endswith(csv_file_extensions)]
 all_image_files = [f for f in all_files if f.lower().endswith(image_file_extensions)]
 
 # unmarked videos. Must not have '_marked' or 'mask in them.

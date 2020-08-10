@@ -1,32 +1,34 @@
 """
 python estimated_location_keeper -c estimated_coords.csv -v video.avi -o output.csv
 """
-from sharedvariables import *
+import os
+from os.path import basename
+from typing import Dict
+
+from sharedvariables import OUTPUT_FOLDER
 import argparse
 from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
-from guitools import ScatterPlotPointSelector
+from guitools import MplScatterPlotPointSelector
 import pathlib
 from matplotlib.widgets import Button
 from matplotlib import widgets
 import tkinter as tk
 from tkinter import filedialog
-from cell_celector_ui import Ui_MainWindow
-
-from PyQt5 import QtCore, QtGui, QtWidgets
 from sharedvariables import VideoSession
-from sharedvariables import get_video_sessions, files_of_same_source
 
 
 class MplFrameSelector(object):
+    fig: plt.Figure
+    point_selector_dict: Dict[int, MplScatterPlotPointSelector]
+
     def __init__(self,
                  frames,
                  cell_coordinates,
                  output_file,
                  frame_masks=None,
-                 vessel_mask=None,
-                 ):
+                 vessel_mask=None):
         """
 
         Args:
@@ -37,13 +39,13 @@ class MplFrameSelector(object):
         self.frames = frames
         self.frame_masks = frame_masks
         self.vessel_mask = vessel_mask
-        self.cell_coords_dict = cell_coordinates
+        self.cell_cords_dict = cell_coordinates
         self.output_file = output_file
 
         self.key_idx = 0
 
         self._frame_idx = 0
-        self.cur_coords = None
+        self.cur_frame_cell_cords = None
         self.cur_frame = None
         self.cur_mask = None
         self.cur_point_selector = None
@@ -52,9 +54,10 @@ class MplFrameSelector(object):
         self.fig, self.ax = None, None
 
     def activate(self):
+        plt.ioff()
         self.fig, self.ax = plt.subplots()
         if self.frame_idx is None:
-            self.frame_idx = list(self.cell_coords_dict.keys())[0]
+            self.frame_idx = list(self.cell_cords_dict.keys())[0]
         self.update()
 
     @property
@@ -68,12 +71,16 @@ class MplFrameSelector(object):
 
     @classmethod
     def fromvideosession(cls, video_session: VideoSession):
+        from datetime import datetime
         """ Create cell selector from VideoSession object
 
             video_session (VideoSession):
         """
+
         filename_without_extension = basename(video_session.video_oa790_file).split('.')[0]
-        output_file = os.path.join(OUTPUT_FOLDER, filename_without_extension + '_selected_cords.csv')
+        output_file = os.path.join(OUTPUT_FOLDER,
+                                   f'{datetime.now().strftime("date_time%m-%d-%Y_%H-%M-%S")}',
+                                   filename_without_extension + '_selected_cords.csv')
         try:
             frame_masks = video_session.mask_frames_oa790
         except Exception:
@@ -92,25 +99,25 @@ class MplFrameSelector(object):
                    output_file, frame_masks, vessel_mask)
 
     def prev_marked_frame(self):
-        marked_frame_indices = np.array(list(self.cell_coords_dict.keys()))
+        marked_frame_indices = np.array(list(self.cell_cords_dict.keys()))
         # keep only those that are bigger than cur frame idx
         marked_frame_indices = marked_frame_indices[marked_frame_indices < self._frame_idx]
 
         if len(marked_frame_indices) == 0:
-            # if only the current frame idx is bigger or same than any other marked frame index go to first marked frame
-            self.frame_idx = list(self.cell_coords_dict.keys())[0]
+            # if only the current frame idx is smaller or same than any other marked frame index go to last marked frame
+            self.frame_idx = list(self.cell_cords_dict.keys())[-1]
         else:
             # go to closest next frame
             self.frame_idx = marked_frame_indices[np.argmin(np.abs(marked_frame_indices - self._frame_idx))]
 
     def next_marked_frame(self):
-        marked_frame_indices = np.array(list(self.cell_coords_dict.keys()))
+        marked_frame_indices = np.array(list(self.cell_cords_dict.keys()))
         # keep only those that are bigger than cur frame idx
         marked_frame_indices = marked_frame_indices[marked_frame_indices > self._frame_idx]
 
         if len(marked_frame_indices) == 0:
             # if only the current frame idx is bigger or same than any other marked frame index go to first marked frame
-            self.frame_idx = list(self.cell_coords_dict.keys())[0]
+            self.frame_idx = list(self.cell_cords_dict.keys())[0]
         else:
             # go to closest next frame
             self.frame_idx = marked_frame_indices[np.argmin(np.abs(marked_frame_indices - self._frame_idx))]
@@ -119,7 +126,7 @@ class MplFrameSelector(object):
         self._frame_idx = (self._frame_idx - 1) % len(self.frames)
         self.update()
 
-    def update(self, frame_idx=None):
+    def update(self):
         """ Update frame selector plot contents
 
         Args:
@@ -130,12 +137,17 @@ class MplFrameSelector(object):
         """
         # Get frame at index and mask at that frame.
         self.cur_frame = self.frames[self.frame_idx]
-        if self.frame_idx not in self.point_selector_dict and self.cur_coords is not None:
-            self.point_selector_dict[self.frame_idx] = ScatterPlotPointSelector(self.cur_coords, fig_ax=(self.fig, self.ax))
 
+        if self.frame_idx in self.cell_cords_dict:
+            self.cur_frame_cell_cords = self.cell_cords_dict[self.frame_idx]
+        else:
+            self.cur_frame_cell_cords = None
+        if self.frame_idx not in self.point_selector_dict and self.cur_frame_cell_cords is not None:
+            self.point_selector_dict[self.frame_idx] = MplScatterPlotPointSelector(self.cur_frame_cell_cords, fig_ax=(self.fig, self.ax))
+
+        # Update cur point selector. Each frame has it's own point selector.
         if self.cur_point_selector is not None:
             self.cur_point_selector.deactivate()
-
         if self.frame_idx in self.point_selector_dict:
             self.cur_point_selector = self.point_selector_dict[self.frame_idx]
         else:
@@ -158,11 +170,13 @@ class MplFrameSelector(object):
         if self.cur_point_selector is not None:
             self.cur_point_selector.activate()
 
+        plt.ioff()
         self.fig.canvas.draw_idle()
+        plt.ioff()
 
-    def save(self, event):
+    def save(self):
         output_df = pd.DataFrame(columns=['X', 'Y', 'Slice'])
-        for frame_idx in self.cell_coords_dict.keys():
+        for frame_idx in self.cell_cords_dict.keys():
             if frame_idx not in self.point_selector_dict:
                 continue
             point_selector = self.point_selector_dict[frame_idx]
@@ -170,15 +184,17 @@ class MplFrameSelector(object):
                 # when no point selected from that frame
                 continue
 
-            blood_cell_positions = self.cell_coords_dict[frame_idx]
-            positions_to_keep = blood_cell_positions[point_selector.selected_point_indices, :]
+            positions_to_keep = point_selector.all_points[point_selector.selected_point_indices, :]
 
+            # the frame indices in the csv are 1 indexed so we add 1
+            slice_idx = np.ones(len(positions_to_keep), dtype=np.int) * (frame_idx + 1)
             cur_coords_df = pd.DataFrame({
                 'X': positions_to_keep[:, 0],
                 'Y': positions_to_keep[:, 1],
-                'Slice': np.ones(len(positions_to_keep) * frame_idx)})
+                'Slice': slice_idx})
             output_df = output_df.append(cur_coords_df)
 
+        pathlib.Path(os.path.dirname(self.output_file)).mkdir(parents=True, exist_ok=True)
         output_df.to_csv(self.output_file)
         print(f'Saved output to {self.output_file}')
 
@@ -280,7 +296,6 @@ def parse_arguments():
     return video_filename, masks_video_filename, vessel_mask, cell_positions, frame_indices, args.output_directory
 
 
-def main():
     video_filename, masks_video_filename, vessel_mask, coords, frame_indices, output_directory = parse_arguments()
 
     output_csv_filename = os.path.splitext(os.path.basename(video_filename))[0] + '_selected_coords.csv'
