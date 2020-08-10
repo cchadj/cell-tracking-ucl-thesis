@@ -219,11 +219,13 @@ class VideoSession(object):
 
     @property
     def cell_positions(self):
-        """ A dictionary with frame index -> Nx2 x,y cell positions.
+        """ A dictionary with {frame index -> Nx2 x,y cell positions}.
 
-        Returns the positions of the blood cells as a dictionary indexed by the frame index as is in the csv file.
-        The csv file is 1 indexed while python is 0 indexed so if you want to pick the first frame then use
-        session.cell_positions[1] instead of session.cell_positions[0].
+        Returns the positions of the blood cells as a dictionary indexed by the frame index as is in the csv file
+        but 0 indexed instead!. To get the first frame do  session.cell_positions[0] instead of session.cell_positions[1].
+
+        To access ith frame's cell positions do:
+        self.cell_positions[i - 1]
         """
         import pandas as pd
         import numpy as np
@@ -244,7 +246,8 @@ class VideoSession(object):
                 for frame_idx in frame_indices:
                     curr_coordinates = csv_cell_positions_coordinates[
                         np.where(csv_cell_positions_frame_indices == frame_idx)[0]]
-                    cell_positions[frame_idx] = curr_coordinates
+                    # The csv file is 1 indexed but python is 0 indexed so we -1.
+                    cell_positions[frame_idx - 1] = curr_coordinates
         return cell_positions
 
     @property

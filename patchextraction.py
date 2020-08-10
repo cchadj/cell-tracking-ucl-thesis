@@ -322,9 +322,9 @@ class SessionPatchExtractor(object):
 
     def _extract_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
         non_cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
-        # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
+
         for frame_idx, cell_positions in cell_positions.items():
-            frame = session_frames[frame_idx - 1]
+            frame = session_frames[frame_idx]
             # get non cell positions at random points along the perimeter of the patch.
             cx, cy = cell_positions[:, 0], cell_positions[:, 1]
             rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.patch_size,
@@ -357,9 +357,9 @@ class SessionPatchExtractor(object):
 
     def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
         cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
-        # note, frame_idx in the csv files is 1 indexed while python is 0 indexed => do frame_idx - 1 to get frame
+
         for frame_idx, cell_positions in cell_positions.items():
-            frame = session_frames[frame_idx - 1]
+            frame = session_frames[frame_idx]
             cur_frame_cell_patches = extract_patches_at_positions(frame, cell_positions, patch_size=self.patch_size)
             frame_idx_to_patch_dict[frame_idx] = cur_frame_cell_patches
             cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)

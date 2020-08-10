@@ -1,3 +1,6 @@
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import  QApplication, QMainWindow
+
 from sharedvariables import *
 import argparse
 import pathlib
@@ -171,10 +174,24 @@ def main():
     return 0
 
 
+def window():
+    app = QApplication(sys.argv)
+    win = QMainWindow()
+    win.setGeometry(0, 0, 300, 300)
+    win.setWindowTitle('Example!')
+
+    label = QtWidgets.QLabel(win)
+    label.setText('This is an example')
+    label.move(50, 50)
+    win.show()
+    sys.exit(app.exec_())
+
+
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
     print()
 
+    window()
     exit(main())
 

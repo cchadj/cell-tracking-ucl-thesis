@@ -7,15 +7,19 @@ from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
 from guitools import ScatterPlotPointSelector
-from cell_no_cell import get_frames_from_video
 import pathlib
 from matplotlib.widgets import Button
 from matplotlib import widgets
 import tkinter as tk
 from tkinter import filedialog
+from cell_celector_ui import Ui_MainWindow
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+from sharedvariables import VideoSession
+from sharedvariables import get_video_sessions, files_of_same_source
 
 
-class FrameSelector(object):
+class MplFrameSelector(object):
     def __init__(self,
                  frames,
                  cell_coordinates,
@@ -30,7 +34,6 @@ class FrameSelector(object):
             frame_indices:
             cell_coordinates: dict, where points[frame_index] = Nx2. The cell positions for each frame.
         """
-        self.fig, self.ax = plt.subplots()
         self.frames = frames
         self.frame_masks = frame_masks
         self.vessel_mask = vessel_mask
@@ -39,40 +42,94 @@ class FrameSelector(object):
 
         self.key_idx = 0
 
-        self.frame_idx = None
+        self._frame_idx = 0
         self.cur_coords = None
         self.cur_frame = None
         self.cur_mask = None
         self.cur_point_selector = None
         # Holds a point selector object for each frame_idx
         self.point_selector_dict = {}
+        self.fig, self.ax = None, None
 
+    def activate(self):
+        self.fig, self.ax = plt.subplots()
+        if self.frame_idx is None:
+            self.frame_idx = list(self.cell_coords_dict.keys())[0]
         self.update()
 
-    def select_frame(self, frame_idx):
-        if frame_idx == "":
-            frame_idx = self.frame_idx
-        self.update(int(frame_idx))
+    @property
+    def frame_idx(self):
+        return int(self._frame_idx)
 
-    def next_frame(self, event):
-        self.key_idx = (self.key_idx + 1) % len(self.cell_coords_dict)
+    @frame_idx.setter
+    def frame_idx(self, val):
+        self._frame_idx = min(val, len(self.frames) - 1)
         self.update()
 
-    def prev_frame(self, event):
-        self.key_idx = (self.key_idx - 1) % len(self.cell_coords_dict)
+    @classmethod
+    def fromvideosession(cls, video_session: VideoSession):
+        """ Create cell selector from VideoSession object
+
+            video_session (VideoSession):
+        """
+        filename_without_extension = basename(video_session.video_oa790_file).split('.')[0]
+        output_file = os.path.join(OUTPUT_FOLDER, filename_without_extension + '_selected_cords.csv')
+        try:
+            frame_masks = video_session.mask_frames_oa790
+        except Exception:
+            frame_masks = None
+
+        try:
+            vessel_mask = video_session.vessel_mask_oa790
+        except Exception:
+            try:
+                vessel_mask = video_session.vessel_mask_confocal
+            except Exception:
+                vessel_mask = None
+
+        return cls(video_session.frames_oa790,
+                   video_session.cell_positions,
+                   output_file, frame_masks, vessel_mask)
+
+    def prev_marked_frame(self):
+        marked_frame_indices = np.array(list(self.cell_coords_dict.keys()))
+        # keep only those that are bigger than cur frame idx
+        marked_frame_indices = marked_frame_indices[marked_frame_indices < self._frame_idx]
+
+        if len(marked_frame_indices) == 0:
+            # if only the current frame idx is bigger or same than any other marked frame index go to first marked frame
+            self.frame_idx = list(self.cell_coords_dict.keys())[0]
+        else:
+            # go to closest next frame
+            self.frame_idx = marked_frame_indices[np.argmin(np.abs(marked_frame_indices - self._frame_idx))]
+
+    def next_marked_frame(self):
+        marked_frame_indices = np.array(list(self.cell_coords_dict.keys()))
+        # keep only those that are bigger than cur frame idx
+        marked_frame_indices = marked_frame_indices[marked_frame_indices > self._frame_idx]
+
+        if len(marked_frame_indices) == 0:
+            # if only the current frame idx is bigger or same than any other marked frame index go to first marked frame
+            self.frame_idx = list(self.cell_coords_dict.keys())[0]
+        else:
+            # go to closest next frame
+            self.frame_idx = marked_frame_indices[np.argmin(np.abs(marked_frame_indices - self._frame_idx))]
+
+    def prev_frame(self):
+        self._frame_idx = (self._frame_idx - 1) % len(self.frames)
         self.update()
 
     def update(self, frame_idx=None):
+        """ Update frame selector plot contents
 
-        self.frame_idx = frame_idx
-        if frame_idx is None:
-            self.frame_idx = list(self.cell_coords_dict)[self.key_idx]
-        if self.frame_idx in self.cell_coords_dict:
-            self.cur_coords = self.cell_coords_dict[self.frame_idx]
+        Args:
+            frame_idx:
 
-        # Get frame at index and mask at that frame
-        # CSV is one indexed while python is 0 indexed, subtract one.
-        self.cur_frame = self.frames[self.frame_idx - 1]
+        Returns:
+
+        """
+        # Get frame at index and mask at that frame.
+        self.cur_frame = self.frames[self.frame_idx]
         if self.frame_idx not in self.point_selector_dict and self.cur_coords is not None:
             self.point_selector_dict[self.frame_idx] = ScatterPlotPointSelector(self.cur_coords, fig_ax=(self.fig, self.ax))
 
@@ -86,7 +143,7 @@ class FrameSelector(object):
 
         # apply mask from the frame mask video.
         if self.frame_masks is not None:
-            self.cur_mask = self.frame_masks[self.frame_idx - 1]
+            self.cur_mask = self.frame_masks[self.frame_idx]
             self.cur_frame[~self.cur_mask] = 0
 
         # apply mask from the vessel mask
@@ -246,8 +303,8 @@ def main():
     frame_masks = None
     if masks_video_filename:
         frame_masks = np.bool8(get_frames_from_video(masks_video_filename)[..., 0])
-    callback = FrameSelector(frames, cell_positions, output_csv_filename,
-                             frame_masks=frame_masks, vessel_mask=vessel_mask)
+    callback = MplFrameSelector(frames, cell_positions, output_csv_filename,
+                                frame_masks=frame_masks, vessel_mask=vessel_mask)
 
     # ax rect -> [left, bottom, width, height]
     axprev = plt.axes([0.85, 0.65, 0.1, 0.175])
@@ -269,16 +326,12 @@ def main():
             if text is not "":
                 n = int(text)
                 if n >= len(frames):
-                    frame_txtbox.set_val(callback.frame_idx)
+                    frame_txtbox.set_val(callback._frame_idx)
         except ValueError:
-            frame_txtbox.set_val(callback.frame_idx)
+            frame_txtbox.set_val(callback._frame_idx)
 
     frame_txtbox.on_text_change(ensure_number)
 
     bprev = Button(axprev, 'Previous')
     bprev.on_clicked(callback.prev_frame)
     plt.show()
-
-
-if __name__ == '__main__':
-    main()
