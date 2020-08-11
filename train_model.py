@@ -4,7 +4,7 @@ from typing import Any, Union, Iterable
 
 import torch
 import collections
-
+import pandas as pd
 from numpy.core._multiarray_umath import ndarray
 from torch import nn
 import os
@@ -167,7 +167,18 @@ def train_model_demo(patch_size=(21, 21),
             if 'validset' not in train_params:
                 train_params['validset'] = validset
 
-        results = train(model, train_params, criterion=torch.nn.CrossEntropyLoss(), device=device)
+        display_dict = collections.OrderedDict({
+            "patch_size": patch_size,
+            "do_hist_match": do_hist_match,
+            "nnp": n_negatives_per_positive
+        })
+        additional_display = [
+            pd.DataFrame.from_dict(display_dict)
+        ]
+        results = train(model,
+                        train_params,
+                        criterion=torch.nn.CrossEntropyLoss(),
+                        device=device, additional_display_dfs=additional_display)
 
         output_directory = os.path.join(CACHED_MODELS_FOLDER,
                                         f'blood_cell_classifier_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}'
