@@ -93,7 +93,9 @@ class CNN(nn.Module):
 class TrainingTracker:
     additional_display_dfs: List[pd.DataFrame]
 
-    def __init__(self, device, additional_display_dfs=[]):
+    def __init__(self, device, additional_display_dfs=None):
+        if additional_display_dfs is None:
+            additional_display_dfs = []
         self.additional_display_dfs = additional_display_dfs
         self.epoch_count = 0
         self.epoch_start_time = None
@@ -429,9 +431,11 @@ class SignalHandler(object):
 def train(cnn, params,
           device="cuda",
           criterion=nn.BCELoss(),
-          additional_display_dfs=[]
+          additional_display_dfs=None
           ):
     # if params changes, following line of code should reflect the changes too
+    if additional_display_dfs is None:
+        additional_display_dfs = []
     train_loader = torch.utils.data.DataLoader(
         params['trainset'],
         batch_size=params['batch_size'],
