@@ -5,7 +5,9 @@ import re
 import glob
 from videoutils import get_frames_from_video
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import warnings
 
 
 def files_of_same_source(f1, f2):
@@ -155,20 +157,25 @@ class VideoSession(object):
         self.std_image_confocal_file = find_filename_of_same_source(video_filename, std_image_confocal_files)
         self.std_image_oa790_file = find_filename_of_same_source(video_filename, std_image_oa790_files)
         self.std_image_oa850_file = find_filename_of_same_source(video_filename, std_image_oa850_files)
-        self.cell_position_csv_files = [csv_file for csv_file
-                                        in csv_cell_cords_oa790_filenames
-                                        if files_of_same_source(csv_file, video_filename)]
+        self._cell_position_csv_files = [csv_file for csv_file
+                                         in csv_cell_cords_oa790_filenames
+                                         if files_of_same_source(csv_file, video_filename)]
 
         self._frames_oa790 = None
         self._frames_oa850 = None
+
         self._mask_frames_oa790 = None
         self._mask_frames_oa850 = None
+
         self._marked_frames_oa790 = None
         self._marked_frames_oa850 = None
-        self._cell_positions = None
+
+        self._cell_positions = {}
+
         self._std_image_oa790 = None
         self._std_image_oa850 = None
         self._std_image_confocal = None
+
         self._vessel_mask_oa790 = None
         self._vessel_mask_oa850 = None
         self._vessel_mask_confocal = None
@@ -218,6 +225,84 @@ class VideoSession(object):
         return self._marked_frames_oa850
 
     @property
+    def cell_position_csv_files(self):
+        """ Immutable list of filenames of the csvs with the cell positions.
+        """
+        return self._cell_position_csv_files.copy()
+
+    def _add_to_cell_positions(self, csv_file):
+        """ Warning, assumes that each csv_file has unique indices and overwrites entries from those indices
+        without checking the actual coordinates.
+        """
+        csv_cell_positions_df = pd.read_csv(csv_file, delimiter=',')
+
+        csv_cell_positions_coordinates = np.int32(csv_cell_positions_df[['X', 'Y']].to_numpy())
+        csv_cell_positions_frame_indices = np.int32(csv_cell_positions_df[['Slice']].to_numpy())
+
+        # The csv file is 1 indexed but python is 0 indexed so we -1.
+        frame_indices_all = np.int32(np.squeeze(csv_cell_positions_frame_indices - 1))
+        frame_indices_unique = np.unique(frame_indices_all)
+
+        # Number of cells in videos is the same as the number of entries in the csv_file
+        for frame_idx in frame_indices_unique:
+            curr_coordinates = csv_cell_positions_coordinates[
+                np.where(frame_indices_all == frame_idx)[0]
+            ]
+            if frame_idx in self._cell_positions:
+                warnings.warn(f"Same slice index, '{frame_idx + 1}', found in multiple csv_files."
+                              f' Overwriting with the latest csv file coordinates.')
+
+            # warning overwriting coordinates in  frame_idx if already exist
+            self._cell_positions[frame_idx] = curr_coordinates
+
+    def _remove_cell_positions(self, csv_file):
+        """ Warning, assumes that each csv_file has unique indices and removes entries from those indices
+        without checking the actual coordinates.
+        """
+
+        csv_cell_positions_df = pd.read_csv(csv_file, delimiter=',')
+
+        # csv_cell_positions_coordinates = np.int32(csv_cell_positions_df[['X', 'Y']].to_numpy())
+        csv_cell_positions_frame_indices = np.int32(csv_cell_positions_df[['Slice']].to_numpy())
+
+        # The csv file is 1 indexed but python is 0 indexed so we -1.
+        frame_indices = np.int32(np.unique(csv_cell_positions_frame_indices) - 1)
+
+        for frame_idx in frame_indices:
+            del self._cell_positions[frame_idx]
+
+    def _initialise_cell_positions(self):
+        for csv_file in self._cell_position_csv_files:
+            self._add_to_cell_positions(csv_file)
+
+    def append_cell_position_csv_file(self, csv_file):
+        """ Adds cell positions from the csv file
+        """
+        self._cell_position_csv_files.append(csv_file)
+        if len(self._cell_positions) == 0:
+            self._initialise_cell_positions()
+        else:
+            self._add_to_cell_positions(csv_file)
+
+    def pop_cell_position_csv_file(self, idx):
+        """ Remove the csv cell positions from the csv file at index idx
+        """
+        self._cell_position_csv_files.pop(idx)
+        if len(self._cell_positions) == 0:
+            self._initialise_cell_positions()
+        else:
+           pass
+
+    def remove_cell_position_csv_file(self, csv_file):
+        """ Remove the csv cell positions from the csv file at index idx
+        """
+        self._cell_position_csv_files.remove(csv_file)
+        if len(self._cell_positions) == 0:
+            self._initialise_cell_positions()
+        else:
+            pass
+
+    @property
     def cell_positions(self):
         """ A dictionary with {frame index -> Nx2 x,y cell positions}.
 
@@ -227,28 +312,13 @@ class VideoSession(object):
         To access ith frame's cell positions do:
         self.cell_positions[i - 1]
         """
-        import pandas as pd
-        import numpy as np
-        if len(self.cell_position_csv_files) == 0:
+        if len(self._cell_position_csv_files) == 0:
             raise Exception(f"No csv found with cell positions for video session {basename(self.video_oa790_file)}")
 
-        cell_positions = {}
-        if self._cell_positions is None:
-            for csv_file in self.cell_position_csv_files:
-                csv_cell_positions_df = pd.read_csv(csv_file, delimiter=',')
+        if len(self._cell_positions) == 0:
+            self._initialise_cell_positions()
 
-                csv_cell_positions_coordinates = np.int32(csv_cell_positions_df[['X', 'Y']].to_numpy())
-                csv_cell_positions_frame_indices = np.int32(csv_cell_positions_df[['Slice']].to_numpy())
-
-                frame_indices = np.unique(csv_cell_positions_frame_indices)
-
-                # Number of cells in videos is the same as the number of entries in the csv_file
-                for frame_idx in frame_indices:
-                    curr_coordinates = csv_cell_positions_coordinates[
-                        np.where(csv_cell_positions_frame_indices == frame_idx)[0]]
-                    # The csv file is 1 indexed but python is 0 indexed so we -1.
-                    cell_positions[frame_idx - 1] = curr_coordinates
-        return cell_positions
+        return self._cell_positions
 
     @property
     def vessel_mask_oa790(self):

@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 from os.path import basename
 from matplotlib import pyplot as plt
 
@@ -87,8 +87,9 @@ class MainWindowUIClass(Ui_MainWindow):
             self.model.create_video_session(file_names[0])
             self.frame_selector = MplFrameSelector.fromvideosession(self.model.video_session)
             self.frame_selector.activate()
-            self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
+            # because it's a matplotlib based class we need to call plt show afterwards
             plt.show()
+            self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
             for btn in self.widgets:
                 btn.setEnabled(True)
 
@@ -109,7 +110,32 @@ class MainWindowUIClass(Ui_MainWindow):
         self.debugDisplay.append('Functionality not yet implemented')
 
     def loadCellPositionsCsvSlot(self):
-        self.debugDisplay.append('Functionality not yet implemented')
+        dialog = QFileDialog()
+
+        data_folder_full_path = os.path.abspath(DATA_FOLDER)
+        dialog.setDirectoryUrl(QUrl('file:///' + data_folder_full_path))
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        file_extensions = 'Csv files ('
+        for extension in csv_file_extensions:
+            file_extensions += f'*{extension} '
+        file_extensions += ')'
+        dialog.setNameFilter(file_extensions)
+        dialog.setViewMode(QFileDialog.List)
+        if dialog.exec_():
+            filenames = dialog.selectedFiles()
+        else:
+            self.debugDisplay.append('No file chosen')
+            return
+
+        if len(filenames) == 0:
+            self.debugDisplay.append('No file chosen')
+            return
+        self.model.video_session.append_cell_position_csv_file(filenames[0])
+        self.frame_selector.close()
+
+        self.frame_selector = MplFrameSelector.fromvideosession(self.model.video_session)
+        self.frame_selector.activate()
+        plt.show()
 
     def loadMaskVidSlot(self):
         self.debugDisplay.append('Functionality not yet implemented')
@@ -118,24 +144,28 @@ class MainWindowUIClass(Ui_MainWindow):
         self.frame_selector.frame_idx += 1
         self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
         print('Next frame')
+        plt.show()
         pass
 
     def goToPrevFrameSlot(self):
         self.frame_selector.frame_idx -= 1
         self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
         print('Prev frame')
+        plt.show()
         pass
 
     def goToNextMarkedFrameSlot(self):
         self.frame_selector.next_marked_frame()
         self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
         print('Going to next marked frame slot')
+        plt.show()
         pass
 
     def goToPrevMarkedFrameSlot(self):
         self.frame_selector.prev_marked_frame()
         self.cur_frame_txt.setText(str(self.frame_selector.frame_idx))
         print('Going to prev marked frame slot')
+        plt.show()
         pass
 
     def saveSlot(self):

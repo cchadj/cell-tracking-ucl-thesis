@@ -109,7 +109,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.load_vessel_mask_btn.clicked.connect(self.loadVesselMaskSlot)
-        self.load_cell_positions_csv_btn.clicked.connect(self.loadVesselMaskSlot)
+        self.load_cell_positions_csv_btn.clicked.connect(self.loadCellPositionsCsvSlot)
         self.load_mask_video_btn.clicked.connect(self.loadMaskVidSlot)
         self.next_frame_btn.clicked.connect(self.goToNextFrameSlot)
         self.prev_frame_btn.clicked.connect(self.goToPrevFrameSlot)
