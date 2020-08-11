@@ -93,7 +93,7 @@ class CNN(nn.Module):
 class TrainingTracker:
     additional_display_dfs: List[pd.DataFrame]
 
-    def __init__(self, device, additional_display_dfs= []):
+    def __init__(self, device, additional_display_dfs=[]):
         self.additional_display_dfs = additional_display_dfs
         self.epoch_count = 0
         self.epoch_start_time = None
