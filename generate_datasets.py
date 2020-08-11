@@ -520,9 +520,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         video_sessions = get_video_sessions(should_have_marked_video=True)
 
         cell_images = np.zeros([0, *patch_size], dtype=np.float32)
-        cell_images_marked = np.zeros_like(cell_images)
+        non_cell_images = np.zeros_like(cell_images)
 
-        non_cell_images = np.zeros_like(cell_images, dtype=np.uint8)
+        cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
         non_cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
 
         if v:
