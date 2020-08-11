@@ -1,8 +1,11 @@
 import pathlib
 import argparse
+from typing import Any, Union, Iterable
 
 import torch
 import collections
+
+from numpy.core._multiarray_umath import ndarray
 from torch import nn
 import os
 import numpy as np
@@ -56,7 +59,8 @@ def load_model_from_cache(model, patch_size=(21, 21), n_negatives_per_positive=3
     best_model_idx = np.argmax([float(extract_value_from_string(f, 'va')) for f in potential_model_directories])
     best_model_directory = os.path.join(CACHED_MODELS_FOLDER, potential_model_directories[best_model_idx])
 
-    best_model_file = [os.path.join(best_model_directory, f) for f in os.listdir(best_model_directory) if f.endswith('.pt')][0]
+    best_model_file = \
+        [os.path.join(best_model_directory, f) for f in os.listdir(best_model_directory) if f.endswith('.pt')][0]
     model.load_state_dict(torch.load(best_model_file))
     model.eval()
 
@@ -68,15 +72,15 @@ def train_model_demo(patch_size=(21, 21),
                      n_negatives_per_positive=3,
                      device='cuda',
                      load_from_cache=True,
-                     train_params=None,
-                     ):
+                     train_params=None):
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
 
     trainset, validset, \
-    cell_images, non_cell_images, \
-    cell_images_marked, non_cell_images_marked, hist_match_template = \
+        cell_images, non_cell_images, \
+        cell_images_marked, non_cell_images_marked, \
+        hist_match_template = \
         get_cell_and_no_cell_patches(
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
@@ -84,32 +88,33 @@ def train_model_demo(patch_size=(21, 21),
             overwrite_cache=False,
         )
 
-    model = CNN(convolutional=
-    nn.Sequential(
-        nn.Conv2d(1, 32, padding=2, kernel_size=5),
-        # PrintLayer("1"),
-        nn.BatchNorm2d(32),
-        # PrintLayer("2"),
-        nn.MaxPool2d(kernel_size=(3, 3), stride=2),
-        # PrintLayer("3"),
+    model = CNN(
+        convolutional=
+        nn.Sequential(
+            nn.Conv2d(1, 32, padding=2, kernel_size=5),
+            # PrintLayer("1"),
+            nn.BatchNorm2d(32),
+            # PrintLayer("2"),
+            nn.MaxPool2d(kernel_size=(3, 3), stride=2),
+            # PrintLayer("3"),
 
-        nn.Conv2d(32, 32, padding=2, kernel_size=5),
-        # PrintLayer("4"),
-        nn.BatchNorm2d(32),
-        # PrintLayer("5"),
-        nn.ReLU(),
-        # PrintLayer("6"),
-        nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-        # PrintLayer("7"),
+            nn.Conv2d(32, 32, padding=2, kernel_size=5),
+            # PrintLayer("4"),
+            nn.BatchNorm2d(32),
+            # PrintLayer("5"),
+            nn.ReLU(),
+            # PrintLayer("6"),
+            nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+            # PrintLayer("7"),
 
-        nn.Conv2d(32, 64, padding=2, kernel_size=5),
-        # PrintLayer("9"),
-        nn.BatchNorm2d(64),
-        # PrintLayer("11"),
-        nn.ReLU(),
-        nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-        # PrintLayer("12"),
-    ),
+            nn.Conv2d(32, 64, padding=2, kernel_size=5),
+            # PrintLayer("9"),
+            nn.BatchNorm2d(64),
+            # PrintLayer("11"),
+            nn.ReLU(),
+            nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+            # PrintLayer("12"),
+        ),
         dense=
         nn.Sequential(
             nn.Linear(576, 64),
@@ -154,8 +159,10 @@ def train_model_demo(patch_size=(21, 21),
                 validset=validset,
             )
         else:
-            train_params['trainset'] = trainset
-            train_params['validset'] = validset
+            if 'trainset' not in train_params:
+                train_params['trainset'] = trainset
+            if 'validset' not in train_params:
+                train_params['validset'] = validset
 
         results = train(model, train_params, criterion=torch.nn.CrossEntropyLoss(), device=device)
 
@@ -199,9 +206,13 @@ def main():
     parser.add_argument('--hist-match', action='store_true',
                         help='Set this flag to do histogram match.')
     parser.add_argument('-n', '--n-negatives-per-positive', default=3, type=int)
+    parser.add_argument('-d', '--device', default='cuda', type=str, help="Device to use for training. 'cuda' or 'cpu'")
 
     args = parser.parse_args()
+    available_devices = ['cuda', 'gpu']
+    assert args.device in available_devices, f'Device must be one of {available_devices}.'
     print('---------------------------------------')
+    device = args.device
     patch_size = args.patch_size, args.patch_size
     hist_match = args.hist_match
     npp = args.n_negatives_per_positive
@@ -211,12 +222,10 @@ def main():
         patch_size=patch_size,
         do_hist_match=hist_match,
         n_negatives_per_positive=npp,
+        device=device,
+        load_from_cache=False,
     )
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print('Using device:', device)
-    print()
-
     main()

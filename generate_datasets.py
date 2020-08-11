@@ -429,8 +429,12 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         Histogram match template is the template used for histogram matching. If do_hist_match is False then
         None is returned.
     """
-    # Input
-    height, width = patch_size
+    assert type(patch_size) == int or type(patch_size) == tuple
+    if type(patch_size) == int:
+        height, width = patch_size, patch_size
+    elif type(patch_size) == tuple:
+        height, width = patch_size
+
     if v:
         print(f'patch size {(height, width)}')
         print(f'do hist match: {do_hist_match}')
