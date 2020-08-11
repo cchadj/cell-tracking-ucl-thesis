@@ -1,3 +1,5 @@
+from typing import List, Any
+
 import torch
 import tqdm
 from torch.utils import data
@@ -89,7 +91,10 @@ class CNN(nn.Module):
 # Helper class, help track loss, accuracy, epoch time, run time,
 # hyper-parameters etc.
 class TrainingTracker:
-    def __init__(self, device):
+    additional_display_dfs: List[pd.DataFrame]
+
+    def __init__(self, device, additional_display_dfs= []):
+        self.additional_display_dfs = additional_display_dfs
         self.epoch_count = 0
         self.epoch_start_time = None
         self.epoch_duration = None
@@ -223,6 +228,8 @@ class TrainingTracker:
         with pd.option_context('display.max_rows', None,
                                'display.max_columns', None):  # more options can be specified also
             clear_output()
+            for additional_display_df in self.additional_display_dfs:
+                display(additional_display_df)
             display(run_parameters_df)
             display(df)
 
@@ -419,7 +426,11 @@ class SignalHandler(object):
         self.signal_raised = True
 
 
-def train(cnn, params, device="cuda", criterion=nn.BCELoss()):
+def train(cnn, params,
+          device="cuda",
+          criterion=nn.BCELoss(),
+          additional_display_dfs=[]
+          ):
     # if params changes, following line of code should reflect the changes too
     train_loader = torch.utils.data.DataLoader(
         params['trainset'],
@@ -458,7 +469,7 @@ def train(cnn, params, device="cuda", criterion=nn.BCELoss()):
                                                                              'learning_rate_scheduler_patience'])
 
     # Tracker tracks the process and helps with early stopping
-    tracker = TrainingTracker(device=device)
+    tracker = TrainingTracker(device, additional_display_dfs)
     tracker.start_run(cnn, params, train_loader, valid_loader, criterion)
 
     interrupt_handler = SignalHandler()
