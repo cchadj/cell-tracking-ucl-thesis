@@ -255,8 +255,9 @@ class TrainingTracker:
 
         Args:
             model:
+            model:
         """
-        if model == None:
+        if model is None:
             model = self.recorded_model
         # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
         torch.save(model.state_dict(), f'{output_name}.pt')

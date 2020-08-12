@@ -80,7 +80,7 @@ def train_model_demo(patch_size=(21, 21),
     trainset, validset, \
         cell_images, non_cell_images, \
         cell_images_marked, non_cell_images_marked, \
-        hist_match_template = \
+        _, hist_match_template = \
         get_cell_and_no_cell_patches(
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
