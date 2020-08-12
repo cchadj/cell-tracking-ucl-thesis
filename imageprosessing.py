@@ -27,7 +27,7 @@ def imextendedmax(I, H, conn=8):
 
 
 def normalize_data(data, target_range=(0, 1), data_range=None):
-    """ Normalizes data to a given target range
+    """ Normalizes data to a given target range. (Min Max Normalisation)
 
     Args:
         data: The data to normalise. Can be of any shape.
@@ -37,6 +37,7 @@ def normalize_data(data, target_range=(0, 1), data_range=None):
                           Useful when max value may not be observed in the data given.
     Returns:
         Normalised data within target range.
+        Same type as data.
 
     """
     if data_range is None:
@@ -48,7 +49,7 @@ def normalize_data(data, target_range=(0, 1), data_range=None):
     assert alpha < beta, f'Target range should be from small to big, target range given: {target_range}.'
     assert data_min < data_max, f'Data range should be from small to big, data range given: {data_range}.'
 
-    return (beta - alpha) * ((data - data_min) / (data_max - data_min)) + alpha
+    return ((beta - alpha) * ((data - data_min) / (data_max - data_min)) + alpha).astype(data.dtype)
 
 
 def image_histogram_equalization(image, number_bins=256):
