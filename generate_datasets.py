@@ -250,6 +250,11 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
                                             n_negatives_per_positive=1,
                                             v=v, vv=vv)
 
+        hist_match_template = cell_images[0]
+        if do_hist_match:
+            cell_images = hist_match_images(cell_images, hist_match_template)
+            non_cell_images = hist_match_images(cell_images, hist_match_template)
+
         trainset, validset = create_dataset_from_cell_and_no_cell_images(
             cell_images, non_cell_images, v=v
         )

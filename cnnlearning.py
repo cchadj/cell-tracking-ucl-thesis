@@ -36,11 +36,46 @@ class PrintLayer(nn.Module):
 
 # Build the neural network, expand on top of nn.Module
 class CNN(nn.Module):
-    def __init__(self, input_dims=3, output_classes=2, dense_input_dims=576, padding=0, convolutional=None, dense=None):
+    def __init__(self, model_type=0,
+                 input_dims=3, output_classes=2, dense_input_dims=576, padding=0):
         super().__init__()
+        assert model_type in [0, 1]
+        if model_type == 0:
+            self.convolutional = nn.Sequential(
+                nn.Conv2d(1, 32, padding=2, kernel_size=5),
+                # PrintLayer("1"),
+                nn.BatchNorm2d(32),
+                # PrintLayer("2"),
+                nn.MaxPool2d(kernel_size=(3, 3), stride=2),
+                # PrintLayer("3"),
 
-        # Feature extraction layer
-        if convolutional is None:
+                nn.Conv2d(32, 32, padding=2, kernel_size=5),
+                # PrintLayer("4"),
+                nn.BatchNorm2d(32),
+                # PrintLayer("5"),
+                nn.ReLU(),
+                # PrintLayer("6"),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+                # PrintLayer("7"),
+
+                nn.Conv2d(32, 64, padding=2, kernel_size=5),
+                # PrintLayer("9"),
+                nn.BatchNorm2d(64),
+                # PrintLayer("11"),
+                nn.ReLU(),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+                # PrintLayer("12"),
+            )
+
+            self.dense = nn.Sequential(
+                nn.Linear(576, 64),
+                nn.BatchNorm1d(64),
+                nn.ReLU(64),
+                nn.Linear(64, 32),
+                nn.BatchNorm1d(32),
+                nn.Linear(32, 2)
+            )
+        elif model_type == 1:
             self.convolutional = nn.Sequential(
                 nn.Conv2d(input_dims, 16, kernel_size=3, padding=padding, padding_mode='replicate'),
                 # Print(),
@@ -61,10 +96,6 @@ class CNN(nn.Module):
                 nn.AvgPool2d(kernel_size=(3, 3), stride=1),
                 # Print("nn.AvgPool2d(kernel_size=(3, 3), stride=2"),
             )
-        else:
-            self.convolutional = convolutional
-
-        if dense is None:
             # Fully connected layer
             self.dense = nn.Sequential(
                 nn.Dropout(),
@@ -76,8 +107,7 @@ class CNN(nn.Module):
                 nn.ReLU(),
                 nn.Linear(4, output_classes),
             )
-        else:
-            self.dense = dense
+
         self.dense_input_dims = dense_input_dims
 
     # define forward function

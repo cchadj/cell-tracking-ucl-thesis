@@ -1,11 +1,9 @@
 import pathlib
 import argparse
-from typing import Any, Union, Iterable
 
 import torch
 import collections
 import pandas as pd
-from numpy.core._multiarray_umath import ndarray
 from torch import nn
 import os
 import numpy as np
@@ -87,47 +85,12 @@ def train_model_demo(patch_size=(21, 21),
             do_hist_match=do_hist_match,
             overwrite_cache=False,
         )
+
     assert cell_images.dtype == np.float32 and non_cell_images.dtype == np.float32
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
 
-    model = CNN(
-        convolutional=
-        nn.Sequential(
-            nn.Conv2d(1, 32, padding=2, kernel_size=5),
-            # PrintLayer("1"),
-            nn.BatchNorm2d(32),
-            # PrintLayer("2"),
-            nn.MaxPool2d(kernel_size=(3, 3), stride=2),
-            # PrintLayer("3"),
-
-            nn.Conv2d(32, 32, padding=2, kernel_size=5),
-            # PrintLayer("4"),
-            nn.BatchNorm2d(32),
-            # PrintLayer("5"),
-            nn.ReLU(),
-            # PrintLayer("6"),
-            nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-            # PrintLayer("7"),
-
-            nn.Conv2d(32, 64, padding=2, kernel_size=5),
-            # PrintLayer("9"),
-            nn.BatchNorm2d(64),
-            # PrintLayer("11"),
-            nn.ReLU(),
-            nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-            # PrintLayer("12"),
-        ),
-        dense=
-        nn.Sequential(
-            nn.Linear(576, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(64),
-            nn.Linear(64, 32),
-            nn.BatchNorm1d(32),
-            nn.Linear(32, 2),
-            #   nn.Softmax()
-        )).to(device)
+    model = CNN().to(device)
 
     pathlib.Path(CACHED_MODELS_FOLDER).mkdir(parents=True, exist_ok=True)
 

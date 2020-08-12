@@ -73,3 +73,23 @@ def hist_match_images(images, reference):
         hist_matched_images[i] = match_histograms(im, reference)
 
     return hist_matched_images
+
+
+def imagestack_to_vstacked_image(framestack):
+    return np.hstack(np.split(framestack, len(framestack), axis=0)).squeeze()
+
+
+def vstacked_image_to_imagestack(stacked_image, n_images):
+    return np.array(np.split(stacked_image, n_images, axis=0))
+
+
+def imagestack_to_hstacked_image(framestack):
+    return np.hstack([f.squeeze() for f in np.split(framestack, len(framestack))])
+
+
+def hstacked_image_to_imagestack(stacked_image, n_images):
+    return np.array(np.split(stacked_image, n_images, axis=1))
+
+
+def hist_match_2(images, reference):
+    return vstacked_image_to_imagestack(match_histograms(imagestack_to_vstacked_image(images), reference), len(images))
