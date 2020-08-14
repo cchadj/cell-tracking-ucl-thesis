@@ -21,8 +21,7 @@ def create_average_and_stdev_image(frames, masks=None):
     return average_img, stdev_img
 
 
-def veselness_detection(im,
-                        visualise_intermediate_results=False):
+def detect_vessels(im, visualise_intermediate_results=False):
 
 
     # im_blurred = skimage.filters.median(im,  mode='nearest', cval=0)
