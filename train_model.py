@@ -83,6 +83,7 @@ def train_model_demo(patch_size=(21, 21),
         get_cell_and_no_cell_patches(
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
+            standardize_dataset=standardize_dataset,
             do_hist_match=do_hist_match,
             overwrite_cache=False,
         )
@@ -182,6 +183,7 @@ def train_model_demo(patch_size=(21, 21),
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--patch-size', default=21, type=int, help='Patch size')
+    parser.add_argument('-s', '--standardize', action='store_true', help='Set to standardize output between -1 and 1')
     parser.add_argument('--hist-match', action='store_true',
                         help='Set this flag to do histogram match.')
     parser.add_argument('-n', '--n-negatives-per-positive', default=3, type=int)
@@ -195,12 +197,14 @@ def main():
     patch_size = args.patch_size, args.patch_size
     hist_match = args.hist_match
     npp = args.n_negatives_per_positive
+    standardize = args.standardize
     print('---------------------------------------')
 
     train_model_demo(
         patch_size=patch_size,
         do_hist_match=hist_match,
         n_negatives_per_positive=npp,
+        standardize_dataset=standardize,
         device=device,
         load_from_cache=False,
     )
