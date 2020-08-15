@@ -85,7 +85,7 @@ def train_model_demo(patch_size=(21, 21),
             n_negatives_per_positive=n_negatives_per_positive,
             standardize_dataset=standardize_dataset,
             do_hist_match=do_hist_match,
-            overwrite_cache=False,
+            overwrite_cache=True,
         )
 
     assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8
