@@ -174,9 +174,9 @@ def train_model_demo(patch_size=(21, 21),
     print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
     print()
     print('Positive accuracy:\t',
-          f'{classify_images(cell_images, model).sum().item() / len(cell_images):.3f}')
+          f'{classify_images(cell_images, model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images):.3f}')
     print('Negative accuracy:\t',
-          f'{(1 - classify_images(non_cell_images, model)).sum().item() / len(non_cell_images):.3f}')
+          f'{(1 - classify_images(non_cell_images, model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images):.3f}')
 
     return model, results
 
