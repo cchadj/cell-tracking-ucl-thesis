@@ -85,7 +85,7 @@ class LabeledImageDataset(torch.utils.data.Dataset):
 class ImageDataset(torch.utils.data.Dataset):
     """ Used to create a DataLoader compliant Dataset for binary classifiers
     """
-    def __init__(self, images):
+    def __init__(self, images, standardize=True):
         """
         Args:
           images (ndarray):
@@ -94,14 +94,13 @@ class ImageDataset(torch.utils.data.Dataset):
         """
         self.n_images = images.shape[0]
 
-        self.transform = torchvision.transforms.Compose([
-            # you can add other transformations in this list
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(0.5, 0.5)
-        ])
+        transforms = [torchvision.transforms.ToTensor()]
+
+        if standardize:
+            torchvision.transforms.Normalize([0.5], [0.5])
 
         self.samples = images
-        # print(len(self.samples))
+        self.transform = torchvision.transforms.Compose(transforms)
 
     def __len__(self):
         return len(self.samples)
