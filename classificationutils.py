@@ -178,7 +178,7 @@ def get_cell_positions_from_probability_map(probability_map,
 
 
 @torch.no_grad()
-def classify_images(images, model, device="cuda"):
+def classify_images(images, model, standardize_dataset=True, device="cuda"):
     """ Classify images.
 
     Arguments:
@@ -193,7 +193,7 @@ def classify_images(images, model, device="cuda"):
         # i.e (Nx100x123 -> Nx100x123x1)
         images = images[..., None]
 
-    image_dataset = ImageDataset(images)
+    image_dataset = ImageDataset(images, standardize=standardize_dataset)
     loader = torch.utils.data.DataLoader(
         image_dataset,
         batch_size=1024 * 3,
@@ -215,4 +215,3 @@ def classify_images(images, model, device="cuda"):
 
 if __name__ == '__main__':
     from generate_datasets import get_cell_and_no_cell_patches
-    get
