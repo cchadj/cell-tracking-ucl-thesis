@@ -194,7 +194,6 @@ def classify_images(images, model, device="cuda"):
         images = images[..., None]
 
     image_dataset = ImageDataset(images)
-    print('hello')
     loader = torch.utils.data.DataLoader(
         image_dataset,
         batch_size=1024 * 3,
