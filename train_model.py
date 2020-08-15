@@ -88,7 +88,7 @@ def train_model_demo(patch_size=(21, 21),
             overwrite_cache=False,
         )
 
-    assert cell_images.dtype == np.float32 and non_cell_images.dtype == np.float32
+    assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
 
