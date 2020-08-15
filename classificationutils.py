@@ -194,6 +194,7 @@ def classify_images(images, model, device="cuda"):
         images = images[..., None]
 
     image_dataset = ImageDataset(images)
+    print('hello')
     loader = torch.utils.data.DataLoader(
         image_dataset,
         batch_size=1024 * 3,
@@ -211,3 +212,8 @@ def classify_images(images, model, device="cuda"):
         c += len(pred)
 
     return predictions
+
+
+if __name__ == '__main__':
+    from generate_datasets import get_cell_and_no_cell_patches
+    get
