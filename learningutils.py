@@ -97,7 +97,7 @@ class ImageDataset(torch.utils.data.Dataset):
         transforms = [torchvision.transforms.ToTensor()]
 
         if standardize:
-            torchvision.transforms.Normalize([0.5], [0.5])
+            transforms.append(torchvision.transforms.Normalize([0.5], [0.5]))
 
         self.samples = images
         self.transform = torchvision.transforms.Compose(transforms)
