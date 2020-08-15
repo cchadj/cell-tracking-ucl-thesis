@@ -83,6 +83,7 @@ def train_model_demo(patch_size=(21, 21),
         get_cell_and_no_cell_patches(
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
+            standardize_dataset=standardize_dataset,
             do_hist_match=do_hist_match,
             overwrite_cache=False,
         )
