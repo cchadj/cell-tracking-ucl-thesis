@@ -252,7 +252,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
     except FileNotFoundError:
         print('Not all data found fom cache. Creating datasets...')
 
-        cell_images, non_cell_images, cell_images_marked, non_cell_images_marked =\
+        cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = \
             create_cell_and_no_cell_patches(patch_size=patch_size,
                                             do_hist_match=False,
                                             n_negatives_per_positive=1,
@@ -298,10 +298,10 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             print("Cell images array shape:", cell_images.shape)
             print("Non cell images array shape:", non_cell_images.shape)
 
-    return trainset, validset,\
-        cell_images, non_cell_images, \
-        cell_images_marked, non_cell_images_marked, \
-        hist_match_template
+    return trainset, validset, \
+           cell_images, non_cell_images, \
+           cell_images_marked, non_cell_images_marked, \
+           hist_match_template
 
 
 def main():
@@ -332,6 +332,11 @@ def main():
     print('Negatives per positive:', npp)
     print('---------------------------------------')
 
+    patch_size = 21
+    do_hist_match = False
+    n_negatives_per_positive = 1
+    standardize_dataset = False
+
     get_cell_and_no_cell_patches(patch_size=patch_size,
                                  n_negatives_per_positive=npp,
                                  do_hist_match=hist_match,
@@ -340,5 +345,29 @@ def main():
                                  vv=vv)
 
 
+def main_tmp():
+    patch_size = 21
+    do_hist_match = False
+    n_negatives_per_positive = 1
+    standardize_dataset = False
+
+    overwrite_cache = True
+    verbose = False
+    very_verbose = True
+
+    ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+    trainset, validset, \
+        cell_images, non_cell_images, \
+        cell_images_marked, non_cell_images_marked, hist_match_template = \
+        get_cell_and_no_cell_patches(patch_size=patch_size,
+                                     n_negatives_per_positive=n_negatives_per_positive,
+                                     do_hist_match=do_hist_match,
+                                     overwrite_cache=overwrite_cache,
+                                     standardize_dataset=standardize_dataset,
+                                     v=verbose,
+                                     vv=very_verbose,
+
+
 if __name__ == '__main__':
-    main()
+    main_tmp()
+#   main()

@@ -7,7 +7,7 @@ import pandas as pd
 from torch import nn
 import os
 import numpy as np
-from cnnlearning import CNN, train
+from cnnlearning import CNN, train, TrainingTracker
 from generate_datasets import get_cell_and_no_cell_patches
 from classificationutils import classify_images, classify_labeled_dataset
 from sharedvariables import CACHED_MODELS_FOLDER
@@ -69,6 +69,7 @@ def train_model_demo(patch_size=(21, 21),
                      do_hist_match=False,
                      n_negatives_per_positive=3,
                      device='cuda',
+                     standardize_dataset=True,
                      load_from_cache=True,
                      train_params=None):
     assert type(patch_size) is int or type(patch_size) is tuple
@@ -139,10 +140,10 @@ def train_model_demo(patch_size=(21, 21),
         additional_display = [
             pd.DataFrame.from_dict(display_dict)
         ]
-        results = train(model,
-                        train_params,
-                        criterion=torch.nn.CrossEntropyLoss(),
-                        device=device, additional_display_dfs=additional_display)
+        results: TrainingTracker = train(model,
+                                         train_params,
+                                         criterion=torch.nn.CrossEntropyLoss(),
+                                         device=device, additional_display_dfs=additional_display)
 
         output_directory = os.path.join(CACHED_MODELS_FOLDER,
                                         f'blood_cell_classifier_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}'
@@ -175,7 +176,7 @@ def train_model_demo(patch_size=(21, 21),
     print('Negative accuracy:\t',
           f'{(1 - classify_images(non_cell_images, model)).sum().item() / len(non_cell_images):.3f}')
 
-    return model
+    return model, results
 
 
 def main():
