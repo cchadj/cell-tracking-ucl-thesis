@@ -78,31 +78,34 @@ def create_cell_and_no_cell_patches(
                                                 axis=0)
 
     if do_hist_match:
+        if v:
+            print('Doing histogram matching...')
         hist_match_template = np.float32(video_sessions[2].frames_oa790[0])
-
-        print('Doing histogram matching on cell images')
+        if vv:
+            print('Doing histogram matching on cell images')
         cell_images = hist_match_images(cell_images, hist_match_template)
-        print('Doing histogram matching on non cell images')
+        if vv:
+            print('Doing histogram matching on non cell images')
         non_cell_images = hist_match_images(non_cell_images, hist_match_template)
 
-    # normalisation_data_range = np.array((
-    #     min(np.min(cell_images), np.min(non_cell_images)),
-    #     max(np.max(cell_images), np.max(non_cell_images))
-    # ))
-    #
-    # cell_images = normalize_data(cell_images, target_range=(0, 1), data_range=normalisation_data_range)
-    # non_cell_images = normalize_data(non_cell_images, target_range=(0, 1), data_range=normalisation_data_range)
     return cell_images, non_cell_images, cell_images_marked, non_cell_images_marked
 
 
-def create_dataset_from_cell_and_no_cell_images(cell_images, non_cell_images, v=False):
+def create_dataset_from_cell_and_no_cell_images(
+        cell_images,
+        non_cell_images,
+        standardize=False,
+        to_grayscale=False,
+        v=False):
     if v:
         print('Creating dataset from cell and non cell patches')
         print('-----------------------------------------------')
     dataset = LabeledImageDataset(
         np.concatenate((cell_images[:len(cell_images), ...], non_cell_images[:len(non_cell_images), ...]), axis=0),
         np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)),
-                       axis=0)
+                       axis=0),
+        standardize=standardize,
+        to_grayscale=to_grayscale,
     )
 
     if v:
@@ -110,14 +113,17 @@ def create_dataset_from_cell_and_no_cell_images(cell_images, non_cell_images, v=
 
     trainset_size = int(len(dataset) * 0.80)
     validset_size = len(dataset) - trainset_size
+    # noinspection PyUnresolvedReferences
     trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
 
     return trainset, validset
 
 
 def get_cell_and_no_cell_patches(patch_size=(21, 21),
-                                 n_negatives_per_positive=3,
+                                 n_negatives_per_positive=1,
                                  do_hist_match=False,
+                                 standardize_dataset=False,
+                                 dataset_to_grayscale=False,
                                  overwrite_cache=False,
                                  v=False,
                                  vv=False):
@@ -131,17 +137,19 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         patch_size (int, tuple): The patch size (height, width) or int for square.
         n_negatives_per_positive (int):  How many non cells per cell patch.
         do_hist_match (bool):  Whether to histogram matching or not.
+        standardize_dataset: Standardizes the values of the datasets to have mean and std -.5, (values [-1, 1])
+        dataset_to_grayscale: Makes the datasets output to have 1 channel.
         overwrite_cache (bool): Set to true to skip attempting to read from cache and create new dataset overwriting
                                 the old data.
         v (bool):  Verbose description of what is currently happening.
-        vv (bool):  Very Verbose.
+        vv (bool):  Very Verbose description of what is currently happening.
 
     Returns:
         (Dataset, Dataset, np array NxHxW, np array,      np array,           np.array,             , np.array h x w of template)
         trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
 
         Training set and validation set can be used by torch DataLoader.
-        Cell images and non cell images are numpy arrays n x patch_height x patch_width.
+        Cell images and non cell images are numpy arrays n x patch_height x patch_width and of type uint8.
         Cell images marked and non marked images are the same but from the marked videos for debugging.
         Histogram match template is the template used for histogram matching. If do_hist_match is False then
         None is returned.
@@ -193,10 +201,10 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         dataset_folder,
         f'hist_match_template_image'
     )
-    normalisation_data_range_filename = os.path.join(
-        dataset_folder,
-        f'normalisation_data_range_image.npy'
-    )
+    # normalisation_data_range_filename = os.path.join(
+    #     dataset_folder,
+    #     f'normalisation_data_range_image.npy'
+    # )
 
     try:
         if overwrite_cache:
@@ -229,9 +237,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             print(f"loading marked non bloodcell patches from '{non_cell_images_marked_filename}'")
         non_cell_images_marked = np.load(non_cell_images_marked_filename)
 
-        if v:
-            print(f"loading normalisation range '{normalisation_data_range_filename}'")
-        normalisation_data_range = np.load(normalisation_data_range_filename)
+        # if v:
+        #     print(f"loading normalisation range '{normalisation_data_range_filename}'")
+        # normalisation_data_range = np.load(normalisation_data_range_filename)
 
         if do_hist_match:
             if v:
@@ -256,7 +264,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             non_cell_images = hist_match_images(cell_images, hist_match_template)
 
         trainset, validset = create_dataset_from_cell_and_no_cell_images(
-            cell_images, non_cell_images, v=v
+            cell_images, non_cell_images, standardize=standardize_dataset, to_grayscale=dataset_to_grayscale, v=v
         )
 
         if v:
@@ -270,7 +278,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         np.save(non_cell_images_filename, non_cell_images)
         np.save(cell_images_marked_filename, cell_images_marked)
         np.save(non_cell_images_marked_filename, non_cell_images_marked)
-        np.save(normalisation_data_range_filename, normalisation_data_range)
+        # np.save(normalisation_data_range_filename, normalisation_data_range)
         if do_hist_match:
             Image.fromarray(np.uint8(hist_match_template * 255)).save(template_image_filename + '.png')
             np.save(template_image_filename + '.npy', hist_match_template)
@@ -290,8 +298,10 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             print("Cell images array shape:", cell_images.shape)
             print("Non cell images array shape:", non_cell_images.shape)
 
-    return trainset, validset, cell_images, non_cell_images, \
-        cell_images_marked, non_cell_images_marked, hist_match_template
+    return trainset, validset,\
+        cell_images, non_cell_images, \
+        cell_images_marked, non_cell_images_marked, \
+        hist_match_template
 
 
 def main():

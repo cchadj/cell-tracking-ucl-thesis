@@ -90,6 +90,7 @@ def train_model_demo(patch_size=(21, 21),
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
 
+    # noinspection PyUnresolvedReferences
     model = CNN().to(device)
 
     pathlib.Path(CACHED_MODELS_FOLDER).mkdir(parents=True, exist_ok=True)

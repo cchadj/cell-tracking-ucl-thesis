@@ -331,20 +331,39 @@ def create_average_images(video_session, patch_size=51, sigma=1, average_all_fra
     w, h = template.shape[::-1]
     # All the 6 methods for comparison in a list
     methods = ['cv.TM_CCOEFF', 'cv.TM_CCOEFF_NORMED', 'cv.TM_CCORR',
-               'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED', 'surf']
+               'cv.TM_CCORR_NORMED', 'cv.TM_SQDIFF', 'cv.TM_SQDIFF_NORMED',
+               'surf', 'per-patch-template-matching']
     axes: np.ndarray
     fig, axes = plt.subplots(len(methods), 3)
     for i, meth in enumerate(methods):
         method = meth
-        if meth != 'surf':
+        if meth != 'surf' and method != 'per-patch-template-matching':
             method = eval(meth)
 
         try:
-            x, y, correlation_im = find_bloodcell_correspondance(avg_cell_oa790, avg_cell_oa850, method,
-                                                                 ret_correlation_im=True)
+            if method == 'per-patch-template-matching':
+                xs_ys = np.zeros((len(cell_patches_oa790), 2), dtype=np.int32)
+
+                fig2, per_template_axes = plt.subplots(len(cell_patches_oa790), 2, figsize=(50, 50))
+                fig2.suptitle('Per patch template matching')
+                for j, (patch_oa790, patch_oa850) in enumerate(zip(cell_patches_oa790, cell_patches_oa850)):
+                    cx, cy = find_bloodcell_correspondance(patch_oa790, patch_oa790, method=cv.TM_CCORR_NORMED)
+                    x, y, correlation_im = find_bloodcell_correspondance(patch_oa790, patch_oa850,
+                                                                         method=cv.TM_CCORR_NORMED, ret_correlation_im=True)
+                    xs_ys[j] = np.array((x, y))
+                    per_template_axes[j, 0].imshow(patch_oa790)
+                    per_template_axes[j, 0].scatter(cx, cy)
+                    per_template_axes[j, 1].imshow(patch_oa850)
+                    per_template_axes[j, 1].scatter(x, y)
+
+                mean_x_y = np.mean(xs_ys, axis=1)
+                x, y = mean_x_y[0], mean_x_y[1]
+            else:
+                x, y, correlation_im = find_bloodcell_correspondance(avg_cell_oa790, avg_cell_oa850, method,
+                                                                     ret_correlation_im=True)
             print(f'Method {meth} ({x, y})')
-        except:
-            print(f'Method {meth} failed')
+        except Exception as e:
+            print(f'Method {meth} failed {e}')
 
         try:
             cx, cy = find_bloodcell_correspondance(avg_cell_oa790, avg_cell_oa790, method)

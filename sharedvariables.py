@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
-
+from imageprosessing import normalize_data
 
 def files_of_same_source(f1, f2):
     f1, f2 = os.path.basename(f1), os.path.basename(f2)
@@ -66,6 +66,8 @@ all_image_files = [f for f in all_files if f.lower().endswith(image_file_extensi
 # unmarked videos. Must not have '_marked' or 'mask in them.
 all_video_files_unmarked = [f for f in all_video_files if
                             '_marked' not in basename(f).lower() and 'mask' not in basename(f)]
+
+unmarked_video_confocal_filenames = [f for f in all_video_files_unmarked if 'confocal' in basename(f).lower()]
 unmarked_video_oa790_filenames = [f for f in all_video_files_unmarked if 'oa790' in basename(f).lower()]
 unmarked_video_oa850_filenames = [f for f in all_video_files_unmarked if 'oa850' in basename(f).lower()]
 
@@ -144,28 +146,49 @@ class VideoSession(object):
         self.subject_number = subject_number
         self.session_number = session_number
         self.video_file = video_filename
+
         self.video_oa790_file = find_filename_of_same_source(video_filename, unmarked_video_oa790_filenames)
-        self.video_850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
+        self.video_oa850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
+        self.video_confocal_file = find_filename_of_same_source(video_filename, unmarked_video_confocal_filenames)
+
         self.marked_video_oa790_file = vid_marked_790_filename
         self.marked_video_oa850_file = vid_marked_850_filename
+
         self.mask_video_oa790_file = find_filename_of_same_source(video_filename, mask_video_oa790_files)
         self.mask_video_oa850_file = find_filename_of_same_source(video_filename, mask_video_oa850_files)
         self.mask_video_confocal_file = find_filename_of_same_source(video_filename, mask_video_confocal_files)
-        self.vessel_mask_confocal_file = find_filename_of_same_source(video_filename, vessel_mask_confocal_files)
+
         self.vessel_mask_oa790_file = find_filename_of_same_source(video_filename, vessel_mask_oa790_files)
         self.vessel_mask_oa850_file = find_filename_of_same_source(video_filename, vessel_mask_oa850_files)
-        self.std_image_confocal_file = find_filename_of_same_source(video_filename, std_image_confocal_files)
+        self.vessel_mask_confocal_file = find_filename_of_same_source(video_filename, vessel_mask_confocal_files)
+
         self.std_image_oa790_file = find_filename_of_same_source(video_filename, std_image_oa790_files)
         self.std_image_oa850_file = find_filename_of_same_source(video_filename, std_image_oa850_files)
+        self.std_image_confocal_file = find_filename_of_same_source(video_filename, std_image_confocal_files)
+
         self._cell_position_csv_files = [csv_file for csv_file
                                          in csv_cell_cords_oa790_filenames
                                          if files_of_same_source(csv_file, video_filename)]
 
         self._frames_oa790 = None
         self._frames_oa850 = None
+        self._frames_confocal = None
 
         self._mask_frames_oa790 = None
         self._mask_frames_oa850 = None
+        self._mask_frames_confocal = None
+
+        self._masked_frames_oa790 = None
+        self._masked_frames_oa850 = None
+        self._masked_frames_confocal = None
+
+        self._vessel_masked_frames_oa790 = None
+        self._vessel_masked_frames_oa850 = None
+        self._vessel_masked_frames_confocal = None
+
+        self._fully_masked_frames_oa790 = None
+        self._fully_masked_frames_oa850 = None
+        self._fully_masked_frames_confocal = None
 
         self._marked_frames_oa790 = None
         self._marked_frames_oa850 = None
@@ -189,24 +212,161 @@ class VideoSession(object):
     @property
     def frames_oa850(self):
         if self._frames_oa850 is None:
-            self._frames_oa850 = get_frames_from_video(self.video_850_file)[..., 0]
+            self._frames_oa850 = get_frames_from_video(self.video_oa850_file)[..., 0]
         return self._frames_oa850
+
+    @property
+    def frames_confocal(self):
+        if self._frames_confocal is None:
+            self._frames_confocal = get_frames_from_video(self.video_confocal_file)[..., 0]
+        return self._frames_confocal
 
     @property
     def mask_frames_oa790(self):
         if self._mask_frames_oa790 is None:
             if self.mask_video_oa790_file == '':
-                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
-            self._mask_frames_oa790 = get_frames_from_video(self.mask_video_oa790_file)
+                self._mask_frames_oa790 = np.ones_like(self.frames_oa790, dtype=np.bool8)
+                # raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
+            else:
+                self._mask_frames_oa790 = get_frames_from_video(self.mask_video_oa790_file)[..., 0].astype(np.bool8)
         return self._mask_frames_oa790
+
+    @mask_frames_oa790.setter
+    def mask_frames_oa790(self, masks):
+        assert masks.dtype == np.bool8, f'The mask type must be {np.bool8}'
+        assert masks.shape == self.frames_oa790.shape,\
+            f'The frame masks must have the same shape as the frames. ' \
+            f'frames oa790 shape:{self.frames_oa790.shape}, masks given shape:{masks.shape}'
+        self._mask_frames_oa790 = masks
+        self._masked_frames_oa790 = None
+        self._fully_masked_frames_oa790 = None
 
     @property
     def mask_frames_oa850(self):
         if self._mask_frames_oa850 is None:
             if self.mask_video_oa850_file == '':
                 raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
-            self._mask_frames_oa850 = get_frames_from_video(self.mask_video_oa850_file)
+            self._mask_frames_oa850 = get_frames_from_video(self.mask_video_oa850_file)[..., 0].astype(np.bool8)
         return self._mask_frames_oa850
+
+    @mask_frames_oa850.setter
+    def mask_frames_oa850(self, masks):
+        assert masks.dtype == np.bool8, f'The mask type must be {np.bool8}'
+        assert masks.shape == self.frames_oa850.shape, \
+            f'The frame masks must have the same shape as the frames. ' \
+            f'frames oa850 shape:{self.frames_oa850.shape}, masks given shape:{masks.shape}'
+        self._mask_frames_oa850 = masks
+        self._masked_frames_oa850 = None
+        self._fully_masked_frames_oa850 = None
+
+    @property
+    def mask_frames_confocal(self):
+        if self._mask_frames_confocal is None:
+            if self.mask_video_confocal_file == '':
+                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
+            self._mask_frames_confocal = get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(np.bool8)
+        return self._mask_frames_confocal
+
+    @mask_frames_confocal.setter
+    def mask_frames_confocal(self, masks):
+        assert masks.dtype == np.bool8, f'The mask type must be {np.bool8}'
+        assert masks.shape == self.frames_confocal.shape, \
+            f'The frame masks must have the same shape as the frames. ' \
+            f'frames confocal shape:{self.frames_confocal.shape}, masks given shape:{masks.shape}'
+        self._mask_frames_confocal = masks
+        self._masked_frames_confocal = None
+        self._fully_masked_frames_confocal = None
+
+    @property
+    def masked_frames_oa790(self):
+        """ The frames from the oa790nm channel masked with the corresponding frames of the masked video.
+        """
+        if self._masked_frames_oa790 is None:
+            # We invert the mask because True values mean that the values are masked and therefor invalid.
+            # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
+            self._masked_frames_oa790 = np.ma.masked_array(self.frames_oa790, ~self.mask_frames_oa790)
+        return self._masked_frames_oa790
+
+    @property
+    def masked_frames_oa850(self):
+        """ The frames from the oa850nm channel masked with the corresponding frames of the masked video.
+        """
+        if self._masked_frames_oa850 is None:
+            # We invert the mask because True values mean that the values are masked and therefor invalid.
+            # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
+            self._masked_frames_oa850 = np.ma.masked_array(self.frames_oa850, ~self.mask_frames_oa850)
+        return self._masked_frames_oa850
+
+    @property
+    def masked_frames_confocal(self):
+        """ The frames from the confocal channel masked with the corresponding frames of the masked video.
+        """
+        if self._masked_frames_confocal is None:
+            # We invert the mask because True values mean that the values are masked and therefor invalid.
+            # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
+            self._masked_frames_confocal = np.ma.masked_array(self.frames_confocal, ~self.mask_frames_confocal)
+        return self._masked_frames_confocal
+
+    @property
+    def vessel_masked_frames_oa790(self):
+        """ The frames from the oa790nm channel masked with the vessel mask image.
+        """
+        if self._vessel_masked_frames_oa790 is None:
+            self._vessel_masked_frames_oa790 = np.ma.empty_like(self.frames_oa790)
+            for i, frame in enumerate(self.frames_oa790):
+                self._vessel_masked_frames_oa790[i] = np.ma.masked_array(frame, ~self.vessel_mask_confocal)
+        return self._vessel_masked_frames_oa790
+
+    @property
+    def vessel_masked_frames_oa850(self):
+        """ The frames from the oa850nm channel masked with the vessel mask image.
+        """
+        if self._vessel_masked_frames_oa850 is None:
+            self._vessel_masked_frames_oa850 = np.ma.empty_like(self.frames_oa850)
+            for i, frame in enumerate(self.frames_oa850):
+                self._vessel_masked_frames_oa850[i] = np.ma.masked_array(frame, ~self.vessel_mask_oa850)
+        return self._vessel_masked_frames_oa850
+
+    @property
+    def vessel_masked_frames_confocal(self):
+        """ The frames from the confocal channel masked with the vessel mask image.
+        """
+        if self._vessel_masked_frames_confocal is None:
+            self._vessel_masked_frames_confocal = np.ma.empty_like(self.frames_confocal)
+            for i, frame in enumerate(self.frames_confocal):
+                self._vessel_masked_frames_confocal[i] = np.ma.masked_array(frame, ~self.vessel_mask_confocal)
+        return self._vessel_masked_frames_confocal
+
+    @property
+    def fully_masked_frames_oa790(self):
+        """ The frames from the oa790nm channel masked with the vessel mask image and the mask frames from the mask video.
+        """
+        print('hello')
+        if self._fully_masked_frames_oa790 is None:
+            self._fully_masked_frames_oa790 = np.ma.empty_like(self.frames_oa790)
+            for i, frame in enumerate(self.frames_oa790):
+                self._fully_masked_frames_oa790[i] = np.ma.masked_array(frame, ~(self.vessel_mask_confocal * self.mask_frames_oa790[i]))
+        return self._fully_masked_frames_oa790
+
+    @property
+    def fully_masked_frames_oa850(self):
+        """ The frames from the oa850nm channel masked with the vessel mask image and the mask frames from the mask video.
+        """
+        if self._fully_masked_frames_oa850 is None:
+            self._fully_masked_frames_oa850 = np.ma.empty_like(self.frames_oa850)
+            for i, frame in enumerate(self.frames_oa850):
+                self._fully_masked_frames_oa850[i] = np.ma.masked_array(frame, ~(self.vessel_mask_oa850 * self.masked_frames_oa850[i]))
+        return self._fully_masked_frames_oa850
+
+    @property
+    def fully_masked_frames_confocal(self):
+        """ The frames from the confocalnm channel masked with the vessel mask image and the mask frames from the mask video.
+        """
+        if self._fully_masked_frames_confocal is None:
+            self._fully_masked_frames_confocal = np.ma.empty_like(self.frames_confocal)
+            for i, frame in enumerate(self.frames_confocal):
+                self._fully_masked_frames_confocal[i] = np.ma.masked_array(frame, ~(self.vessel_mask_confocal * self.mask_frames_confocal[i]))
+        return self._fully_masked_frames_confocal
 
     @property
     def marked_frames_oa790(self):
@@ -320,45 +480,57 @@ class VideoSession(object):
 
         return self._cell_positions
 
+    @staticmethod
+    def _vessel_mask_from_file(file):
+        vessel_mask = plt.imread(file)
+        if len(vessel_mask.shape) == 3:
+            vessel_mask = vessel_mask[..., 0]
+
+        return np.bool8(vessel_mask)
+
     @property
     def vessel_mask_oa790(self):
         if self._vessel_mask_oa790 is None:
             if self.vessel_mask_oa790_file == '':
-                raise Exception(f"No vessel mask found fr session {self.video_oa790_file}")
-            vessel_mask = plt.imread(self.vessel_mask_confocal_file)
-            if len(vessel_mask.shape) == 3:
-                vessel_mask = vessel_mask[..., 0]
-            self._vessel_mask_oa790 = np.bool8(vessel_mask)
+                raise Exception(f"No vessel mask for the channel oa790 found for session {self.video_oa790_file}")
+            self._vessel_mask_oa790 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa790_file)
         return self._vessel_mask_oa790
 
     @property
     def vessel_mask_oa850(self):
         if self._vessel_mask_oa850 is None:
             if self.vessel_mask_oa850_file == '':
-                raise Exception(f"No vessel mask found fr session {self.video_oa790_file}")
-            vessel_mask = plt.imread(self.vessel_mask_oa850_file)
-            if len(vessel_mask.shape) == 3:
-                vessel_mask = vessel_mask[..., 0]
-            self._vessel_mask_oa850 = np.bool8(vessel_mask)
+                raise Exception(f"No vessel mask for channel oa850 found for session {self.video_oa790_file}")
+            self._vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
         return self._vessel_mask_oa850
 
     @property
     def vessel_mask_confocal(self):
         if self._vessel_mask_confocal is None:
-            if self.vessel_mask_confocal_file == '':
-                raise Exception(f"No vessel mask found for session {self.video_oa790_file}")
-            vessel_mask = plt.imread(self.vessel_mask_confocal_file)
-            if len(vessel_mask.shape) == 3:
-                vessel_mask = vessel_mask[..., 0]
-            self._vessel_mask_confocal = np.bool8(vessel_mask)
+            if not self.vessel_mask_confocal_file:
+                raise Exception(f"No confocal vessel mask found for session {self.video_oa790_file}")
+            self._vessel_mask_confocal = VideoSession._vessel_mask_from_file(self.vessel_mask_confocal_file)
         return self._vessel_mask_confocal
+
+    @staticmethod
+    def _std_image_from_file(file):
+        std_image = plt.imread(file)
+        if len(std_image.shape) == 3:
+            std_image = std_image[..., 0]
+
+        # if image is 16 bit scale back to uint8 (assuming data range is from 0 to 2^16 -1)
+        if std_image.dtype == np.uint16:
+            uint16_max_val = np.iinfo(np.uint16).max
+            std_image = np.uint8(normalize_data(std_image, target_range=(0, 255), data_range=(0, uint16_max_val)))
+
+        return std_image
 
     @property
     def std_image_oa790(self):
         if self._std_image_oa790 is None:
             if self.std_image_oa790_file == '':
                 raise Exception(f"No standard deviation image oa790 found for session '{self.video_oa790_file}'")
-            self._std_image_oa790 = plt.imread(self.std_image_oa790_file)
+            self._std_image_oa790 = VideoSession._std_image_from_file(self.std_image_oa790_file)
         return self._std_image_oa790
 
     @property
@@ -366,7 +538,7 @@ class VideoSession(object):
         if self._std_image_oa850 is None:
             if self.std_image_oa850_file == '':
                 raise Exception(f"No standard deviation image oa850 found for session '{self.video_oa790_file}'")
-            self._std_image_oa850 = plt.imread(self.std_image_oa850_file)
+            self._std_image_oa850 = VideoSession._std_image_from_file(self.std_image_oa850_file)
         return self._std_image_oa850
 
     @property
@@ -374,7 +546,7 @@ class VideoSession(object):
         if self._std_image_confocal is None:
             if self.std_image_confocal_file == '':
                 raise Exception(f"No standard deviation image confocal found for session '{self.video_oa790_file}'")
-            self._std_image_confocal = plt.imread(self.std_image_confocal_file)
+            self._std_image_confocal = VideoSession._std_image_from_file(self.std_image_confocal_file)
         return self._std_image_confocal
 
 

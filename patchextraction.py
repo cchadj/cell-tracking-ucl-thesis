@@ -90,7 +90,8 @@ def get_patch(im, x, y, patch_size):
     if type(patch_size) == int:
         patch_size = patch_size, patch_size
     height, width = patch_size
-    return im[int(y - height / 2):int(y + height / 2), int(x - width / 2):int(x + width / 2), ...]
+    return im[int(y - height / 2):int(y + height / 2),
+              int(x - width / 2):int(x + width / 2), ...]
 
 
 def extract_patches(img,
@@ -249,6 +250,7 @@ def extract_patches_at_positions(image,
 
             if visualize_patches:
                 # Rectangle ( xy -> bottom and left rect coords, )
+                # noinspection PyUnresolvedReferences
                 rect = matplotlib.patches.Rectangle((x - patch_width / 2,
                                                      y - patch_height / 2),
                                                     patch_width, patch_height, linewidth=1,
@@ -258,15 +260,20 @@ def extract_patches_at_positions(image,
                 ax.add_patch(rect)
                 ax.scatter(x, y)
                 ax.annotate(patch_count - 1, (x, y))
+        else:
+            print(f'Helllooo {patch.shape[:2]}')
 
     patches = patches[:patch_count, ...]
     return patches.squeeze()
 
 
 class SessionPatchExtractor(object):
+    _temporal_width: int
+
     def __init__(self,
                  session,
                  patch_size=21,
+                 temporal_width=1,
                  n_negatives_per_positive=1):
         """
 
@@ -277,9 +284,11 @@ class SessionPatchExtractor(object):
         assert type(patch_size) is int or type(patch_size) is tuple
 
         if type(patch_size) is tuple:
-            self.patch_size = patch_size
+            self._patch_size = patch_size
         if type(patch_size) is int:
-            self.patch_size = patch_size, patch_size
+            self._patch_size = patch_size, patch_size
+
+        self.temporal_width = temporal_width
 
         self.n_negatives_per_positive = n_negatives_per_positive
         self._all_patches_oa790 = None
@@ -297,15 +306,63 @@ class SessionPatchExtractor(object):
         self._cell_patches_oa790_at_frame = {}
         self._marked_cell_patches_oa790_at_frame = {}
 
+        self._temporal_cell_patches_oa790 = None
+        self._temporal_marked_cell_patches_oa790 = None
+
+        self._temporal_non_cell_patches_oa790 = None
+        self._temporal_marked_non_cell_patches_oa790 = None
+
+        self._temporal_cell_patches_oa790_at_frame = {}
+        self._marked_temporal_cell_patches_oa790_at_frame = {}
+
+        self._temporal_non_cell_patches_oa790_at_frame = {}
+        self._temporal_marked_non_cell_patches_oa790_at_frame = {}
+
         self._non_cell_patches_oa790_at_frame = {}
         self._marked_non_cell_patches_oa790_at_frame = {}
 
     @property
+    def patch_size(self):
+        return self._patch_size
+
+    def _reset_patches(self):
+        self._cell_patches_oa790 = None
+
+        self._marked_cell_patches_oa790 = None
+        self._non_cell_patches_oa790 = None
+        self._marked_non_cell_patches_oa790 = None
+
+        self._cell_patches_oa850 = None
+        self._marked_cell_patches_oa850 = None
+
+        self._temporal_cell_patches_oa790 = None
+        self._temporal_marked_cell_patches_oa790 = None
+        self._temporal_non_cell_patches_oa790 = None
+        self._temporal_marked_non_cell_patches_oa790 = None
+
+    @patch_size.setter
+    def patch_size(self, patch_size):
+        assert type(patch_size) is int or type(patch_size) is tuple
+
+        if type(patch_size) is tuple:
+            self._patch_size = patch_size
+        if type(patch_size) is int:
+            self._patch_size = patch_size, patch_size
+
+        self._reset_patches()
+
+    @property
+    def temporal_cell_patches_oa790_at_frame(self):
+        tmp = self.temporal_cell_patches_oa790
+
+        return self._temporal_cell_patches_oa790_at_frame
+
+    @property
     def all_patches_oa790(self):
         if self._all_patches_oa790 is None:
-            self._all_patches_oa790 = np.zeros((0, *self.patch_size), dtype=self.session.frames_oa790.dtype)
+            self._all_patches_oa790 = np.zeros((0, *self._patch_size), dtype=self.session.frames_oa790.dtype)
             for frame in self.session.frames_oa790:
-                cur_frame_patches = extract_patches(frame, patch_size=self.patch_size)
+                cur_frame_patches = extract_patches(frame, patch_size=self._patch_size)
                 self._all_patches_oa790 = np.concatenate((self._all_patches_oa790, cur_frame_patches), axis=0)
 
         return self._all_patches_oa790
@@ -313,28 +370,134 @@ class SessionPatchExtractor(object):
     @property
     def all_patches_oa850(self):
         if self._all_patches_oa850 is None:
-            self._all_patches_oa850 = np.zeros((0, *self.patch_size), dtype=self.session.frames_oa850.dtype)
+            self._all_patches_oa850 = np.zeros((0, *self._patch_size), dtype=self.session.frames_oa850.dtype)
             for frame in self.session.frames_oa850:
-                cur_frame_patches = extract_patches(frame, patch_size=self.patch_size)
+                cur_frame_patches = extract_patches(frame, patch_size=self._patch_size)
                 self._all_patches_oa850 = np.concatenate((self._all_patches_oa850, cur_frame_patches), axis=0)
 
         return self._all_patches_oa850
 
-    def _extract_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
-        non_cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
+    @property
+    def temporal_width(self):
+        return self._temporal_width
 
-        for frame_idx, cell_positions in cell_positions.items():
+    @temporal_width.setter
+    def temporal_width(self, width):
+        assert type(width) is int, f'Temporal width of patch should be an integer not {type(width)}'
+        self._temporal_width = width
+        self._temporal_cell_patches_oa790 = None
+
+    def _delete_invalid_positions(self, positions):
+        _, frame_height, frame_width = self.session.frames_oa790.shape
+
+        positions = np.int32(positions)
+        positions = np.delete(positions, np.where(positions[:, 0] - (self._patch_size[1] / 2) < 0)[0], axis=0)
+        positions = np.delete(positions, np.where(positions[:, 1] - (self._patch_size[0] / 2) < 0)[0], axis=0)
+        positions = np.delete(positions, np.where(positions[:, 0] + (self._patch_size[1] / 2) >= frame_width - 1)[0],
+                              axis=0)
+        positions = np.delete(positions, np.where(positions[:, 1] + (self._patch_size[0] / 2) >= frame_height - 1)[0],
+                              axis=0)
+        return positions
+
+    def _extract_temporal_cell_patches(self, session_frames, cell_positions, frame_idx_to_temporal_patch_dict):
+        temporal_cell_patches = np.empty((0, *self._patch_size, 2 * self.temporal_width + 1), dtype=np.uint8)
+        frame_idx_to_temporal_patch_dict = {}
+
+        _, frame_height, frame_width = session_frames.shape
+        for frame_idx, frame_cell_positions in cell_positions.items():
+            if frame_idx < self.temporal_width or frame_idx > self.temporal_width:
+                continue
+
+            frame_cell_positions = self._delete_invalid_positions(frame_cell_positions)
+            cur_frame_temporal_patches = np.empty((len(frame_cell_positions), *self._patch_size, 2 * self.temporal_width + 1),
+                                                  dtype=np.uint8)
+            for i, frame in enumerate(session_frames[frame_idx - self.temporal_width:frame_idx + self.temporal_width + 1]):
+                cur_frame_temporal_patches[..., i] = extract_patches_at_positions(frame, frame_cell_positions,
+                                                                                  patch_size=self._patch_size)
+
+            frame_idx_to_temporal_patch_dict[frame_idx] = cur_frame_temporal_patches
+            temporal_cell_patches = np.concatenate((temporal_cell_patches, cur_frame_temporal_patches), axis=0)
+
+        return temporal_cell_patches
+
+    def _extract_temporal_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_temporal_patch_dict):
+        temporal_non_cell_patches = np.empty((0, *self._patch_size, 2 * self.temporal_width + 1), dtype=np.uint8)
+
+        _, frame_height, frame_width = session_frames.shape
+        for frame_idx, frame_cell_positions in cell_positions.items():
+            if frame_idx < self.temporal_width or frame_idx > self.temporal_width:
+                continue
+
+            cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
+            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self._patch_size,
+                                                     n_points_per_rect=self.n_negatives_per_positive)
+            non_cell_positions = np.int32(np.array([rx, ry]).T)
+            non_cell_positions = self._delete_invalid_positions(non_cell_positions)
+
+            cur_frame_temporal_patches = np.empty((len(non_cell_positions), *self._patch_size, 2 * self.temporal_width + 1),
+                                                  dtype=np.uint8)
+            for i, frame in enumerate(session_frames[frame_idx - self.temporal_width:frame_idx + self.temporal_width + 1]):
+                cur_frame_temporal_patches[..., i] = extract_patches_at_positions(frame, frame_cell_positions,
+                                                                                  patch_size=self._patch_size)
+
+            frame_idx_to_temporal_patch_dict[frame_idx] = cur_frame_temporal_patches
+            temporal_non_cell_patches = np.concatenate((temporal_non_cell_patches, cur_frame_temporal_patches), axis=0)
+
+        return temporal_non_cell_patches
+
+    @property
+    def temporal_cell_patches_oa790(self):
+        if self._temporal_cell_patches_oa790 is None:
+            self._temporal_cell_patches_oa790 = self._extract_temporal_cell_patches(self.session.frames_oa790,
+                                                                                    self.session.cell_positions,
+                                                                                    self._temporal_cell_patches_oa790_at_frame)
+        return self._temporal_cell_patches_oa790
+
+    @property
+    def temporal_marked_cell_patches_oa790(self):
+        if self._temporal_marked_cell_patches_oa790 is None:
+            self._temporal_marked_cell_patches_oa790 = self._extract_temporal_cell_patches(self.session.marked_frames_oa790,
+                                                                                           self.session.cell_positions,
+                                                                                           self._marked_temporal_cell_patches_oa790_at_frame)
+        return self._temporal_marked_cell_patches_oa790
+
+    @property
+    def temporal_non_cell_patches_oa790(self):
+        if self._temporal_non_cell_patches_oa790 is None:
+            self._temporal_non_cell_patches_oa790_at_frame = {}
+            self._temporal_non_cell_patches_oa790 = self._extract_temporal_non_cell_patches(self.session.frames_oa790,
+                                                                                            self.session.cell_positions,
+                                                                                            self._temporal_non_cell_patches_oa790_at_frame)
+        return self._temporal_non_cell_patches_oa790
+
+    @property
+    def temporal_marked_non_cell_patches_oa790(self):
+        if self._temporal_marked_non_cell_patches_oa790 is None:
+            self._temporal_marked_non_cell_patches_oa790_at_frame = {}
+            self._temporal_marked_non_cell_patches_oa790 = self._extract_temporal_non_cell_patches(self.session.marked_frames_oa790,
+                                                                                                   self.session.cell_positions,
+                                                                                                   self._temporal_marked_non_cell_patches_oa790_at_frame)
+        return self._temporal_non_cell_patches_oa790
+
+    @property
+    def all_temporal_patches_oa790(self):
+        # TODO: extract all temporal patches, from 2nd frame to the penultimate frame.
+        raise NotImplemented
+
+    def _extract_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
+        non_cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
+
+        for frame_idx, frame_cell_positions in cell_positions.items():
             frame = session_frames[frame_idx]
             # get non cell positions at random points along the perimeter of the patch.
-            cx, cy = cell_positions[:, 0], cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.patch_size,
+            cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
+            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self._patch_size,
                                                      n_points_per_rect=self.n_negatives_per_positive)
 
             non_cell_positions = np.int32(np.array([rx, ry]).T)
-            non_cell_positions = np.delete(non_cell_positions, np.where(non_cell_positions[:, 0] >= frame.shape[1])[0], axis=0)
-            non_cell_positions = np.delete(non_cell_positions, np.where(non_cell_positions[:, 1] >= frame.shape[0])[0], axis=0)
+            non_cell_positions = self._delete_invalid_positions(non_cell_positions)
 
-            cur_frame_patches = extract_patches_at_positions(frame, non_cell_positions, patch_size=self.patch_size)
+            cur_frame_patches = extract_patches_at_positions(frame, non_cell_positions, patch_size=self._patch_size)
             frame_idx_to_patch_dict[frame_idx] = cur_frame_patches
             non_cell_patches = np.concatenate((non_cell_patches, cur_frame_patches), axis=0)
         return non_cell_patches
@@ -356,11 +519,14 @@ class SessionPatchExtractor(object):
         return self._marked_non_cell_patches_oa790
 
     def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict):
-        cell_patches = np.zeros((0, *self.patch_size), dtype=session_frames.dtype)
+        cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
 
-        for frame_idx, cell_positions in cell_positions.items():
+        for frame_idx, frame_cell_positions in cell_positions.items():
             frame = session_frames[frame_idx]
-            cur_frame_cell_patches = extract_patches_at_positions(frame, cell_positions, patch_size=self.patch_size)
+
+            frame_cell_positions = self._delete_invalid_positions(frame_cell_positions)
+
+            cur_frame_cell_patches = extract_patches_at_positions(frame, frame_cell_positions, patch_size=self._patch_size)
             frame_idx_to_patch_dict[frame_idx] = cur_frame_cell_patches
             cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)
         return cell_patches
@@ -399,14 +565,16 @@ class SessionPatchExtractor(object):
 
     @property
     def cell_patches_oa790_at_frame(self):
-        # for the cell patches creation ot fill the dict
+        # force the cell patches creation ot fill the dict
         tmp = self.cell_patches_oa790
+
         return self._cell_patches_oa790_at_frame
 
     @property
     def marked_cell_patches_oa790_at_frame(self):
-        # for the cell patches creation ot fill the dict
-        tmp = self.cell_patches_oa790
+        # force the cell patches creation to fill the dict
+        tmp = self.marked_cell_patches_oa790
+
         return self._marked_cell_patches_oa790_at_frame
 
     @property

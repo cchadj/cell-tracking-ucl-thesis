@@ -13,35 +13,57 @@ class LabeledImageDataset(torch.utils.data.Dataset):
 
     def __init__(self,
                  images,
-                 labels):
+                 labels,
+                 to_grayscale=False,
+                 standardize=False,
+                 ):
         """
         Args:
           images (ndarray):
               The images.
-              shape -> N x height x width x channels or N x height x width grayscale image.
+              shape -> N x height x width x channels or N x height x width grayscale image.\
+              Type must be uint8 ( values from 0 to 255)
           labels (ndarray):
-              The corresponding labels
+              The corresponding list of labels.
         """
+        assert len(images.shape) == 3 or len(images.shape) == 4,\
+            f'Expected images shape to be one of NxHxWxC or NxHxW. Shape given {images.shape}.'
+        assert images.dtype == np.uint8, f'Images expected to have type uint8, not {images.dtype}.'
+        assert len(images) == len(labels),\
+            f'Expected to have equal amount of labels and images. n images:{len(images)} n labels:{len(labels)}'
+        # if labels already ndarray nothing changes, if list makes to a numpy array
+        labels = np.array(labels).squeeze()
+        assert labels.dtype == np.int, f'Labels must be integers not {labels.dtype}'
+        assert len(labels.shape) == 1, f'Labels should be a list of one label for each image, shape given {labels.shape}'
+
+        if len(images.shape) == 3:
+            images = images[..., np.newaxis]
+
         self.n_images = images.shape[0]
         self.n_channels = images.shape[-1]
 
-        # ToTensor accept uint8 [0, 255] numpy image of shape H x W x C
         # print("A", images.shape)
         if len(images.shape) == 3:
             # images = np.concatenate((images[..., None], images[..., None], images[..., None]), axis=-1)
             # if shape is NxHxW -> NxHxWx1
             images = images[..., np.newaxis]
-
-        self.transform = torchvision.transforms.Compose([
-            # you can add other transformations in this list
-            # torchvision.transforms.ToPILImage(),
-            # torchvision.transforms.Grayscale(num_output_channels=1),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize([0.5], [0.5])
-        ])
-
-        # print("B", images.shape)
         self.samples = [(image, label) for image, label in zip(images, labels)]
+
+        transforms = []
+        if self.n_channels > 1 and to_grayscale:
+            # Takes ndarray input with shape HxWxC
+            transforms.append(torchvision.transforms.ToPILImage())
+            # Grayscale takes a PILImage as an input
+            transforms.append(torchvision.transforms.Grayscale(num_output_channels=1))
+
+        # ToTensor accept uint8 [0, 255] numpy image of shape H x W x C and scales to [0, 1]
+        transforms.append(torchvision.transforms.ToTensor())
+
+        if standardize:
+            # Standardization brings values to -1 and 1
+            # Normalise takes input a tensor image of shape CxHxW and brings to target mean and standard deviation
+            transforms.append(torchvision.transforms.Normalize(mean=[0.5], std=[0.5]))
+        self.transform = torchvision.transforms.Compose(transforms)
 
     def __len__(self):
         return len(self.samples)
