@@ -112,6 +112,8 @@ class ImageRegistator(object):
 
     def apply_registration(self, im):
         dx, dy = self.horizontal_displacement, self.vertical_displacement
+        if im.dtype == np.bool:
+            im = np.float32(im)
 
         translation = np.float32([[1, 0, dx],
                                   [0, 1, dy]])
