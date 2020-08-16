@@ -275,19 +275,19 @@ class TrainingTracker:
         if self.valid_accuracies:
             results["valid accuracy"] = self.valid_accuracies[-1]
 
-        results["Best Loss?"] = self.is_best_valid_loss_recorded
-        results["Best Accuracy?"] = self.is_best_valid_accuracy_recorded
+        results["Best loss?"] = self.is_best_valid_loss_recorded
+        results["Best Acc?"] = self.is_best_valid_accuracy_recorded
         results["Model Recorded?"] = self.is_model_recorded
 
         if self.do_early_stop:
-            results["Times since last best loss"] = self._times_since_last_best_valid_loss
-            results["Times since last best accuracy"] = self._times_since_last_best_valid_accuracy
+            results["last loss"] = self._times_since_last_best_valid_loss
+            results["last acc"] = self._times_since_last_best_valid_accuracy
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
-            run_parameters["learning rate"] = param_group["lr"]
+            run_parameters['lr'] = param_group["lr"]
             results['lr'] = param_group['lr']
-            run_parameters["weight decay"] = param_group["weight_decay"]
+            run_parameters['wd'] = param_group["weight_decay"]
 
         # Record hyper-params into 'results'
         for k, v in self.run_params.items():
@@ -308,12 +308,12 @@ class TrainingTracker:
 
         current_performance_df = pd.DataFrame(
             collections.OrderedDict({
-                'Highest training accuracy': self.best_train_accuracy,
-                'Corresponding training loss': self.best_train_loss,
-                'Highest training accuracy epoch': self.best_train_accuracy_epoch,
-                'Highest validation accuracy': self.best_valid_accuracy,
-                'Corresponding validation loss': self.best_valid_loss,
-                'Highest validation accuracy epoch': self.best_valid_accuracy_epoch
+                'Best train acc': self.best_train_accuracy,
+                'train loss': self.best_train_loss,
+                'Best train epoch': self.best_train_accuracy_epoch,
+                'Best valid acc': self.best_valid_accuracy,
+                'valid loss': self.best_valid_loss,
+                'Best valid epoch': self.best_valid_accuracy_epoch
             }), index=[0])
         # display epoch information and show progress
         with pd.option_context('display.max_rows', 10,
