@@ -21,6 +21,7 @@ def get_random_points_on_rectangles(cx, cy, rect_size, n_points_per_rect=1):
         Random points on the rectangles defined by centre cx, cy and height, width
 
     """
+    np.random.seed(0)
     assert type(rect_size) is int or type(rect_size) is tuple
     if type(rect_size) is int:
         rect_size = rect_size, rect_size
@@ -391,11 +392,11 @@ class SessionPatchExtractor(object):
         _, frame_height, frame_width = self.session.frames_oa790.shape
 
         positions = np.int32(positions)
-        positions = np.delete(positions, np.where(positions[:, 0] - (self._patch_size[1] / 2) < 0)[0], axis=0)
-        positions = np.delete(positions, np.where(positions[:, 1] - (self._patch_size[0] / 2) < 0)[0], axis=0)
-        positions = np.delete(positions, np.where(positions[:, 0] + (self._patch_size[1] / 2) >= frame_width - 1)[0],
+        positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < 0)[0], axis=0)
+        positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < 0)[0], axis=0)
+        positions = np.delete(positions, np.where(positions[:, 0] + np.ceil(self._patch_size[1] / 2) >= frame_width - 1)[0],
                               axis=0)
-        positions = np.delete(positions, np.where(positions[:, 1] + (self._patch_size[0] / 2) >= frame_height - 1)[0],
+        positions = np.delete(positions, np.where(positions[:, 1] + np.ceil(self._patch_size[0] / 2) >= frame_height - 1)[0],
                               axis=0)
         return positions
 
@@ -437,7 +438,7 @@ class SessionPatchExtractor(object):
             cur_frame_temporal_patches = np.empty((len(non_cell_positions), *self._patch_size, 2 * self.temporal_width + 1),
                                                   dtype=np.uint8)
             for i, frame in enumerate(session_frames[frame_idx - self.temporal_width:frame_idx + self.temporal_width + 1]):
-                cur_frame_temporal_patches[..., i] = extract_patches_at_positions(frame, frame_cell_positions,
+                cur_frame_temporal_patches[..., i] = extract_patches_at_positions(frame, non_cell_positions,
                                                                                   patch_size=self._patch_size)
 
             frame_idx_to_temporal_patch_dict[frame_idx] = cur_frame_temporal_patches
@@ -477,7 +478,7 @@ class SessionPatchExtractor(object):
             self._temporal_marked_non_cell_patches_oa790 = self._extract_temporal_non_cell_patches(self.session.marked_frames_oa790,
                                                                                                    self.session.cell_positions,
                                                                                                    self._temporal_marked_non_cell_patches_oa790_at_frame)
-        return self._temporal_non_cell_patches_oa790
+        return self._temporal_marked_non_cell_patches_oa790
 
     @property
     def all_temporal_patches_oa790(self):

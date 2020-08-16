@@ -27,7 +27,12 @@ def extract_value_from_string(string, value_prefix, delimiter='_'):
     return val
 
 
-def load_model_from_cache(model, patch_size=(21, 21), n_negatives_per_positive=3, hist_match=False):
+def load_model_from_cache(model,
+                          patch_size=(21, 21),
+                          n_negatives_per_positive=3,
+                          temporal_width=0,
+                          standardize_dataset=True,
+                          hist_match=False):
     """ Attempts to find the model weights to model from cache.
 
     Args:
@@ -52,6 +57,12 @@ def load_model_from_cache(model, patch_size=(21, 21), n_negatives_per_positive=3
     potential_model_directories = [
         f for f in potential_model_directories if extract_value_from_string(f, 'hm') == str(hist_match).lower()
     ]
+    potential_model_directories = [
+        f for f in potential_model_directories if extract_value_from_string(f, 'st') == str(standardize_dataset).lower()
+    ]
+    potential_model_directories = [
+        f for f in potential_model_directories if extract_value_from_string(f, 'tw') == temporal_width
+    ]
 
     if len(potential_model_directories) == 0:
         raise FileNotFoundError('No model directory in cache')
@@ -68,6 +79,7 @@ def load_model_from_cache(model, patch_size=(21, 21), n_negatives_per_positive=3
 
 
 def train_model_demo(patch_size=(21, 21),
+                     temporal_width=0,
                      do_hist_match=False,
                      n_negatives_per_positive=3,
                      device='cuda',
@@ -84,6 +96,7 @@ def train_model_demo(patch_size=(21, 21),
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
 
+    print('Creating/Loading ...')
     trainset, validset, \
         cell_images, non_cell_images, \
         cell_images_marked, non_cell_images_marked, \
@@ -92,6 +105,7 @@ def train_model_demo(patch_size=(21, 21),
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
             standardize_dataset=standardize_dataset,
+            temporal_width=temporal_width,
             do_hist_match=do_hist_match,
             try_load_from_cache=try_load_data_from_cache,
         )
@@ -101,8 +115,12 @@ def train_model_demo(patch_size=(21, 21),
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
 
+    n_channels = 1
+    if len(cell_images.shape) == 4:
+        n_channels = cell_images.shape[-1]
+
     # noinspection PyUnresolvedReferences
-    model = CNN().to(device)
+    model = CNN(input_dims=n_channels).to(device)
 
     pathlib.Path(CACHED_MODELS_FOLDER).mkdir(parents=True, exist_ok=True)
 
@@ -113,8 +131,8 @@ def train_model_demo(patch_size=(21, 21),
         print(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
               f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
         model_directory = load_model_from_cache(model, patch_size=patch_size,
-                                               hist_match=do_hist_match,
-                                               n_negatives_per_positive=n_negatives_per_positive)
+                                                hist_match=do_hist_match,
+                                                n_negatives_per_positive=n_negatives_per_positive)
         print(f"Model found. Loaded model from '{model_directory}'")
         with open(os.path.join(model_directory, 'results.pkl'), 'rb') as results_file:
             results = pickle.load(results_file)
@@ -148,10 +166,11 @@ def train_model_demo(patch_size=(21, 21),
                 train_params['validset'] = validset
 
         run_configuration_display = collections.OrderedDict({
-            "patch_size": patch_size[0],
-            "do_hist_match": do_hist_match,
-            "standardize data": standardize_dataset,
-            "nnp": n_negatives_per_positive
+            'patch_size': patch_size[0],
+            'temporal width': temporal_width,
+            'hist match': do_hist_match,
+            'standardize data': standardize_dataset,
+            'nnp': n_negatives_per_positive
         })
         additional_displays.append(run_configuration_display)
 
@@ -166,7 +185,8 @@ def train_model_demo(patch_size=(21, 21),
         pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
         output_name = os.path.join(output_directory,
                                    f'blood_cell_classifier_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}'
-                                   f'_npp_{n_negatives_per_positive}_va_{results.recorded_model_valid_accuracy:.3f}')
+                                   f'_npp_{n_negatives_per_positive}_va_{results.recorded_model_valid_accuracy:.3f}'
+                                   f'_st_{str(standardize_dataset).lower()}_tw_{temporal_width}')
 
         print(f'Saving model as {output_name}')
         results.save(output_name)

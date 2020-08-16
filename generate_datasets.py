@@ -80,13 +80,13 @@ def create_cell_and_no_cell_patches(
 
         if temporal_width > 0:
             cur_session_marked_cell_images = patch_extractor.temporal_marked_cell_patches_oa790
-            cur_session_non_marked_cell_images = patch_extractor.temporal_marked_non_cell_patches_oa790
+            cur_session_marked_non_cell_images = patch_extractor.temporal_marked_non_cell_patches_oa790
         else:
             cur_session_marked_cell_images = patch_extractor.marked_cell_patches_oa790
-            cur_session_non_marked_cell_images = patch_extractor.marked_non_cell_patches_oa790
+            cur_session_marked_non_cell_images = patch_extractor.marked_non_cell_patches_oa790
 
         cell_images_marked = np.concatenate((cell_images_marked, cur_session_marked_cell_images), axis=0)
-        non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_non_marked_cell_images),
+        non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_marked_non_cell_images),
                                                 axis=0)
 
     if do_hist_match:
@@ -108,6 +108,7 @@ def create_dataset_from_cell_and_no_cell_images(
         non_cell_images,
         standardize=False,
         to_grayscale=False,
+        device='cuda',
         v=False):
     if v:
         print('Creating dataset from cell and non cell patches')
@@ -118,6 +119,7 @@ def create_dataset_from_cell_and_no_cell_images(
                        axis=0),
         standardize=standardize,
         to_grayscale=to_grayscale,
+        device=device
     )
 
     if v:
@@ -195,32 +197,33 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
     patch_size = (height, width)
 
-    post_fix = f'_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}' \
-               f'_nnp_{n_negatives_per_positive}_stdzed_{standardize_dataset}_tw_{temporal_width}'
+    postfix = f'_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}'\
+              f'_st_{str(standardize_dataset).lower()}_tw_{temporal_width}'
+
     dataset_folder = os.path.join(
         CACHED_DATASETS_FOLDER,
-        f'dataset{post_fix}')
+        f'dataset{postfix}')
     pathlib.Path(dataset_folder).mkdir(parents=True, exist_ok=True)
 
     trainset_filename = os.path.join(
         dataset_folder,
-        f'trainset_bloodcells{post_fix}.pt')
+        f'trainset_bloodcells{postfix}.pt')
     validset_filename = os.path.join(
         dataset_folder,
-        f'validset_bloodcells{post_fix}.pt')
+        f'validset_bloodcells{postfix}.pt')
 
     cell_images_filename = os.path.join(
         dataset_folder,
-        f'bloodcells{post_fix}.npy')
+        f'bloodcells{postfix}.npy')
     non_cell_images_filename = os.path.join(
         dataset_folder,
-        f'non_bloodcells{post_fix}.npy')
+        f'non_bloodcells{postfix}.npy')
     cell_images_marked_filename = os.path.join(
         dataset_folder,
-        f'bloodcells_marked{post_fix}.npy')
+        f'bloodcells_marked{postfix}.npy')
     non_cell_images_marked_filename = os.path.join(
         dataset_folder,
-        f'non_bloodcells_marked{post_fix}.npy')
+        f'non_bloodcells_marked{postfix}.npy')
     template_image_filename = os.path.join(
         dataset_folder,
         f'hist_match_template_image'
@@ -373,30 +376,36 @@ def main():
 
 
 def main_tmp():
+    # Input
     patch_size = 21
     do_hist_match = False
     n_negatives_per_positive = 1
-    standardize_dataset = False
+    standardize_dataset = True
     temporal_width = 1
 
-    overwrite_cache = True
+    try_load_from_cache = False
     verbose = False
     very_verbose = True
 
     ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
     trainset, validset, \
-        cell_images, non_cell_images, \
-        cell_images_marked, non_cell_images_marked, hist_match_template = \
+    cell_images, non_cell_images, \
+    cell_images_marked, non_cell_images_marked, hist_match_template = \
         get_cell_and_no_cell_patches(patch_size=patch_size,
                                      n_negatives_per_positive=n_negatives_per_positive,
                                      do_hist_match=do_hist_match,
-                                     try_load_from_cache=not overwrite_cache,
+                                     try_load_from_cache=try_load_from_cache,
                                      temporal_width=temporal_width,
                                      standardize_dataset=standardize_dataset,
                                      v=verbose,
                                      vv=very_verbose)
 
+    loader = torch.utils.data.DataLoader(trainset, batch_size=10)
 
+    for im, lbl in loader:
+        print(im.shape)
+        print(lbl.shape)
+        break
 if __name__ == '__main__':
     main_tmp()
 #   main()

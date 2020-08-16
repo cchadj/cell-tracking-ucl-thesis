@@ -18,8 +18,6 @@ try:
 except ImportError:
     import pickle
 
-import os
-import sys
 import signal
 
 
@@ -42,7 +40,7 @@ class CNN(nn.Module):
         assert model_type in [0, 1]
         if model_type == 0:
             self.convolutional = nn.Sequential(
-                nn.Conv2d(1, 32, padding=2, kernel_size=5),
+                nn.Conv2d(input_dims, 32, padding=2, kernel_size=5),
                 # PrintLayer("1"),
                 nn.BatchNorm2d(32),
                 # PrintLayer("2"),

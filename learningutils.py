@@ -16,6 +16,7 @@ class LabeledImageDataset(torch.utils.data.Dataset):
                  labels,
                  to_grayscale=False,
                  standardize=False,
+                 device='cuda'
                  ):
         """
         Args:
@@ -35,6 +36,8 @@ class LabeledImageDataset(torch.utils.data.Dataset):
         labels = np.array(labels).squeeze()
         assert labels.dtype == np.int, f'Labels must be integers not {labels.dtype}'
         assert len(labels.shape) == 1, f'Labels should be a list of one label for each image, shape given {labels.shape}'
+        assert device in ['cuda', 'cpu'], f'Device must be  one of {["cuda", "cpu"]}'
+        self.device = device
 
         if len(images.shape) == 3:
             images = images[..., np.newaxis]
@@ -45,6 +48,8 @@ class LabeledImageDataset(torch.utils.data.Dataset):
         if len(images.shape) == 3:
             # if shape is NxHxW -> NxHxWx1
             images = images[..., np.newaxis]
+
+        labels = torch.from_numpy(labels).to(device).type(torch.LongTensor)
         self.samples = [(image, label) for image, label in zip(images, labels)]
 
         transforms = []
@@ -68,14 +73,12 @@ class LabeledImageDataset(torch.utils.data.Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        sample = self.samples[idx]
-
-        img, target = sample[0], sample[1]
+        img, target = self.samples[idx]
 
         if self.transform:
             img = self.transform(img)
 
-        return img, target
+        return img.to(self.device), target
 
 
 class ImageDataset(torch.utils.data.Dataset):
