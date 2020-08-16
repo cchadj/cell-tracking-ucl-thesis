@@ -286,6 +286,7 @@ class TrainingTracker:
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
             run_parameters["learning rate"] = param_group["lr"]
+            results['lr'] = param_group['lr']
             run_parameters["weight decay"] = param_group["weight_decay"]
 
         # Record hyper-params into 'results'
@@ -298,7 +299,7 @@ class TrainingTracker:
                 run_parameters["Trainset size"] = len(self.run_params[k])
             elif k == "validset":
                 run_parameters["Validset size "] = len(self.run_params[k])
-            elif k not in ["trainset", "validset", "testset", "optimizer"]:
+            elif k not in ["trainset", "validset", "testset", "optimizer", "lr", "weight_decay"]:
                 results[k] = v
 
         self.run_data.append(results)
