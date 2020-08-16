@@ -316,7 +316,8 @@ class TrainingTracker:
                 'Highest validation accuracy epoch': self.best_valid_accuracy_epoch
             }), index=[0])
         # display epoch information and show progress
-        with pd.option_context('display.max_rows', None,
+        with pd.option_context('display.max_rows', 10,
+                               'display.max_colwidth', 30,
                                'display.max_columns', None):  # more options can be specified also
             clear_output()
             for additional_display in self.additional_displays:
