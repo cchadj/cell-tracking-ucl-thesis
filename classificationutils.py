@@ -196,7 +196,7 @@ def classify_images(images, model, standardize_dataset=True, device="cuda"):
     image_dataset = ImageDataset(images, standardize=standardize_dataset)
     loader = torch.utils.data.DataLoader(
         image_dataset,
-        batch_size=1024 * 3,
+        batch_size=1024 * 5,
         shuffle=False
     )
 

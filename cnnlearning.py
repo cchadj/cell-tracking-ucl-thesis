@@ -568,15 +568,20 @@ def train(cnn, params,
     # if params changes, following line of code should reflect the changes too
     if additional_displays is None:
         additional_displays = []
+
+    batch_size = int(0.75 * len(params['trainset']))
+    if params['batch_size'] in [None, 'all']:
+        batch_size = len(params['trainset'])
+
     train_loader = torch.utils.data.DataLoader(
         params['trainset'],
-        batch_size=params['batch_size'],
+        batch_size=batch_size,
         shuffle=True
     )
 
     valid_loader = torch.utils.data.DataLoader(
         params['validset'],
-        batch_size=params['batch_size'],
+        batch_size=batch_size,
         shuffle=False
     )
 
