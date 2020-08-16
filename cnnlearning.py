@@ -295,7 +295,7 @@ class TrainingTracker:
                      "epochs", "shuffle"]:
                 run_parameters[k] = v
             elif k == "learning_rate_scheduler_patience":
-                run_parameters['sched patience'] = v
+                run_parameters['lr patience'] = v
             elif k == "early_stop_patience":
                 run_parameters['stop patience'] = v
             elif k == "trainset":

@@ -532,7 +532,7 @@ class SessionPatchExtractor(object):
                                                                                  self._marked_non_cell_patches_oa790_at_frame)
         return self._marked_non_cell_patches_oa790
 
-    def _extract_cell_patches(self, session_frames, cell_positions, masks=None, frame_idx_to_patch_dict=None):
+    def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict=None, masks=None):
         cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
 
         for frame_idx, frame_cell_positions in cell_positions.items():
@@ -610,6 +610,7 @@ class SessionPatchExtractor(object):
     def _extract_mixed_channel_cell_patches(self, frames_oa790):
         from measure_velocity import ImageRegistator
         frames_oa850 = self.session.frames_oa850
+        frames_confocal = self.session.frames_confocal
         masks_oa850 = self.session.mask_frames_oa850
         ir = ImageRegistator(source=self.session.vessel_mask_oa850, target=self.session.vessel_mask_confocal)
         ir.register_vertically()
@@ -621,6 +622,11 @@ class SessionPatchExtractor(object):
             registered_frames_oa850[i] = ir.apply_registration(frame)
             registered_mask_frames_oa850[i] = ir.apply_registration(mask)
 
+        cell_patches_confocal = self._extract_cell_patches(
+            frames_confocal,
+            self.session.cell_positions,
+            masks=registered_mask_frames_oa850
+        )
         cell_patches_oa790 = self._extract_cell_patches(
             frames_oa790,
             self.session.cell_positions,
@@ -633,16 +639,19 @@ class SessionPatchExtractor(object):
         )
         assert len(cell_patches_oa790) == len(cell_patches_oa850), 'Not the same of patches extracted'
 
-        mixed_channel_cell_patches = np.empty([*cell_patches_oa790.shape, 2])
-        mixed_channel_cell_patches[..., 0] = cell_patches_oa790
-        mixed_channel_cell_patches[..., 1] = cell_patches_oa850
+        mixed_channel_cell_patches = np.empty([*cell_patches_oa790.shape, 3], dtype=frames_oa790.dtype)
+        mixed_channel_cell_patches[..., 0] = cell_patches_confocal
+        mixed_channel_cell_patches[..., 1] = cell_patches_oa790
+        mixed_channel_cell_patches[..., 2] = cell_patches_oa850
 
         return mixed_channel_cell_patches
 
     def _extract_mixed_channel_non_cell_patches(self, frames_oa790):
         from measure_velocity import ImageRegistator
         frames_oa850 = self.session.frames_oa850
+        frames_confocal = self.session.frames_confocal
         masks_oa850 = self.session.mask_frames_oa850
+
         ir = ImageRegistator(source=self.session.vessel_mask_oa850, target=self.session.vessel_mask_confocal)
         ir.register_vertically()
 
@@ -655,9 +664,11 @@ class SessionPatchExtractor(object):
 
         non_cell_patches_oa790 = np.zeros((0, *self._patch_size), dtype=frames_oa790.dtype)
         non_cell_patches_oa850 = np.zeros((0, *self._patch_size), dtype=frames_oa850.dtype)
+        non_cell_patches_confocal = np.zeros((0, *self._patch_size), dtype=frames_confocal.dtype)
 
         for frame_idx, frame_cell_positions in self.session.cell_positions.items():
             frame_oa790 = frames_oa790[frame_idx]
+            frame_confocal = frames_confocal[frame_idx]
             frame_oa850 = registered_frames_oa850[frame_idx]
             mask = registered_mask_frames_oa850[frame_idx]
 
@@ -669,18 +680,22 @@ class SessionPatchExtractor(object):
             non_cell_positions = np.int32(np.array([rx, ry]).T)
             non_cell_positions = self._delete_invalid_positions(non_cell_positions)
 
+            cur_frame_patches_confocal= extract_patches_at_positions(frame_confocal, non_cell_positions,
+                                                                     patch_size=self._patch_size, mask=mask)
             cur_frame_patches_oa790 = extract_patches_at_positions(frame_oa790, non_cell_positions,
                                                                    patch_size=self._patch_size, mask=mask)
             cur_frame_patches_oa850 = extract_patches_at_positions(frame_oa850, non_cell_positions,
                                                                    patch_size=self._patch_size, mask=mask)
 
+            non_cell_patches_confocal = np.concatenate((non_cell_patches_confocal, cur_frame_patches_confocal), axis=0)
             non_cell_patches_oa790 = np.concatenate((non_cell_patches_oa790, cur_frame_patches_oa790), axis=0)
             non_cell_patches_oa850 = np.concatenate((non_cell_patches_oa850, cur_frame_patches_oa850), axis=0)
 
         assert len(non_cell_patches_oa790) == len(non_cell_patches_oa850), 'Not the same of patches extracted'
-        mixed_channel_non_cell_patches = np.empty([*non_cell_patches_oa790.shape, 2], dtype=frame_oa790.dtype)
-        mixed_channel_non_cell_patches[..., 0] = non_cell_patches_oa790
-        mixed_channel_non_cell_patches[..., 1] = non_cell_patches_oa850
+        mixed_channel_non_cell_patches = np.empty([*non_cell_patches_oa790.shape, 3], dtype=frame_oa790.dtype)
+        mixed_channel_non_cell_patches[..., 0] = non_cell_patches_confocal
+        mixed_channel_non_cell_patches[..., 1] = non_cell_patches_oa790
+        mixed_channel_non_cell_patches[..., 2] = non_cell_patches_oa850
 
         return mixed_channel_non_cell_patches
 
@@ -705,9 +720,9 @@ class SessionPatchExtractor(object):
 
     @property
     def mixed_channel_marked_non_cell_patches(self):
-        if self._mixed_channel_cell_patches is None:
-            self._mixed_channel_cell_patches = self._extract_mixed_channel_cell_patches(self.session.marked_frames_oa790)
-        return self._mixed_channel_cell_patches
+        if self._mixed_channel_marked_non_cell_patches is None:
+            self._mixed_channel_marked_non_cell_patches = self._extract_mixed_channel_non_cell_patches(self.session.marked_frames_oa790)
+        return self._mixed_channel_marked_non_cell_patches
 
 
 if __name__ == '__main__':
