@@ -217,12 +217,12 @@ def train_model_demo(patch_size=(21, 21),
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--patch-size', default=21, type=int, help='Patch size')
-    parser.add_argument('-t', '--temporal-width', default=0, type=int, help='Temporal width')
-    parser.add_argument('-s', '--standardize', action='store_true', help='Set to standardize output between -1 and 1')
-    parser.add_argument('--hist-match', action='store_true',
+    parser.add_argument('-ps', '-p', '--patch-size', default=21, type=int, help='Patch size')
+    parser.add_argument('-tw', '-t', '--temporal-width', default=0, type=int, help='Temporal width')
+    parser.add_argument('-st', '-s', '--standardize', action='store_true', help='Set this flag to standardize dataset output between -1 and 1')
+    parser.add_argument('-hm', '--hist-match', action='store_true',
                         help='Set this flag to do histogram match.')
-    parser.add_argument('-n', '--n-negatives-per-positive', default=3, type=int)
+    parser.add_argument('-npp', '-n', '--n-negatives-per-positive', default=3, type=int)
     parser.add_argument('-d', '--device', default='cuda', type=str, help="Device to use for training. 'cuda' or 'cpu'")
 
     args = parser.parse_args()
@@ -271,4 +271,8 @@ def main_tmp():
 
 
 if __name__ == '__main__':
-    main_tmp()
+    import sys
+    if len(sys.argv) > 1:
+        main()
+    else:
+        main_tmp()
