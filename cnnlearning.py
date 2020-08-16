@@ -291,10 +291,13 @@ class TrainingTracker:
 
         # Record hyper-params into 'results'
         for k, v in self.run_params.items():
-            if k in ["batch_size", "do_early_stop",
-                     "early_stop_patience", "learning_rate_scheduler_patience",
+            if k in ["batch_size",
                      "epochs", "shuffle"]:
                 run_parameters[k] = v
+            elif k == "learning_rate_scheduler_patience":
+                run_parameters['sched patience'] = v
+            elif k == "early_stop_patience":
+                run_parameters['stop patience'] = v
             elif k == "trainset":
                 run_parameters["Trainset size"] = len(self.run_params[k])
             elif k == "validset":
