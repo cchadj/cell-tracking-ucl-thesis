@@ -96,7 +96,7 @@ def train_model_demo(patch_size=(21, 21),
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
 
-    print('Creating/Loading ...')
+    print('Creating (or loading from cache) data...')
     trainset, validset, \
         cell_images, non_cell_images, \
         cell_images_marked, non_cell_images_marked, \
@@ -115,12 +115,8 @@ def train_model_demo(patch_size=(21, 21),
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
 
-    n_channels = 1
-    if len(cell_images.shape) == 4:
-        n_channels = cell_images.shape[-1]
-
     # noinspection PyUnresolvedReferences
-    model = CNN(input_dims=n_channels).to(device)
+    model = CNN(dataset_sample=trainset, output_classes=2).to(device)
 
     pathlib.Path(CACHED_MODELS_FOLDER).mkdir(parents=True, exist_ok=True)
 
@@ -222,6 +218,7 @@ def train_model_demo(patch_size=(21, 21),
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--patch-size', default=21, type=int, help='Patch size')
+    parser.add_argument('-t', '--temporal-width', default=0, type=int, help='Temporal width')
     parser.add_argument('-s', '--standardize', action='store_true', help='Set to standardize output between -1 and 1')
     parser.add_argument('--hist-match', action='store_true',
                         help='Set this flag to do histogram match.')
@@ -237,6 +234,7 @@ def main():
     hist_match = args.hist_match
     npp = args.n_negatives_per_positive
     standardize = args.standardize
+    temporal_width = args.temporal_width
     print('---------------------------------------')
 
     train_model_demo(
@@ -244,11 +242,33 @@ def main():
         do_hist_match=hist_match,
         n_negatives_per_positive=npp,
         standardize_dataset=standardize,
+        temporal_width=temporal_width,
         device=device,
         try_load_data_from_cache=True,
         try_load_model_from_cache=True,
     )
 
 
+def main_tmp():
+    patch_size = 21
+    temporal_width = 1
+    hist_match = False
+    standardize = True
+    npp = 1
+    device = 'cuda'
+
+    train_model_demo(
+        patch_size=patch_size,
+        temporal_width=temporal_width,
+        do_hist_match=hist_match,
+        n_negatives_per_positive=npp,
+        standardize_dataset=standardize,
+        device=device,
+
+        try_load_data_from_cache=True,
+        try_load_model_from_cache=True,
+    )
+
+
 if __name__ == '__main__':
-    main()
+    main_tmp()

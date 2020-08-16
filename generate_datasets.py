@@ -402,10 +402,6 @@ def main_tmp():
 
     loader = torch.utils.data.DataLoader(trainset, batch_size=10)
 
-    for im, lbl in loader:
-        print(im.shape)
-        print(lbl.shape)
-        break
 if __name__ == '__main__':
     main_tmp()
 #   main()

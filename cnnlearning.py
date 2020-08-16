@@ -34,10 +34,29 @@ class PrintLayer(nn.Module):
 
 # Build the neural network, expand on top of nn.Module
 class CNN(nn.Module):
-    def __init__(self, model_type=0,
-                 input_dims=3, output_classes=2, dense_input_dims=576, padding=0):
+    def __init__(self, dataset_sample=None, model_type=0,
+                 input_dims=1, output_classes=2, dense_input_dims=576, padding=0):
+        """
+
+        Args:
+            dataset_sample (LabeledImageDataset):
+             Dataset sample based on which the model is configured. (input dimension and such
+            model_type: One of 0 or 1.
+            input_dims: The number of channels for the input images. Not needed if dataset_sample is provided.
+            output_classes: How many output classes there are.
+            dense_input_dims: The input dimensions of the dense part of this model. Not needed if dataset_sample is
+                provided.
+            padding:
+        """
         super().__init__()
         assert model_type in [0, 1]
+
+        if dataset_sample:
+            batch_sample = dataset_sample[0]
+            image_sample, label_sample = batch_sample
+            # a tensor image is CxHxW
+            input_dims = image_sample.shape[0]
+
         if model_type == 0:
             self.convolutional = nn.Sequential(
                 nn.Conv2d(input_dims, 32, padding=2, kernel_size=5),
@@ -65,8 +84,18 @@ class CNN(nn.Module):
                 # PrintLayer("12"),
             )
 
+            # determine the input dimensions needed for the dense part of the model.
+            if dataset_sample:
+                # In order for the image sample to work we must append a batch number dimension
+                # HxWxC -> 1xHxWxC
+                image_batch = image_sample[None, ...].to('cpu')
+
+                # output shape is 1x output C x out H x out W.
+                # to get the dense input dimensions we multiply all the shape args except batch size.
+                dense_input_dims = np.prod(np.array(self.convolutional(image_batch).shape[1:]))
+
             self.dense = nn.Sequential(
-                nn.Linear(576, 64),
+                nn.Linear(dense_input_dims, 64),
                 nn.BatchNorm1d(64),
                 nn.ReLU(64),
                 nn.Linear(64, 32),
@@ -97,7 +126,7 @@ class CNN(nn.Module):
             # Fully connected layer
             self.dense = nn.Sequential(
                 nn.Dropout(),
-                nn.Linear(16, 8),
+                nn.Linear(self.dense_input_dims, 8),
                 nn.Dropout(),
                 nn.ReLU(),
                 nn.Linear(8, 4),
@@ -467,7 +496,7 @@ class TrainingTracker:
             n_samples += images.shape[0]
             n_correct += torch.sum(predictions == targets).item()
 
-        return n_samples/n_correct
+        return n_samples / n_correct
 
     @torch.no_grad()
     def _get_loss(self, loader):
@@ -638,3 +667,28 @@ def train(cnn, params,
     tracker.end_run()
 
     return tracker
+
+
+if __name__ == '__main__':
+    from generate_datasets import get_cell_and_no_cell_patches
+
+    # Input
+
+    try_load_from_cache = False
+    verbose = False
+    very_verbose = True
+    trainset, validset, _, _, _, _, _ = get_cell_and_no_cell_patches(
+        patch_size=21,
+        do_hist_match=False,
+        n_negatives_per_positive=1,
+        standardize_dataset=True,
+        temporal_width=1,
+        try_load_from_cache=True,
+        v=False,
+        vv=False
+    )
+    loader = torch.utils.data.DataLoader(trainset, batch_size=100, shuffle=False)
+    CNN(dataset_sample=trainset).to('cuda')
+
+    for ims, lbls in loader:
+        output = CNN(ims)
