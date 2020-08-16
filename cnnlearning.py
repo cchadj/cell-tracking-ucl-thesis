@@ -262,7 +262,7 @@ class TrainingTracker:
     def display_results(self):
         # Write into 'results' (OrderedDict) for all run related data
         results = collections.OrderedDict()
-        results["epoch"] = self.epoch_count
+        results["e"] = self.epoch_count
         # record epoch loss and accuracy
 
         if self.train_losses:
@@ -271,13 +271,13 @@ class TrainingTracker:
             results["valid loss"] = self.valid_losses[-1]
 
         if self.train_accuracies:
-            results["train accuracy"] = self.train_accuracies[-1]
+            results["train acc"] = self.train_accuracies[-1]
         if self.valid_accuracies:
-            results["valid accuracy"] = self.valid_accuracies[-1]
+            results["valid acc"] = self.valid_accuracies[-1]
 
         results["Best loss?"] = self.is_best_valid_loss_recorded
         results["Best Acc?"] = self.is_best_valid_accuracy_recorded
-        results["Model Recorded?"] = self.is_model_recorded
+        # results["Model Recorded?"] = self.is_model_recorded
 
         if self.do_early_stop:
             results["last loss"] = self._times_since_last_best_valid_loss
@@ -316,7 +316,7 @@ class TrainingTracker:
                 'Best valid epoch': self.best_valid_accuracy_epoch
             }), index=[0])
         # display epoch information and show progress
-        with pd.option_context('display.max_rows', 10,
+        with pd.option_context('display.max_rows', 7,
                                'display.max_colwidth', 30,
                                'display.max_columns', None):  # more options can be specified also
             clear_output()
