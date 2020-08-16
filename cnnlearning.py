@@ -121,12 +121,13 @@ class CNN(nn.Module):
 # Helper class, help track loss, accuracy, epoch time, run time,
 # hyper-parameters etc.
 class TrainingTracker:
-    additional_display_dfs: List[pd.DataFrame]
+    additional_displays: List[pd.DataFrame]
 
-    def __init__(self, device, additional_display_dfs=None):
-        if additional_display_dfs is None:
-            additional_display_dfs = []
-        self.additional_display_dfs = additional_display_dfs
+    def __init__(self, device, additional_displays=None):
+        if additional_displays is None:
+            additional_displays = []
+
+        self.additional_displays = additional_displays
         self.epoch_count = 0
         self.epoch_start_time = None
         self.epoch_duration = None
@@ -145,13 +146,27 @@ class TrainingTracker:
         # Track training performance metrics
         self.epoch_durations = []
 
+        # training dataset
+        self.best_train_loss = np.inf
+        self.is_best_train_loss_recorded = False
+        self.best_train_accuracy_epoch = 0
+
+        self.best_train_accuracy = 0
+        self.is_best_train_accuracy_recorded = False
+
+        self._times_since_last_best_train_loss = 0
+        self._times_since_last_best_train_accuracy = 0
+
+        # validation dataset
         self.best_valid_loss = np.inf
         self.is_best_valid_loss_recorded = False
 
         self.best_valid_accuracy = 0
+        self.best_valid_accuracy_epoch = 0
         self.is_best_valid_accuracy_recorded = False
 
-        self.is_model_recorded = False
+        self._times_since_last_best_valid_loss = 0
+        self._times_since_last_best_valid_accuracy = 0
 
         # tracking every run count, run data, hyper-params used, time
         self.run_params = None
@@ -160,26 +175,33 @@ class TrainingTracker:
         # Model is updated each epoch
         self.model = None
 
+        # Recorded model train is updated each time record_train_model() is called
+        self.recorded_train_model = None
+        self.recorded_train_model_weights = None
+        self.recorded_train_model_epoch = None
+        self.recorded_train_model_valid_accuracy = None
+        self.recorded_train_model_valid_loss = None
+        self.recorded_train_model_train_accuracy = None
+        self.recorded_train_model_train_loss = None
+        self.is_train_model_recorded = False
+
         # Recorded model is updated each time record_model() is called
         self.recorded_model = None
         self.recorded_model_weights = None
         self.recorded_model_epoch = None
         self.recorded_model_valid_accuracy = None
         self.recorded_model_valid_loss = None
+        self.recorded_model_train_accuracy = None
+        self.recorded_model_train_loss = None
+        self.is_model_recorded = False
 
+        # Loaders and loss criterion used for this run
         self.train_loader = None
         self.valid_loader = None
         self.criterion = None
 
-        # self.valid_untrunsformed_normals = None
-        # self.valid_pca3_transforms = None
-        # self.valid_pca2_transforms = None
+        # 'cpu' or 'cuda'
         self.device = device
-
-        self.do_early_stop = True
-        self.early_stop_patience = 20
-        self._times_since_last_best_valid_loss = 0
-        self._times_since_last_best_valid_accuracy = 0
 
     def start_run(self, model, params, train_loader, valid_loader, criterion):
         self.run_start_time = time.time()
@@ -256,12 +278,25 @@ class TrainingTracker:
         run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
         df = pd.DataFrame.from_dict(self.run_data, orient='columns')
 
+        current_performance_df = pd.DataFrame(
+            collections.OrderedDict({
+                'Highest training accuracy': self.best_train_accuracy,
+                'Corresponding training loss': self.best_train_loss,
+                'Highest training accuracy epoch': self.best_train_accuracy_epoch,
+                'Highest validation accuracy': self.best_valid_accuracy,
+                'Corresponding validation loss': self.best_valid_loss,
+                'Highest validation accuracy epoch': self.best_valid_accuracy_epoch
+            }), index=[0])
         # display epoch information and show progress
         with pd.option_context('display.max_rows', None,
                                'display.max_columns', None):  # more options can be specified also
             clear_output()
-            for additional_display_df in self.additional_display_dfs:
-                display(additional_display_df)
+            for additional_display in self.additional_displays:
+                if type(additional_display) == dict or type(additional_display) == collections.OrderedDict:
+                    display(pd.DataFrame(additional_display, index=[0]))
+                else:
+                    display(additional_display)
+            display(current_performance_df)
             display(run_parameters_df)
             display(df)
 
@@ -273,7 +308,7 @@ class TrainingTracker:
         model.eval()
 
     @torch.no_grad()
-    def save(self, output_name, model=None):
+    def save(self, output_name):
         """ Saves the recorded model as {output_name}.pt among other info files.
 
         Makes {output_name}.pt, {output_name}.txt with recorded epoch loss, accuracy and other run parameters
@@ -287,20 +322,22 @@ class TrainingTracker:
             model:
             model:
         """
-        if model is None:
-            model = self.recorded_model
         # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
-        torch.save(model.state_dict(), f'{output_name}.pt')
+        # save recorded model (usually best validation accuracy)
+        torch.save(self.recorded_model.state_dict(), f'{output_name}.pt')
+
+        # save secondary recorded model (usually for best traiing accuracy_
+        torch.save(self.recorded_train_model.state_dict(), f'{output_name}_train_model.pt')
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
-            run_parameters["learning rate"] = param_group["lr"]
+            run_parameters['learning rate'] = param_group['lr']
 
         # Record hyper-params into 'results'
         for k, v in self.run_params.items():
-            if k in ["batch_size", "do_early_stop",
-                     "early_stop_patience", "learning_rate_scheduler_patience",
-                     "epochs", "shuffle"]:
+            if k in ['batch_size', 'do_early_stop',
+                     'early_stop_patience', 'learning_rate_scheduler_patience',
+                     'epochs', 'shuffle']:
                 run_parameters[k] = v
 
         run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
@@ -312,12 +349,30 @@ class TrainingTracker:
         with open(f'{output_name}_run_parameters.txt', 'w') as fo:
             fo.write(run_parameters_df.__repr__())
 
+    # noinspection DuplicatedCode
     @torch.no_grad()
     def track_loss_and_accuracy(self, train_loss=None, train_accuracy=None):
         if train_loss is None or train_accuracy is None:
             train_loss, train_accuracy = self._get_loss_and_accuracy(self.train_loader)
         self.train_losses.append(train_loss)
         self.train_accuracies.append(train_accuracy)
+
+        if train_loss < self.best_train_loss:
+            self.is_best_train_loss_recorded = True
+            self.best_train_loss = train_loss
+            self._times_since_last_best_train_loss = 0
+        else:
+            self.is_best_train_loss_recorded = False
+            self._times_since_last_best_train_loss += 1
+
+        if train_accuracy > self.best_train_accuracy:
+            self.is_best_train_accuracy_recorded = True
+            self.best_train_accuracy = train_accuracy
+            self.best_train_accuracy_epoch = self.epoch_count
+            self._times_since_last_best_train_accuracy = 0
+        else:
+            self.is_best_train_accuracy_recorded = False
+            self._times_since_last_best_train_accuracy += 1
 
         valid_loss, valid_accuracy = self._get_loss_and_accuracy(self.valid_loader)
         self.valid_losses.append(valid_loss)
@@ -334,6 +389,7 @@ class TrainingTracker:
         if valid_accuracy > self.best_valid_accuracy:
             self.is_best_valid_accuracy_recorded = True
             self.best_valid_accuracy = valid_accuracy
+            self.best_valid_accuracy_epoch = self.epoch_count
             self._times_since_last_best_valid_accuracy = 0
         else:
             self.is_best_valid_accuracy_recorded = False
@@ -345,6 +401,21 @@ class TrainingTracker:
     def get_last_valid_loss(self):
         return self.valid_losses[-1]
 
+    def record_train_model(self, model=None):
+        if model is None:
+            model = self.model
+
+        self.recorded_train_model_weights = copy.deepcopy(model.state_dict())
+        self.recorded_train_model = copy.deepcopy(model)
+        self.recorded_train_model = self.recorded_model.eval()
+        self.recorded_train_model_epoch = self.epoch_count
+        self.recorded_train_model_train_accuracy = self.valid_accuracies[-1]
+        self.recorded_train_model_valid_accuracy = self.valid_accuracies[-1]
+        self.recorded_train_model_valid_loss = self.valid_losses[-1]
+
+        self.is_train_model_recorded = True
+
+    # noinspection DuplicatedCode
     def record_model(self, model=None):
         if model is None:
             model = self.model
@@ -355,6 +426,8 @@ class TrainingTracker:
         self.recorded_model_epoch = self.epoch_count
         self.recorded_model_valid_accuracy = self.valid_accuracies[-1]
         self.recorded_model_valid_loss = self.valid_losses[-1]
+        self.recorded_model_train_accuracy = self.train_accuracies[-1]
+        self.recorded_model_train_loss = self.train_losses[-1]
 
         self.is_model_recorded = True
 
@@ -462,11 +535,11 @@ class SignalHandler(object):
 def train(cnn, params,
           device="cuda",
           criterion=nn.BCELoss(),
-          additional_display_dfs=None
+          additional_displays=None
           ):
     # if params changes, following line of code should reflect the changes too
-    if additional_display_dfs is None:
-        additional_display_dfs = []
+    if additional_displays is None:
+        additional_displays = []
     train_loader = torch.utils.data.DataLoader(
         params['trainset'],
         batch_size=params['batch_size'],
@@ -504,7 +577,7 @@ def train(cnn, params,
                                                                              'learning_rate_scheduler_patience'])
 
     # Tracker tracks the process and helps with early stopping
-    tracker = TrainingTracker(device, additional_display_dfs)
+    tracker = TrainingTracker(device, additional_displays)
     tracker.start_run(cnn, params, train_loader, valid_loader, criterion)
 
     interrupt_handler = SignalHandler()
@@ -553,6 +626,9 @@ def train(cnn, params,
 
             if tracker.is_best_valid_accuracy_recorded:
                 tracker.record_model()
+
+            if tracker.is_best_train_accuracy_recorded:
+                tracker.record_train_model()
 
             tracker.display_results()
 

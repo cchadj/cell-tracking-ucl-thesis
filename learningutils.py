@@ -42,9 +42,7 @@ class LabeledImageDataset(torch.utils.data.Dataset):
         self.n_images = images.shape[0]
         self.n_channels = images.shape[-1]
 
-        # print("A", images.shape)
         if len(images.shape) == 3:
-            # images = np.concatenate((images[..., None], images[..., None], images[..., None]), axis=-1)
             # if shape is NxHxW -> NxHxWx1
             images = images[..., np.newaxis]
         self.samples = [(image, label) for image, label in zip(images, labels)]
@@ -63,6 +61,7 @@ class LabeledImageDataset(torch.utils.data.Dataset):
             # Standardization brings values to -1 and 1
             # Normalise takes input a tensor image of shape CxHxW and brings to target mean and standard deviation
             transforms.append(torchvision.transforms.Normalize(mean=[0.5], std=[0.5]))
+
         self.transform = torchvision.transforms.Compose(transforms)
 
     def __len__(self):
@@ -73,28 +72,45 @@ class LabeledImageDataset(torch.utils.data.Dataset):
 
         img, target = sample[0], sample[1]
 
-        # print('C', img.shape)
         if self.transform:
             img = self.transform(img)
-            # print('D', img.shape)
 
-        # print(img.shape)
         return img, target
 
 
 class ImageDataset(torch.utils.data.Dataset):
     """ Used to create a DataLoader compliant Dataset for binary classifiers
     """
-    def __init__(self, images, standardize=True):
+    def __init__(self, images, standardize=True, to_grayscale=False):
         """
         Args:
           images (ndarray):
               The images.
-              shape -> N x height x width x channels
-        """
-        self.n_images = images.shape[0]
+              shape -> N x height x width x channels or N x height x width. dtype should be uint8.
 
-        transforms = [torchvision.transforms.ToTensor()]
+        """
+        assert 3 <= len(images.shape) <= 4, f'The images should be an array of shape N x H x W x [ C ] not {images.shape}'
+
+        if len(images.shape) == 3:
+            #  NxHxW  -> NxHxWx1
+            images = images[..., None]
+
+        self.n_images, self.height, self.width, self.n_channels = images.shape
+
+        transforms = []
+        if self.n_channels > 1 and to_grayscale:
+            # ToPILImage Takes ndarray input with shape HxWxC
+            transforms.append(torchvision.transforms.ToPILImage())
+            # Grayscale takes a PILImage as an input
+            transforms.append(torchvision.transforms.Grayscale(num_output_channels=1))
+
+        # ToTensor accept uint8 [0, 255] numpy image of shape H x W x C and scales to [0, 1]
+        transforms.append(torchvision.transforms.ToTensor())
+
+        if standardize:
+            # Standardization brings values to -1 and 1
+            # Normalise takes input a tensor image of shape CxHxW and brings to target mean and standard deviation
+            transforms.append(torchvision.transforms.Normalize(mean=[0.5], std=[0.5]))
 
         if standardize:
             transforms.append(torchvision.transforms.Normalize([0.5], [0.5]))
@@ -107,10 +123,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         image = self.samples[idx].copy()
-        # print(image.shape)
-        # print(type(image))
-        # print(image.dtype)
-        # print("Is tensor?", self.transform and not torch.is_tensor(image))
+
         if self.transform and not torch.is_tensor(image):
             image = self.transform(image)
 

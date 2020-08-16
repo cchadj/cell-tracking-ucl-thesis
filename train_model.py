@@ -5,6 +5,8 @@ import torch
 import collections
 import pandas as pd
 from torch import nn
+# import cPickle as pickle
+import pickle
 import os
 import numpy as np
 from cnnlearning import CNN, train, TrainingTracker
@@ -70,8 +72,14 @@ def train_model_demo(patch_size=(21, 21),
                      n_negatives_per_positive=3,
                      device='cuda',
                      standardize_dataset=True,
-                     load_from_cache=True,
-                     train_params=None):
+                     try_load_data_from_cache=True,
+                     try_load_model_from_cache=True,
+                     train_params=None,
+                     additional_displays=None,
+                     ):
+    if additional_displays is None:
+        additional_displays = []
+
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
@@ -85,7 +93,7 @@ def train_model_demo(patch_size=(21, 21),
             n_negatives_per_positive=n_negatives_per_positive,
             standardize_dataset=standardize_dataset,
             do_hist_match=do_hist_match,
-            overwrite_cache=True,
+            try_load_from_cache=try_load_data_from_cache,
         )
 
     assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8,\
@@ -99,18 +107,23 @@ def train_model_demo(patch_size=(21, 21),
     pathlib.Path(CACHED_MODELS_FOLDER).mkdir(parents=True, exist_ok=True)
 
     try:
-        if not load_from_cache:
-            print(f'Not loading from cache.')
+        if not try_load_model_from_cache:
+            print(f'Not loading model and results from cache.')
             raise FileNotFoundError
-        print(f'Attempting to load model from cache with patch_size:{patch_size}, '
+        print(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
               f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
-        model_filename = load_model_from_cache(model, patch_size=patch_size,
+        model_directory = load_model_from_cache(model, patch_size=patch_size,
                                                hist_match=do_hist_match,
                                                n_negatives_per_positive=n_negatives_per_positive)
-        print(f'Model found. Loaded model from {model_filename}')
+        print(f"Model found. Loaded model from '{model_directory}'")
+        with open(os.path.join(model_directory, 'results.pkl'), 'rb') as results_file:
+            results = pickle.load(results_file)
+
     except FileNotFoundError:
-        pass
-        print('Model not found. Training new model. You can interrupt(ctr - C or interrupt kernel) any time to get'
+        if try_load_model_from_cache:
+            additional_displays.append('Model or results not found.')
+        print('Training new model.\n'
+              'You can interrupt(ctr - C or interrupt kernel) any time to get '
               'the model with the best validation accuracy at the current time.')
 
         if train_params is None:
@@ -134,18 +147,18 @@ def train_model_demo(patch_size=(21, 21),
             if 'validset' not in train_params:
                 train_params['validset'] = validset
 
-        display_dict = collections.OrderedDict({
-            "patch_size": patch_size,
+        run_configuration_display = collections.OrderedDict({
+            "patch_size": patch_size[0],
             "do_hist_match": do_hist_match,
+            "standardize data": standardize_dataset,
             "nnp": n_negatives_per_positive
         })
-        additional_display = [
-            pd.DataFrame.from_dict(display_dict)
-        ]
+        additional_displays.append(run_configuration_display)
+
         results: TrainingTracker = train(model,
                                          train_params,
                                          criterion=torch.nn.CrossEntropyLoss(),
-                                         device=device, additional_display_dfs=additional_display)
+                                         device=device, additional_displays=additional_displays)
 
         output_directory = os.path.join(CACHED_MODELS_FOLDER,
                                         f'blood_cell_classifier_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}'
@@ -157,6 +170,11 @@ def train_model_demo(patch_size=(21, 21),
 
         print(f'Saving model as {output_name}')
         results.save(output_name)
+        results_file = os.path.join(output_directory, 'results.pkl')
+        print(f"Saving results as {results_file}")
+        with open(results_file, 'wb') as output_file:
+            pickle.dump(results, output_file, pickle.HIGHEST_PROTOCOL)
+
         print('Done')
         model = results.recorded_model
 
@@ -207,7 +225,8 @@ def main():
         n_negatives_per_positive=npp,
         standardize_dataset=standardize,
         device=device,
-        load_from_cache=False,
+        try_load_data_from_cache=True,
+        try_load_model_from_cache=True,
     )
 
 

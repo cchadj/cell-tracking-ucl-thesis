@@ -28,6 +28,7 @@ def clean_folder(folder):
 
 def create_cell_and_no_cell_patches(
         patch_size=(21, 21),
+        temporal_width=0,
         do_hist_match=False,
         n_negatives_per_positive=1,
         v=False,
@@ -36,7 +37,10 @@ def create_cell_and_no_cell_patches(
     if type(patch_size) == int:
         patch_size = patch_size, patch_size
 
-    cell_images = np.zeros([0, *patch_size], dtype=np.uint8)
+    if temporal_width > 0:
+        cell_images = np.zeros([0, *patch_size, 2 * temporal_width + 1], dtype=np.uint8)
+    else:
+        cell_images = np.zeros([0, *patch_size], dtype=np.uint8)
     non_cell_images = np.zeros_like(cell_images)
 
     cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
@@ -54,14 +58,18 @@ def create_cell_and_no_cell_patches(
         marked_video_file = session.marked_video_oa790_file
         csv_cell_coord_files = session.cell_position_csv_files
 
-        patch_extractor = SessionPatchExtractor(session, patch_size, n_negatives_per_positive)
+        patch_extractor = SessionPatchExtractor(session, patch_size, temporal_width, n_negatives_per_positive)
 
         if vv:
             print('Unmarked', basename(video_file), '<->')
             print(*[basename(f) for f in csv_cell_coord_files], sep='\n')
 
-        cur_session_cell_images = patch_extractor.cell_patches_oa790
-        cur_session_non_cell_images = patch_extractor.non_cell_patches_oa790
+        if temporal_width > 0:
+            cur_session_cell_images = patch_extractor.temporal_cell_patches_oa790
+            cur_session_non_cell_images = patch_extractor.temporal_non_cell_patches_oa790
+        else:
+            cur_session_cell_images = patch_extractor.cell_patches_oa790
+            cur_session_non_cell_images = patch_extractor.non_cell_patches_oa790
 
         cell_images = np.concatenate((cell_images, cur_session_cell_images), axis=0)
         non_cell_images = np.concatenate((non_cell_images, cur_session_non_cell_images), axis=0)
@@ -70,8 +78,12 @@ def create_cell_and_no_cell_patches(
             print('Marked', basename(marked_video_file), '<->')
             print(*[basename(f) for f in csv_cell_coord_files], sep='\n')
 
-        cur_session_marked_cell_images = patch_extractor.marked_cell_patches_oa790
-        cur_session_non_marked_cell_images = patch_extractor.marked_non_cell_patches_oa790
+        if temporal_width > 0:
+            cur_session_marked_cell_images = patch_extractor.temporal_marked_cell_patches_oa790
+            cur_session_non_marked_cell_images = patch_extractor.temporal_marked_non_cell_patches_oa790
+        else:
+            cur_session_marked_cell_images = patch_extractor.marked_cell_patches_oa790
+            cur_session_non_marked_cell_images = patch_extractor.marked_non_cell_patches_oa790
 
         cell_images_marked = np.concatenate((cell_images_marked, cur_session_marked_cell_images), axis=0)
         non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_non_marked_cell_images),
@@ -123,8 +135,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
                                  n_negatives_per_positive=1,
                                  do_hist_match=False,
                                  standardize_dataset=False,
+                                 temporal_width=0,
                                  dataset_to_grayscale=False,
-                                 overwrite_cache=False,
+                                 try_load_from_cache=False,
                                  v=False,
                                  vv=False):
     """ Convenience function to get cell and no cell patches and their corresponding marked(for debugging),
@@ -139,8 +152,17 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         do_hist_match (bool):  Whether to histogram matching or not.
         standardize_dataset: Standardizes the values of the datasets to have mean and std -.5, (values [-1, 1])
         dataset_to_grayscale: Makes the datasets output to have 1 channel.
-        overwrite_cache (bool): Set to true to skip attempting to read from cache and create new dataset overwriting
-                                the old data.
+
+        temporal_width (int):
+         If > 0 then this is the number of frames before and after the current frame for the patch.
+         The returned patches shape will be patch_height x patch_width x (2 * temporal_width + 1) where the central
+         channel will be the patch from the original frame, the channel before that will be the patches from the
+         same location but from previous frames and the channels after the central will be from the corresponding
+         patches after the central.
+
+        try_load_from_cache (bool):
+         Set to true to skip to attempt reading the data from cache to save time.
+         If not true then recreates the data and OVERWRITES the old data.
         v (bool):  Verbose description of what is currently happening.
         vv (bool):  Very Verbose description of what is currently happening.
 
@@ -173,41 +195,39 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
     patch_size = (height, width)
 
+    post_fix = f'_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}' \
+               f'_nnp_{n_negatives_per_positive}_stdzed_{standardize_dataset}_tw_{temporal_width}'
     dataset_folder = os.path.join(
         CACHED_DATASETS_FOLDER,
-        f'dataset_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}')
+        f'dataset{post_fix}')
     pathlib.Path(dataset_folder).mkdir(parents=True, exist_ok=True)
 
     trainset_filename = os.path.join(
         dataset_folder,
-        f'trainset_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.pt')
+        f'trainset_bloodcells{post_fix}.pt')
     validset_filename = os.path.join(
         dataset_folder,
-        f'validset_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.pt')
+        f'validset_bloodcells{post_fix}.pt')
 
     cell_images_filename = os.path.join(
         dataset_folder,
-        f'bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.npy')
+        f'bloodcells{post_fix}.npy')
     non_cell_images_filename = os.path.join(
         dataset_folder,
-        f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}.npy')
+        f'non_bloodcells{post_fix}.npy')
     cell_images_marked_filename = os.path.join(
         dataset_folder,
-        f'bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
+        f'bloodcells_marked{post_fix}.npy')
     non_cell_images_marked_filename = os.path.join(
         dataset_folder,
-        f'non_bloodcells_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}_marked.npy')
+        f'non_bloodcells_marked{post_fix}.npy')
     template_image_filename = os.path.join(
         dataset_folder,
         f'hist_match_template_image'
     )
-    # normalisation_data_range_filename = os.path.join(
-    #     dataset_folder,
-    #     f'normalisation_data_range_image.npy'
-    # )
 
     try:
-        if overwrite_cache:
+        if not try_load_from_cache:
             if v:
                 print('Not checking cache. Overwriting any old data in the cache.')
             clean_folder(dataset_folder)
@@ -215,7 +235,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             raise FileNotFoundError
 
         if v:
-            print('Dataset loading from cache')
+            print('Trying to load data from cache')
             print('--------------------------')
             print(f"loading training set from '{trainset_filename}'...")
         trainset = torch.load(trainset_filename)
@@ -247,15 +267,18 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             hist_match_template = np.load(template_image_filename + '.npy')
 
         if v:
-            print('Done')
+            print('All data found in cache.')
             print()
     except FileNotFoundError:
-        print('Not all data found fom cache. Creating datasets...')
+        if try_load_from_cache:
+            print('--------------------------')
+            print('Not all data found fom cache. Creating datasets... (should not take much time)')
 
         cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = \
             create_cell_and_no_cell_patches(patch_size=patch_size,
                                             do_hist_match=False,
                                             n_negatives_per_positive=1,
+                                            temporal_width=temporal_width,
                                             v=v, vv=vv)
 
         hist_match_template = cell_images[0]
@@ -299,15 +322,16 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             print("Non cell images array shape:", non_cell_images.shape)
 
     return trainset, validset, \
-           cell_images, non_cell_images, \
-           cell_images_marked, non_cell_images_marked, \
-           hist_match_template
+        cell_images, non_cell_images, \
+        cell_images_marked, non_cell_images_marked, \
+        hist_match_template
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--patch-size', default=21, type=int, help='Patch size')
+    parser.add_argument('-t', '--temporal-width', default=0, type=int, help='Temporal width of the patches.')
     parser.add_argument('--hist-match', action='store_true',
                         help='Set this flag to do histogram match.')
     parser.add_argument('-n', '--n-negatives-per-positive', default=3, type=int)
@@ -323,24 +347,27 @@ def main():
     hist_match = args.hist_match
     npp = args.n_negatives_per_positive
     overwrite = args.overwrite
+    temporal_width = args.temporal_width
     v = args.v
     vv = args.vv
 
     print('---------------------------------------')
     print('Patch size:', patch_size)
+    print('Temporal width:', temporal_width)
     print('hist match:', hist_match)
     print('Negatives per positive:', npp)
     print('---------------------------------------')
 
     patch_size = 21
-    do_hist_match = False
-    n_negatives_per_positive = 1
+    hist_match = False
+    nnp = 1
     standardize_dataset = False
 
     get_cell_and_no_cell_patches(patch_size=patch_size,
                                  n_negatives_per_positive=npp,
                                  do_hist_match=hist_match,
-                                 overwrite_cache=overwrite,
+                                 try_load_from_cache=not overwrite,
+                                 standardize_dataset=standardize_dataset,
                                  v=v,
                                  vv=vv)
 
@@ -350,6 +377,7 @@ def main_tmp():
     do_hist_match = False
     n_negatives_per_positive = 1
     standardize_dataset = False
+    temporal_width = 1
 
     overwrite_cache = True
     verbose = False
@@ -362,7 +390,8 @@ def main_tmp():
         get_cell_and_no_cell_patches(patch_size=patch_size,
                                      n_negatives_per_positive=n_negatives_per_positive,
                                      do_hist_match=do_hist_match,
-                                     overwrite_cache=overwrite_cache,
+                                     try_load_from_cache=not overwrite_cache,
+                                     temporal_width=temporal_width,
                                      standardize_dataset=standardize_dataset,
                                      v=verbose,
                                      vv=very_verbose)
