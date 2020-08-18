@@ -415,7 +415,6 @@ class SessionPatchExtractor(object):
 
     def _extract_temporal_cell_patches(self, session_frames, cell_positions, frame_idx_to_temporal_patch_dict):
         temporal_cell_patches = np.empty((0, *self._patch_size, 2 * self.temporal_width + 1), dtype=np.uint8)
-        frame_idx_to_temporal_patch_dict = {}
 
         _, frame_height, frame_width = session_frames.shape
         for frame_idx, frame_cell_positions in cell_positions.items():
@@ -462,6 +461,7 @@ class SessionPatchExtractor(object):
     @property
     def temporal_cell_patches_oa790(self):
         if self._temporal_cell_patches_oa790 is None:
+            self._temporal_cell_patches_oa790_at_frame = {}
             self._temporal_cell_patches_oa790 = self._extract_temporal_cell_patches(self.session.frames_oa790,
                                                                                     self.session.cell_positions,
                                                                                     self._temporal_cell_patches_oa790_at_frame)
@@ -470,6 +470,7 @@ class SessionPatchExtractor(object):
     @property
     def temporal_marked_cell_patches_oa790(self):
         if self._temporal_marked_cell_patches_oa790 is None:
+            self._temporal_marked_non_cell_patches_oa790_at_frame = {}
             self._temporal_marked_cell_patches_oa790 = self._extract_temporal_cell_patches(self.session.marked_frames_oa790,
                                                                                            self.session.cell_positions,
                                                                                            self._marked_temporal_cell_patches_oa790_at_frame)
@@ -554,7 +555,8 @@ class SessionPatchExtractor(object):
         if self._cell_patches_oa790 is None:
             self._cell_patches_oa790 = self._extract_cell_patches(self.session.frames_oa790,
                                                                   self.session.cell_positions,
-                                                                  self._cell_patches_oa790_at_frame)
+                                                                  self._cell_patches_oa790_at_frame,
+                                                                  masks=self.session.mask_frames_oa790)
         return self._cell_patches_oa790
 
     @property
@@ -562,7 +564,8 @@ class SessionPatchExtractor(object):
         if self._marked_cell_patches_oa790 is None:
             self._marked_cell_patches_oa790 = self._extract_cell_patches(self.session.marked_frames_oa790,
                                                                          self.session.cell_positions,
-                                                                         self._marked_cell_patches_oa790_at_frame)
+                                                                         self._marked_cell_patches_oa790_at_frame,
+                                                                         masks=self.session.mask_frames_oa790)
         return self._marked_cell_patches_oa790
 
     @property

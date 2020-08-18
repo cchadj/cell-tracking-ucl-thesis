@@ -29,6 +29,7 @@ def clean_folder(folder):
 def create_cell_and_no_cell_patches(
         patch_size=(21, 21),
         temporal_width=0,
+        normalize=False,
         do_hist_match=False,
         n_negatives_per_positive=1,
         v=False,
@@ -48,7 +49,7 @@ def create_cell_and_no_cell_patches(
 
     video_sessions = get_video_sessions(should_have_marked_video=True)
     if v:
-        print('Creating cell and no cell images from videos...')
+        print('Creating cell and no cell images from videos and cell positions csvs...')
     for session in tqdm.tqdm(video_sessions):
         assert session.has_marked_video, 'Something went wrong.' \
                                          ' get_video_sessions() should have ' \
@@ -89,6 +90,16 @@ def create_cell_and_no_cell_patches(
         non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_marked_non_cell_images),
                                                 axis=0)
 
+    if normalize:
+        data_range = (
+            min(cell_images.min(), non_cell_images.min()),
+            max(cell_images.max(), non_cell_images.max()),
+        )
+        if v:
+            print(f'Normalising patches from {data_range} to {(0, 255)}.')
+        cell_images = normalize_data(cell_images, target_range=(0, 255), data_range=data_range)
+        non_cell_images = normalize_data(non_cell_images, target_range=(0, 255), data_range=data_range)
+
     if do_hist_match:
         if v:
             print('Doing histogram matching...')
@@ -100,6 +111,8 @@ def create_cell_and_no_cell_patches(
             print('Doing histogram matching on non cell images')
         non_cell_images = hist_match_images(non_cell_images, hist_match_template)
 
+    if v:
+        print(f'Created {len(cell_images)} cell patches and {len(non_cell_images)} non cell patches')
     return cell_images, non_cell_images, cell_images_marked, non_cell_images_marked
 
 
@@ -135,6 +148,7 @@ def create_dataset_from_cell_and_no_cell_images(
 
 def get_cell_and_no_cell_patches(patch_size=(21, 21),
                                  n_negatives_per_positive=1,
+                                 normalise_patches=False,
                                  do_hist_match=False,
                                  standardize_dataset=False,
                                  temporal_width=0,
@@ -149,6 +163,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         created and if not then it creates it and saves it in cache.
 
     Args:
+        normalise_patches: The cell and non cell images are normalised to 0 - 255
         patch_size (int, tuple): The patch size (height, width) or int for square.
         n_negatives_per_positive (int):  How many non cells per cell patch.
         do_hist_match (bool):  Whether to histogram matching or not.
@@ -286,7 +301,14 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
         hist_match_template = cell_images[0]
         if do_hist_match:
+            if v:
+                print('Doing histogram matching')
+
+            if vv:
+                print('Doing histogram matching on cell images')
             cell_images = hist_match_images(cell_images, hist_match_template)
+            if vv:
+                print('Doing histogram matching on non cell images')
             non_cell_images = hist_match_images(cell_images, hist_match_template)
 
         trainset, validset = create_dataset_from_cell_and_no_cell_images(
@@ -401,6 +423,7 @@ def main_tmp():
                                      vv=very_verbose)
 
     loader = torch.utils.data.DataLoader(trainset, batch_size=10)
+
 
 if __name__ == '__main__':
     main_tmp()

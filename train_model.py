@@ -3,8 +3,6 @@ import argparse
 
 import torch
 import collections
-import pandas as pd
-from torch import nn
 # import cPickle as pickle
 import pickle
 import os
@@ -89,9 +87,6 @@ def train_model_demo(patch_size=(21, 21),
                      train_params=None,
                      additional_displays=None,
                      ):
-    if additional_displays is None:
-        additional_displays = []
-
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
@@ -142,8 +137,6 @@ def train_model_demo(patch_size=(21, 21),
 
         if train_params is None:
             train_params = collections.OrderedDict(
-                # lr = .001,
-                # optimizer=torch.optim.SGD(model.parameters(), lr=.001, weight_decay=5e-5, momentum=0.9),
                 optimizer=torch.optim.Adam(model.parameters(), lr=.001, weight_decay=5e-4),
                 batch_size=1024 * 7,
                 do_early_stop=True,  # Optional default True
@@ -151,7 +144,6 @@ def train_model_demo(patch_size=(21, 21),
                 learning_rate_scheduler_patience=100,
                 epochs=4000,
                 shuffle=True,
-                # valid_untrunsformed_normals = valid_untrunsformed_normals,
                 trainset=trainset,
                 validset=validset,
             )
@@ -161,6 +153,8 @@ def train_model_demo(patch_size=(21, 21),
             if 'validset' not in train_params:
                 train_params['validset'] = validset
 
+        if additional_displays is None:
+            additional_displays = []
         run_configuration_display = collections.OrderedDict({
             'patch_size': patch_size[0],
             'temporal width': temporal_width,

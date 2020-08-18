@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import warnings
-from imageprosessing import normalize_data
+
 
 def files_of_same_source(f1, f2):
     f1, f2 = os.path.basename(f1), os.path.basename(f2)
@@ -209,17 +209,48 @@ class VideoSession(object):
             self._frames_oa790 = get_frames_from_video(self.video_oa790_file)[..., 0]
         return self._frames_oa790
 
+    def _assert_frame_assignment(self, old_frames, new_frames):
+        assert new_frames.shape[1:3] == old_frames.shape[1:3], \
+            f'Assigned frames should have the same height and width. Old dims {old_frames.shape[1:3]} new dims {new_frames.shape[1:3]}'
+        assert new_frames.dtype == old_frames.dtype, \
+            f'Assigned frames should have the same type. Old type new {old_frames.dtype} type {new_frames.dtype}'
+        assert len(new_frames.shape) == 3, f'The assigned frames should be grayscale (shape given {new_frames.shape})'
+
+    @frames_oa790.setter
+    def frames_oa790(self, new_frames):
+        self._assert_frame_assignment(self.frames_oa790, new_frames)
+        self._vessel_masked_frames_oa790 = None
+        self._fully_masked_frames_oa790 = None
+        self._masked_frames_oa790 = None
+        self._frames_oa790 = new_frames
+
     @property
     def frames_oa850(self):
         if self._frames_oa850 is None:
             self._frames_oa850 = get_frames_from_video(self.video_oa850_file)[..., 0]
         return self._frames_oa850
 
+    @frames_oa850.setter
+    def frames_oa850(self, new_frames):
+        self._assert_frame_assignment(self.frames_oa850, new_frames)
+        self._masked_frames_oa850 = None
+        self._vessel_masked_frames_oa850 = None
+        self._fully_masked_frames_oa850 = None
+        self._frames_oa850 = new_frames
+
     @property
     def frames_confocal(self):
         if self._frames_confocal is None:
             self._frames_confocal = get_frames_from_video(self.video_confocal_file)[..., 0]
         return self._frames_confocal
+
+    @frames_confocal.setter
+    def frames_confocal(self, new_frames):
+        self._assert_frame_assignment(self.frames_confocal, new_frames)
+        self._masked_frames_confocal = None
+        self._vessel_masked_frames_confocal = None
+        self._fully_masked_frames_confocal = None
+        self._frames_confocal = new_frames
 
     @property
     def mask_frames_oa790(self):
@@ -514,6 +545,7 @@ class VideoSession(object):
 
     @staticmethod
     def _std_image_from_file(file):
+        from imageprosessing import normalize_data
         std_image = plt.imread(file)
         if len(std_image.shape) == 3:
             std_image = std_image[..., 0]
@@ -633,3 +665,4 @@ if __name__ == '__main__':
         'all_files is not unique, there is one or more duplicates.'
 
     sys.exit(0)
+

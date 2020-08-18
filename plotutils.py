@@ -5,6 +5,20 @@ from matplotlib.patches import Rectangle
 import numpy as np
 
 
+# thanks to: https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
+def cvimshow(window, img, wait_time=0):
+    # imshow using cv2 with ability to close with the 'x' button without hanging in the main thread
+    import cv2
+    cv2.namedWindow(window, cv2.WINDOW_KEEPRATIO)
+    cv2.imshow(window, img)
+    cv2.waitKey()
+    while cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) >= 1:
+        keyCode = cv2.waitKey()
+        if (keyCode & 0xFF) == ord("q"):
+            cv2.destroyAllWindows()
+            break
+
+
 def no_ticks(axes=None):
     if axes is not None:
         for ax in axes.flatten():
