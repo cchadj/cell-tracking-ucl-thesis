@@ -76,17 +76,19 @@ def load_model_from_cache(model,
     return best_model_directory
 
 
-def train_model_demo(patch_size=(21, 21),
-                     temporal_width=0,
-                     do_hist_match=False,
-                     n_negatives_per_positive=3,
-                     device='cuda',
-                     standardize_dataset=True,
-                     try_load_data_from_cache=True,
-                     try_load_model_from_cache=True,
-                     train_params=None,
-                     additional_displays=None,
-                     ):
+def train_model_demo(
+        video_sessions=None,
+        patch_size=(21, 21),
+        temporal_width=0,
+        do_hist_match=False,
+        n_negatives_per_positive=3,
+        device='cuda',
+        standardize_dataset=True,
+        try_load_data_from_cache=True,
+        try_load_model_from_cache=True,
+        train_params=None,
+        additional_displays=None
+):
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
@@ -97,6 +99,7 @@ def train_model_demo(patch_size=(21, 21),
         cell_images_marked, non_cell_images_marked, \
         hist_match_template = \
         get_cell_and_no_cell_patches(
+            video_sessions=video_sessions,
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
             standardize_dataset=standardize_dataset,
@@ -117,8 +120,8 @@ def train_model_demo(patch_size=(21, 21),
 
     try:
         if not try_load_model_from_cache:
-            print(f'Not loading model and results from cache.')
             raise FileNotFoundError
+
         print(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
               f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
         model_directory = load_model_from_cache(model, patch_size=patch_size,
@@ -130,20 +133,23 @@ def train_model_demo(patch_size=(21, 21),
 
     except FileNotFoundError:
         if try_load_model_from_cache:
-            additional_displays.append('Model or results not found.')
-        print('Training new model.\n'
-              'You can interrupt(ctr - C or interrupt kernel) any time to get '
-              'the model with the best validation accuracy at the current time.')
+            additional_displays.append('Model or results not found in cache.')
+
+        additional_displays.append(
+            'Training new model.\n'
+            'You can interrupt(ctr - C or interrupt kernel in notebook) any time to get '
+            'the model with the best validation accuracy at the current time.')
 
         if train_params is None:
             train_params = collections.OrderedDict(
                 optimizer=torch.optim.Adam(model.parameters(), lr=.001, weight_decay=5e-4),
-                batch_size=1024 * 7,
-                do_early_stop=True,  # Optional default True
+                epochs=4000,
+                batch_size=1024 * 12,
+                do_early_stop=True,
                 early_stop_patience=80,
                 learning_rate_scheduler_patience=100,
-                epochs=4000,
                 shuffle=True,
+
                 trainset=trainset,
                 validset=validset,
             )
@@ -156,7 +162,7 @@ def train_model_demo(patch_size=(21, 21),
         if additional_displays is None:
             additional_displays = []
         run_configuration_display = collections.OrderedDict({
-            'patch_size': patch_size[0],
+            'patch size': patch_size[0],
             'temporal width': temporal_width,
             'hist match': do_hist_match,
             'standardize data': standardize_dataset,
@@ -164,6 +170,8 @@ def train_model_demo(patch_size=(21, 21),
         })
         additional_displays.append(run_configuration_display)
 
+        # set the model in training mode
+        model.train()
         results: TrainingTracker = train(model,
                                          train_params,
                                          criterion=torch.nn.CrossEntropyLoss(),
@@ -191,8 +199,8 @@ def train_model_demo(patch_size=(21, 21),
     model = results.recorded_model
     model.eval()
 
-    trainset_predictions, train_accuracy = classify_labeled_dataset(trainset, model)
-    validset_predictions, valid_accuracy = classify_labeled_dataset(validset, model)
+    _, train_accuracy = classify_labeled_dataset(trainset, model)
+    _, valid_accuracy = classify_labeled_dataset(validset, model)
     positive_accuracy = classify_images(cell_images, model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images)
     negative_accuracy = (1 - classify_images(non_cell_images, model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images)
 
