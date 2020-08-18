@@ -51,7 +51,6 @@ def create_cell_and_no_cell_patches(
         cell_images = np.zeros([0, *patch_size, 2], dtype=np.uint8)
     else:
         cell_images = np.zeros([0, *patch_size], dtype=np.uint8)
-
     non_cell_images = np.zeros_like(cell_images)
 
     cell_images_marked = np.zeros_like(cell_images)
@@ -84,7 +83,7 @@ def create_cell_and_no_cell_patches(
             cur_session_non_cell_images = patch_extractor.temporal_non_cell_patches_oa790
         elif mixed_channel_patches:
             # We only want the oa790 and oa850 channel as confocal channel doesn't guarantee that the bloodcell
-            # will be visible.
+            # will be visible. (2nd and 3rd channel of mixed channel is oa790 and oa850, 1st is confocal)
             cur_session_cell_images = patch_extractor.mixed_channel_cell_patches[..., 1:]
             cur_session_non_cell_images = patch_extractor.mixed_channel_non_cell_patches[..., 1:]
         else:
@@ -188,15 +187,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         created and if not then it creates it and saves it in cache.
 
     Args:
-        video_sessions (list[VideoSessions]):
-            The list of video sessions to use. If None automatically uses all video sessions available from
-            the data folder.
-        normalise_patches: The cell and non cell images are normalised to 0 - 255
         patch_size (int, tuple): The patch size (height, width) or int for square.
-        n_negatives_per_positive (int):  How many non cells per cell patch.
-        do_hist_match (bool):  Whether to histogram matching or not.
-        standardize_dataset: Standardizes the values of the datasets to have mean and std -.5, (values [-1, 1])
-        dataset_to_grayscale: Makes the datasets output to have 1 channel.
 
         temporal_width (int):
          If > 0 then this is the number of frames before and after the current frame for the patch.
@@ -204,10 +195,28 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
          channel will be the patch from the original frame, the channel before that will be the patches from the
          same location but from previous frames and the channels after the central will be from the corresponding
          patches after the central.
+         **DOES NOT work with mixed_channel_patches.**
+
+        mixed_channel_patches:
+          Whether to use the mixed channel technique.
+          The patches returned have two channels, the first is the regular oa790 patch and the second
+          channel is the patch at the same position at the registered oa850 frame
+          **DOES NOT work with temporal patches. (temporal width must be 0)**
+
+        video_sessions (list[VideoSessions]):
+          The list of video sessions to use. If None automatically uses all video sessions available from
+          the data folder.
+
+        normalise_patches: The cell and non cell images are normalised to 0 - 255
+        n_negatives_per_positive (int):  How many non cells per cell patch.
+        do_hist_match (bool):  Whether to histogram matching or not.
+        standardize_dataset: Standardizes the values of the datasets to have mean and std -.5, (values [-1, 1])
+        dataset_to_grayscale: Makes the datasets output to have 1 channel.
 
         try_load_from_cache (bool):
-         Set to true to skip to attempt reading the data from cache to save time.
+         If true attempts to read  the data from cache to save time.
          If not true then recreates the data and OVERWRITES the old data.
+
         v (bool):  Verbose description of what is currently happening.
         vv (bool):  Very Verbose description of what is currently happening.
 
