@@ -418,7 +418,7 @@ class SessionPatchExtractor(object):
 
         _, frame_height, frame_width = session_frames.shape
         for frame_idx, frame_cell_positions in cell_positions.items():
-            if frame_idx < self.temporal_width or frame_idx > self.temporal_width:
+            if frame_idx < self.temporal_width or frame_idx > len(session_frames) - self.temporal_width:
                 continue
 
             frame_cell_positions = self._delete_invalid_positions(frame_cell_positions)
@@ -438,7 +438,7 @@ class SessionPatchExtractor(object):
 
         _, frame_height, frame_width = session_frames.shape
         for frame_idx, frame_cell_positions in cell_positions.items():
-            if frame_idx < self.temporal_width or frame_idx > self.temporal_width:
+            if frame_idx < self.temporal_width or frame_idx > len(session_frames) - self.temporal_width:
                 continue
 
             cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]

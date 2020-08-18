@@ -439,9 +439,10 @@ class TrainingTracker:
 
         self.recorded_train_model_weights = copy.deepcopy(model.state_dict())
         self.recorded_train_model = copy.deepcopy(model)
-        self.recorded_train_model = self.recorded_model.eval()
+        self.recorded_train_model = self.recorded_train_model.eval()
         self.recorded_train_model_epoch = self.epoch_count
-        self.recorded_train_model_train_accuracy = self.valid_accuracies[-1]
+        self.recorded_train_model_train_accuracy = self.train_accuracies[-1]
+        self.recorded_train_model_train_loss = self.train_losses[-1]
         self.recorded_train_model_valid_accuracy = self.valid_accuracies[-1]
         self.recorded_train_model_valid_loss = self.valid_losses[-1]
 
@@ -590,7 +591,10 @@ def train(cnn, params,
     )
 
     epochs = params['epochs']
-
+    if ['evaluation_epochs'] in params:
+        evaluation_epochs = params['evalutaion_epochs']
+    else:
+        evaluation_epochs = 20
     # Set up Optimizer
     if 'optimizer' not in params:
         lr = .001
@@ -658,8 +662,9 @@ def train(cnn, params,
             total_loss /= n_samples
 
         accuracy = n_correct / n_samples
-        if epoch % 20 == 0 or epoch == epochs - 1:
-            tracker.track_loss_and_accuracy(train_loss=total_loss, train_accuracy=accuracy)
+        if epoch % evaluation_epochs == 0 or epoch == epochs - 1:
+            # tracker.track_loss_and_accuracy(train_loss=total_loss, train_accuracy=accuracy)
+            tracker.track_loss_and_accuracy()
 
             if tracker.is_best_valid_accuracy_recorded:
                 tracker.record_model()
