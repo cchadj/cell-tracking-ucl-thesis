@@ -118,12 +118,15 @@ def train_model_demo(
 
     pathlib.Path(CACHED_MODELS_FOLDER).mkdir(parents=True, exist_ok=True)
 
+    if additional_displays is None:
+        additional_displays = []
+    additional_displays.displays(f'Cell patches: {cell_images.shape}. Non cell patches: {non_cell_images.shape}\n')
     try:
         if not try_load_model_from_cache:
             raise FileNotFoundError
 
-        print(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
-              f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
+        additional_displays.append(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
+                                   f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
         model_directory = load_model_from_cache(model, patch_size=patch_size,
                                                 hist_match=do_hist_match,
                                                 n_negatives_per_positive=n_negatives_per_positive)
@@ -159,8 +162,6 @@ def train_model_demo(
             if 'validset' not in train_params:
                 train_params['validset'] = validset
 
-        if additional_displays is None:
-            additional_displays = []
         run_configuration_display = collections.OrderedDict({
             'patch size': patch_size[0],
             'temporal width': temporal_width,
