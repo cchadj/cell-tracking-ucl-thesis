@@ -85,10 +85,10 @@ class LabeledImageDataset(ImageDataset):
         self.labels = torch.from_numpy(labels).to(self.device).type(torch.LongTensor)
 
     def __getitem__(self, idx):
-        img = self.images[idx]
+        image = self.images[idx]
         label = self.labels[idx]
 
         if self.transform:
-            img = self.transform(img)
+            image = self.transform(image)
 
-        return img.to(self.device), label
+        return image.to(self.device), label
