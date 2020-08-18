@@ -63,7 +63,7 @@ class LabeledImageDataset(ImageDataset):
     """
     samples: List[Tuple[np.ndarray, int]]
 
-    def __init__(self, images, labels, to_grayscale=False, standardize=False, device='cuda'):
+    def __init__(self, images, labels, standardize=False, to_grayscale=False, device='cuda'):
         """
         Args:
           images (ndarray):
@@ -72,6 +72,7 @@ class LabeledImageDataset(ImageDataset):
               Type must be uint8 ( values from 0 to 255)
           labels (ndarray):
               The corresponding list of labels.
+              Should have the same length as images. (one label for each image)
         """
         super().__init__(images, standardize, to_grayscale, device)
 

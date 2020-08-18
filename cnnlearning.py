@@ -308,7 +308,7 @@ class TrainingTracker:
 
         self.run_data.append(results)
         run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
-        df = pd.DataFrame.from_dict(self.run_data, orient='columns')
+        run_performance_df = pd.DataFrame.from_dict(self.run_data, orient='columns')
 
         current_performance_df = pd.DataFrame(
             collections.OrderedDict({
@@ -331,7 +331,7 @@ class TrainingTracker:
                     display(additional_display)
             display(current_performance_df)
             display(run_parameters_df)
-            display(df)
+            display(run_performance_df)
 
     # noinspection PyUnresolvedReferences
     @torch.no_grad()
