@@ -6,6 +6,8 @@ import collections
 # import cPickle as pickle
 import pickle
 import os
+from copy import deepcopy
+
 import numpy as np
 from cnnlearning import CNN, train, TrainingTracker
 from generate_datasets import get_cell_and_no_cell_patches
@@ -79,6 +81,7 @@ def load_model_from_cache(model,
 def train_model_demo(
         video_sessions=None,
         patch_size=(21, 21),
+        mixed_channel_patches=False,
         temporal_width=0,
         do_hist_match=False,
         n_negatives_per_positive=3,
@@ -100,6 +103,7 @@ def train_model_demo(
         hist_match_template = \
         get_cell_and_no_cell_patches(
             video_sessions=video_sessions,
+            mixed_channel_patches=mixed_channel_patches,
             patch_size=patch_size,
             n_negatives_per_positive=n_negatives_per_positive,
             standardize_dataset=standardize_dataset,
@@ -108,8 +112,10 @@ def train_model_demo(
             try_load_from_cache=try_load_data_from_cache,
         )
 
+    assert len(cell_images.shape) == 3 or len(cell_images.shape) == 4
+    assert len(non_cell_images.shape) == 3 or len(non_cell_images.shape) == 4
     assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8,\
-        print(f'Cell images dtype {cell_images.dtype} non cell images dtype {non_cell_images.dtype}')
+        f'Cell images dtype {cell_images.dtype} non cell images dtype {non_cell_images.dtype}'
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
 
@@ -157,6 +163,7 @@ def train_model_demo(
                 validset=validset,
             )
         else:
+            train_params = deepcopy(train_params)
             if 'trainset' not in train_params:
                 train_params['trainset'] = trainset
             if 'validset' not in train_params:

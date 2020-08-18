@@ -30,6 +30,7 @@ def create_cell_and_no_cell_patches(
         video_sessions=None,
         patch_size=(21, 21),
         temporal_width=0,
+        mixed_channel_patches=False,
         normalize=False,
         do_hist_match=False,
         n_negatives_per_positive=1,
@@ -39,14 +40,22 @@ def create_cell_and_no_cell_patches(
     if type(patch_size) == int:
         patch_size = patch_size, patch_size
 
+    if mixed_channel_patches:
+        assert temporal_width == 0, \
+            'mixed channel patches can not work with temporal patches.' \
+            'Make sure that either temporal width is greater than 0 or mixed channel patches is True.'
+
     if temporal_width > 0:
         cell_images = np.zeros([0, *patch_size, 2 * temporal_width + 1], dtype=np.uint8)
+    elif mixed_channel_patches:
+        cell_images = np.zeros([0, *patch_size, 2], dtype=np.uint8)
     else:
         cell_images = np.zeros([0, *patch_size], dtype=np.uint8)
+
     non_cell_images = np.zeros_like(cell_images)
 
-    cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
-    non_cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
+    cell_images_marked = np.zeros_like(cell_images)
+    non_cell_images_marked = np.zeros_like(cell_images)
 
     if video_sessions is None:
         video_sessions = get_video_sessions(should_have_marked_cells=True)
@@ -54,6 +63,7 @@ def create_cell_and_no_cell_patches(
 
     if v:
         print('Creating cell and no cell images from videos and cell positions csvs...')
+
     for session in tqdm.tqdm(video_sessions):
         assert session.has_marked_video, 'Something went wrong.' \
                                          ' get_video_sessions() should have ' \
@@ -72,6 +82,11 @@ def create_cell_and_no_cell_patches(
         if temporal_width > 0:
             cur_session_cell_images = patch_extractor.temporal_cell_patches_oa790
             cur_session_non_cell_images = patch_extractor.temporal_non_cell_patches_oa790
+        elif mixed_channel_patches:
+            # We only want the oa790 and oa850 channel as confocal channel doesn't guarantee that the bloodcell
+            # will be visible.
+            cur_session_cell_images = patch_extractor.mixed_channel_cell_patches[..., 1:]
+            cur_session_non_cell_images = patch_extractor.mixed_channel_non_cell_patches[..., 1:]
         else:
             cur_session_cell_images = patch_extractor.cell_patches_oa790
             cur_session_non_cell_images = patch_extractor.non_cell_patches_oa790
@@ -86,6 +101,9 @@ def create_cell_and_no_cell_patches(
         if temporal_width > 0:
             cur_session_marked_cell_images = patch_extractor.temporal_marked_cell_patches_oa790
             cur_session_marked_non_cell_images = patch_extractor.temporal_marked_non_cell_patches_oa790
+        elif mixed_channel_patches:
+            cur_session_marked_cell_images = patch_extractor.mixed_channel_marked_cell_patches[..., 1:]
+            cur_session_marked_non_cell_images = patch_extractor.mixed_channel_marked_non_cell_patches[..., 1:]
         else:
             cur_session_marked_cell_images = patch_extractor.marked_cell_patches_oa790
             cur_session_marked_non_cell_images = patch_extractor.marked_non_cell_patches_oa790
@@ -152,6 +170,7 @@ def create_dataset_from_cell_and_no_cell_images(
 
 
 def get_cell_and_no_cell_patches(patch_size=(21, 21),
+                                 mixed_channel_patches=False,
                                  n_negatives_per_positive=1,
                                  video_sessions=None,
                                  normalise_patches=False,
@@ -208,6 +227,11 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
     elif type(patch_size) == tuple:
         height, width = patch_size
 
+    if mixed_channel_patches:
+        assert temporal_width == 0, \
+            'mixed channel patches can not work with temporal patches.' \
+            'Make sure that either temporal width is greater than 0 or mixed channel patches is True.'
+
     if v:
         print(f'patch size {(height, width)}')
         print(f'do hist match: {do_hist_match}')
@@ -221,8 +245,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
     patch_size = (height, width)
 
-    postfix = f'_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}' \
-              f'_st_{str(standardize_dataset).lower()}_tw_{temporal_width}'
+    postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}' \
+              f'_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}' \
+              f'_st_{str(standardize_dataset).lower()}'
 
     dataset_folder = os.path.join(
         CACHED_DATASETS_FOLDER,
@@ -303,6 +328,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
         cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = \
             create_cell_and_no_cell_patches(patch_size=patch_size,
+                                            mixed_channel_patches=mixed_channel_patches,
                                             video_sessions=video_sessions,
                                             normalize=normalise_patches,
                                             do_hist_match=False,
@@ -432,6 +458,7 @@ def main_tmp():
                                      standardize_dataset=standardize_dataset,
                                      v=verbose,
                                      vv=very_verbose)
+
 
 
 if __name__ == '__main__':

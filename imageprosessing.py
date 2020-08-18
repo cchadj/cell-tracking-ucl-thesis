@@ -132,6 +132,7 @@ def frame_differencing(frames, sigma=0):
 
     return difference_images[:-1]
 
+
 def crop_mask(mask, left_crop=50):
     """ Crop mask or stack of masks by amount of pixels.
 

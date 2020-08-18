@@ -96,7 +96,7 @@ def plot_dataset_as_grid(dataset, title=None):
         plt.show()
 
 
-def plot_images_as_grid(images, ax=None, title=None):
+def plot_images_as_grid(images, ax=None, title=None, fontsize=30):
     """
     Plots a stack of images in a grid.
 
@@ -114,7 +114,7 @@ def plot_images_as_grid(images, ax=None, title=None):
     if ax is None:
         _, ax = plt.subplots(num=None, figsize=(70, 50), dpi=80, facecolor='w', edgecolor='k')
     if title is not None:
-        ax.set_title(title)
+        ax.set_title(title, fontsize=fontsize)
 
     plt.grid(b=None)
     ax.imshow(grid_img.permute(1, 2, 0))
