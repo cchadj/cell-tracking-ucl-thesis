@@ -153,6 +153,7 @@ class TrainingTracker:
     def __init__(self, device, additional_displays=None):
         if additional_displays is None:
             additional_displays = []
+        self.manually_stopped = False
 
         self.additional_displays = additional_displays
         self.epoch_count = 0
@@ -557,12 +558,21 @@ class TrainingTracker:
         return total_loss, accuracy
 
 
-class SignalHandler(object):
-    def __init__(self):
+class TrainingInterruptSignalHandler(object):
+    tracker: TrainingTracker
+
+    def __init__(self, tracker):
+        """
+
+        Args:
+            tracker (TrainingTracker):
+        """
+        self.tracker = tracker
         self.signal_raised = False
 
     def handle(self, sig, frm):
         print(f"Signal {sig} captured.")
+        self.tracker.manually_stopped = True
         self.signal_raised = True
 
 
@@ -622,8 +632,7 @@ def train(cnn, params,
     tracker = TrainingTracker(device, additional_displays)
     tracker.start_run(cnn, params, train_loader, valid_loader, criterion)
 
-    interrupt_handler = SignalHandler()
-
+    interrupt_handler = TrainingInterruptSignalHandler(tracker)
     signal.signal(signal.SIGINT, interrupt_handler.handle)
 
     for epoch in tqdm.tqdm(range(epochs)):
