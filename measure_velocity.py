@@ -47,7 +47,7 @@ def get_positions_from_csv(csv_file, frame_idx):
     return all_cell_positions[np.where(all_cell_frame_indices == frame_idx)[0]]
 
 
-video_sessions = get_video_sessions(should_have_marked_video=True)
+video_sessions = get_video_sessions(should_have_marked_cells=True)
 # keep only the video sessions that have vessel masks
 video_sessions = [vs for vs in video_sessions if vs.vessel_mask_confocal_file and vs.vessel_mask_oa850_file]
 
@@ -396,4 +396,4 @@ def create_average_images(video_session, patch_size=51, sigma=1, average_all_fra
 
 
 if __name__ == '__main__':
-    create_average_images(get_video_sessions(should_have_marked_video=True)[2], patch_size=51, sigma=0.2, average_all_frames=False)
+    create_average_images(get_video_sessions(should_have_marked_cells=True)[2], patch_size=51, sigma=0.2, average_all_frames=False)

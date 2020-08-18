@@ -186,10 +186,11 @@ def train_model_demo(patch_size=(21, 21),
             pickle.dump(results, output_file, pickle.HIGHEST_PROTOCOL)
 
         print('Done')
-        model = results.recorded_model
 
     # Print the final validation accuracy on the training and validation set
+    model = results.recorded_model
     model.eval()
+
     trainset_predictions, train_accuracy = classify_labeled_dataset(trainset, model)
     validset_predictions, valid_accuracy = classify_labeled_dataset(validset, model)
     positive_accuracy = classify_images(cell_images, model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images)

@@ -730,7 +730,7 @@ class SessionPatchExtractor(object):
 
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
-    video_sessions = get_video_sessions(should_have_marked_video=True)
+    video_sessions = get_video_sessions(should_have_marked_cells=True)
     for vs in video_sessions:
         if vs.vessel_mask_confocal_file and vs.vessel_mask_oa850_file:
             break

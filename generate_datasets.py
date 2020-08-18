@@ -27,6 +27,7 @@ def clean_folder(folder):
 
 
 def create_cell_and_no_cell_patches(
+        video_sessions=None,
         patch_size=(21, 21),
         temporal_width=0,
         normalize=False,
@@ -47,7 +48,10 @@ def create_cell_and_no_cell_patches(
     cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
     non_cell_images_marked = np.zeros_like(cell_images, dtype=np.uint8)
 
-    video_sessions = get_video_sessions(should_have_marked_video=True)
+    if video_sessions is None:
+        video_sessions = get_video_sessions(should_have_marked_cells=True)
+    assert all([vs.has_marked_cells for vs in video_sessions]), 'Not all video sessions have marked cells.'
+
     if v:
         print('Creating cell and no cell images from videos and cell positions csvs...')
     for session in tqdm.tqdm(video_sessions):
@@ -119,6 +123,7 @@ def create_cell_and_no_cell_patches(
 def create_dataset_from_cell_and_no_cell_images(
         cell_images,
         non_cell_images,
+        validset_ratio=0.2,
         standardize=False,
         to_grayscale=False,
         device='cuda',
@@ -138,7 +143,7 @@ def create_dataset_from_cell_and_no_cell_images(
     if v:
         print('Splitting into training set and validation set')
 
-    trainset_size = int(len(dataset) * 0.80)
+    trainset_size = int(len(dataset) * (1 - validset_ratio))
     validset_size = len(dataset) - trainset_size
     # noinspection PyUnresolvedReferences
     trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
@@ -148,6 +153,7 @@ def create_dataset_from_cell_and_no_cell_images(
 
 def get_cell_and_no_cell_patches(patch_size=(21, 21),
                                  n_negatives_per_positive=1,
+                                 video_sessions=None,
                                  normalise_patches=False,
                                  do_hist_match=False,
                                  standardize_dataset=False,
@@ -163,6 +169,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         created and if not then it creates it and saves it in cache.
 
     Args:
+        video_sessions (list[VideoSessions]):
+            The list of video sessions to use. If None automatically uses all video sessions available from
+            the data folder.
         normalise_patches: The cell and non cell images are normalised to 0 - 255
         patch_size (int, tuple): The patch size (height, width) or int for square.
         n_negatives_per_positive (int):  How many non cells per cell patch.
@@ -294,6 +303,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
         cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = \
             create_cell_and_no_cell_patches(patch_size=patch_size,
+                                            video_sessions=video_sessions,
                                             do_hist_match=False,
                                             n_negatives_per_positive=1,
                                             temporal_width=temporal_width,

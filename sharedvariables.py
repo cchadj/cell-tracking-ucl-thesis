@@ -3,6 +3,8 @@ import sys
 from os.path import basename
 import re
 import glob
+from typing import List
+
 from videoutils import get_frames_from_video
 import numpy as np
 import pandas as pd
@@ -120,33 +122,27 @@ def find_filename_of_same_source(target_filename, filenames):
 
 class VideoSession(object):
     def __init__(self, video_filename):
-        channel_type = ''
-        if 'confocal' in video_filename.lower():
-            channel_type = 'confocal'
-        elif 'oa790' in video_filename.lower():
-            channel_type = 'oa790'
-        elif 'oa850' in video_filename.lower():
-            channel_type = 'oa790'
+        self.is_registered = '_reg_' in video_filename
 
         vid_marked_790_filename = find_filename_of_same_source(video_filename, marked_video_oa790_files)
         vid_marked_850_filename = find_filename_of_same_source(video_filename, marked_video_oa850_files)
 
-        has_marked_video = vid_marked_790_filename != '' or vid_marked_850_filename != ''
+        self._cell_position_csv_files = [csv_file for csv_file
+                                         in csv_cell_cords_oa790_filenames
+                                         if files_of_same_source(csv_file, video_filename)]
 
-        subject_number = -1
-        session_number = -1
+        self.has_marked_video = vid_marked_790_filename != '' or vid_marked_850_filename != ''
+        self.has_marked_cells = len(self._cell_position_csv_files) > 0
+
+        self.subject_number = -1
+        self.session_number = -1
         for string in video_filename.split('_'):
             if 'Subject' in string:
-                subject_number = int(re.search(r'\d+', string).group())
+                self.subject_number = int(re.search(r'\d+', string).group())
             if 'Session' in string:
-                session_number = int(re.search(r'\d+', string).group())
+                self.session_number = int(re.search(r'\d+', string).group())
 
-        self.type = channel_type
-        self.has_marked_video = has_marked_video
-        self.subject_number = subject_number
-        self.session_number = session_number
         self.video_file = video_filename
-
         self.video_oa790_file = find_filename_of_same_source(video_filename, unmarked_video_oa790_filenames)
         self.video_oa850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
         self.video_confocal_file = find_filename_of_same_source(video_filename, unmarked_video_confocal_filenames)
@@ -165,10 +161,6 @@ class VideoSession(object):
         self.std_image_oa790_file = find_filename_of_same_source(video_filename, std_image_oa790_files)
         self.std_image_oa850_file = find_filename_of_same_source(video_filename, std_image_oa850_files)
         self.std_image_confocal_file = find_filename_of_same_source(video_filename, std_image_confocal_files)
-
-        self._cell_position_csv_files = [csv_file for csv_file
-                                         in csv_cell_cords_oa790_filenames
-                                         if files_of_same_source(csv_file, video_filename)]
 
         self._frames_oa790 = None
         self._frames_oa850 = None
@@ -582,14 +574,20 @@ class VideoSession(object):
         return self._std_image_confocal
 
 
-def get_video_sessions(should_have_marked_video=False):
-    available_channel_type = ['oa790', 'oa850', 'confocal']
+def get_video_sessions(should_have_marked_cells=False,
+                       should_be_registered=False):
+    """ Get all video sessions
 
-    video_sessions = []
+    Returns:
+        List[VideoSession] List of video sessions
+    """
+    video_sessions: List[VideoSession] = []
     for video_filename in unmarked_video_oa790_filenames:
 
         vid_session = VideoSession(video_filename)
-        if should_have_marked_video and not vid_session.has_marked_video:
+        if should_have_marked_cells and len(vid_session.cell_position_csv_files) == 0:
+            continue
+        elif should_be_registered and not vid_session.is_registered:
             continue
         else:
             video_sessions.append(vid_session)
@@ -597,7 +595,8 @@ def get_video_sessions(should_have_marked_video=False):
     return video_sessions
 
 
-def get_video_file_dictionaries(channel_type, should_have_marked_video=False):
+def get_video_file_dictionaries(channel_type,
+                                should_have_marked_video=False):
     available_channel_type = ['oa790', 'oa850', 'confocal']
     assert channel_type.lower() in available_channel_type, f'Channel type must be one of {available_channel_type}'
 
