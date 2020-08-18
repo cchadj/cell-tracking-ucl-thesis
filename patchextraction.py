@@ -280,7 +280,7 @@ def get_mask_bounds(mask):
         x_max = xs.max()
     else:
         ys, xs = np.where(np.diff(mask))
-        x_min, x_max = xs.max(), xs.min()
+        x_min, x_max = xs.min(), xs.max()
 
     y_min, y_max = ys.min(), ys.max()
     return x_min, x_max, y_min, y_max
@@ -773,10 +773,25 @@ class SessionPatchExtractor(object):
 
 
 if __name__ == '__main__':
-    from sharedvariables import get_video_sessions
-    video_sessions = get_video_sessions(should_have_marked_cells=True)
-    for vs in video_sessions:
-        if vs.vessel_mask_confocal_file and vs.vessel_mask_oa850_file:
-            break
+    # from sharedvariables import get_video_sessions
+    # video_sessions = get_video_sessions(should_have_marked_cells=True)
+    # for vs in video_sessions:
+    #     if vs.vessel_mask_confocal_file and vs.vessel_mask_oa850_file:
+    #         break
+    #
+    # patches = SessionPatchExtractor(vs).mixed_channel_cell_patches
 
-    patches = SessionPatchExtractor(vs).mixed_channel_cell_patches
+    from generate_datasets import create_cell_and_no_cell_patches, create_dataset_from_cell_and_no_cell_images
+    from imageprosessing import hist_match_images
+    from sharedvariables import get_video_sessions
+
+    reg_video_sessions = [get_video_sessions(should_have_marked_cells=True, should_be_registered=True)[1]]
+    cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = create_cell_and_no_cell_patches(
+        video_sessions=reg_video_sessions,
+        mixed_channel_patches=True,
+        normalize=False,
+        n_negatives_per_positive=1,
+        v=True,
+        vv=False
+    )
+    print(f'Cell patches: {cell_images.shape}. Non cell patches {non_cell_images.shape}.')

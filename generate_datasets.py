@@ -319,7 +319,20 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         non_cell_images_marked = np.load(non_cell_images_marked_filename)
 
         # if v:
-        #     print(f"loading normalisation range '{normalisation_data_range_filename}'")
+        #     print(f"loading normalisation range '{normalisation_data_range_fifrom generate_datasets import create_cell_and_no_cell_patches, create_dataset_from_cell_and_no_cell_images
+        # from imageprosessing import hist_match_images
+        # from sharedvariables import get_video_sessions
+        #
+        # reg_video_sessions = [get_video_sessions(should_have_marked_cells=True, should_be_registered=True)[1]]
+        # cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = create_cell_and_no_cell_patches(
+        #     video_sessions=reg_video_sessions,
+        #     mixed_channel_patches=True,
+        #     normalize=False,
+        #     n_negatives_per_positive=1,
+        #     v=True,
+        #     vv=False
+        # )
+        # print(f'Cell patches: {cell_images.shape}. Non cell patches {non_cell_images.shape}.')lename}'")
         # normalisation_data_range = np.load(normalisation_data_range_filename)
 
         if do_hist_match:
