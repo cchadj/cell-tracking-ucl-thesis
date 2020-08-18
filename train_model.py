@@ -120,7 +120,7 @@ def train_model_demo(
 
     if additional_displays is None:
         additional_displays = []
-    additional_displays.displays(f'Cell patches: {cell_images.shape}. Non cell patches: {non_cell_images.shape}\n')
+    additional_displays.append(f'Cell patches: {cell_images.shape}. Non cell patches: {non_cell_images.shape}\n')
     try:
         if not try_load_model_from_cache:
             raise FileNotFoundError
