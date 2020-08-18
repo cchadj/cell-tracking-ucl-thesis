@@ -591,8 +591,8 @@ def train(cnn, params,
     )
 
     epochs = params['epochs']
-    if ['evaluation_epochs'] in params:
-        evaluation_epochs = params['evalutaion_epochs']
+    if 'evaluation_epochs' in params:
+        evaluation_epochs = params['evaluation_epochs']
     else:
         evaluation_epochs = 20
     # Set up Optimizer
