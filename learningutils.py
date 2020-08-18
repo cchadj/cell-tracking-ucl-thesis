@@ -1,4 +1,4 @@
-from typing import List, Any, Tuple
+from typing import List, Tuple
 
 import torch
 import torchvision
@@ -55,7 +55,7 @@ class ImageDataset(torch.utils.data.Dataset):
         if self.transform and not torch.is_tensor(image):
             image = self.transform(image)
 
-        return image
+        return image.to(self.device)
 
 
 class LabeledImageDataset(ImageDataset):
@@ -93,3 +93,43 @@ class LabeledImageDataset(ImageDataset):
             image = self.transform(image)
 
         return image.to(self.device), label
+
+
+if __name__ == '__main__':
+    # A test to check that the LabeledImageDataset and ImageDataset yields the same results
+    from generate_datasets import get_cell_and_no_cell_patches, create_dataset_from_cell_and_no_cell_images
+
+    _, _, cell_images, non_cell_images, _, _, _ = get_cell_and_no_cell_patches()
+
+    labeled_dataset = LabeledImageDataset(cell_images, np.ones((len(cell_images), ), dtype=np.int), standardize=True)
+    image_dataset = ImageDataset(cell_images, standardize=True)
+
+    assert len(labeled_dataset) == len(image_dataset), 'The number of samples in the two datasets should be the same.'
+
+    labeled_loader = torch.utils.data.DataLoader(labeled_dataset, batch_size=len(labeled_dataset), shuffle=False)
+    image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=len(image_dataset), shuffle=False)
+
+    for images_1, (images_2, labels) in zip(image_loader, labeled_loader):
+        assert images_1.allclose(images_2)
+
+    labeled_dataset = LabeledImageDataset(cell_images, np.ones((len(cell_images), ), dtype=np.int), standardize=False)
+    image_dataset = ImageDataset(cell_images, standardize=False)
+
+    assert len(labeled_dataset) == len(image_dataset), 'The number of samples in the two datasets should be the same.'
+
+    labeled_loader = torch.utils.data.DataLoader(labeled_dataset, batch_size=len(labeled_dataset), shuffle=False)
+    image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=len(image_dataset), shuffle=False)
+
+    for images_1, (images_2, labels) in zip(image_loader, labeled_loader):
+        assert images_1.allclose(images_2)
+
+    labeled_dataset = LabeledImageDataset(cell_images, np.ones((len(cell_images), ), dtype=np.int), standardize=True)
+    image_dataset = ImageDataset(cell_images, standardize=False)
+
+    assert len(labeled_dataset) == len(image_dataset), 'The number of samples in the two datasets should be the same.'
+
+    labeled_loader = torch.utils.data.DataLoader(labeled_dataset, batch_size=len(labeled_dataset), shuffle=False)
+    image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=len(image_dataset), shuffle=False)
+
+    for images_1, (images_2, labels) in zip(image_loader, labeled_loader):
+        assert not images_1.allclose(images_2)

@@ -124,7 +124,7 @@ def create_dataset_from_cell_and_no_cell_images(
         cell_images,
         non_cell_images,
         validset_ratio=0.2,
-        standardize=False,
+        standardize=True,
         to_grayscale=False,
         device='cuda',
         v=False):
@@ -156,10 +156,10 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
                                  video_sessions=None,
                                  normalise_patches=False,
                                  do_hist_match=False,
-                                 standardize_dataset=False,
+                                 standardize_dataset=True,
                                  temporal_width=0,
                                  dataset_to_grayscale=False,
-                                 try_load_from_cache=False,
+                                 try_load_from_cache=True,
                                  v=False,
                                  vv=False):
     """ Convenience function to get cell and no cell patches and their corresponding marked(for debugging),
@@ -221,7 +221,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
 
     patch_size = (height, width)
 
-    postfix = f'_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}'\
+    postfix = f'_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}' \
               f'_st_{str(standardize_dataset).lower()}_tw_{temporal_width}'
 
     dataset_folder = os.path.join(
@@ -304,6 +304,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
         cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = \
             create_cell_and_no_cell_patches(patch_size=patch_size,
                                             video_sessions=video_sessions,
+                                            normalize=normalise_patches,
                                             do_hist_match=False,
                                             n_negatives_per_positive=1,
                                             temporal_width=temporal_width,
@@ -357,9 +358,9 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
             print("Non cell images array shape:", non_cell_images.shape)
 
     return trainset, validset, \
-        cell_images, non_cell_images, \
-        cell_images_marked, non_cell_images_marked, \
-        hist_match_template
+           cell_images, non_cell_images, \
+           cell_images_marked, non_cell_images_marked, \
+           hist_match_template
 
 
 def main():
@@ -431,8 +432,6 @@ def main_tmp():
                                      standardize_dataset=standardize_dataset,
                                      v=verbose,
                                      vv=very_verbose)
-
-    loader = torch.utils.data.DataLoader(trainset, batch_size=10)
 
 
 if __name__ == '__main__':
