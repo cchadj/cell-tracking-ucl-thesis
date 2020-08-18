@@ -302,7 +302,8 @@ class TrainingTracker:
                 run_parameters['Trainset size'] = len(self.run_params[k])
             elif k == 'validset':
                 run_parameters['Validset size '] = len(self.run_params[k])
-            elif k not in ['trainset', 'validset', 'testset', 'optimizer', 'lr', 'weight_decay', 'evaluate_epochs']:
+            elif k not in ['trainset', 'validset', 'testset', 'optimizer',
+                           'lr', 'weight_decay', 'do_early_stop', 'evaluate_epochs']:
                 results[k] = v
 
         self.run_data.append(results)

@@ -192,19 +192,36 @@ def train_model_demo(patch_size=(21, 21),
     model.eval()
     trainset_predictions, train_accuracy = classify_labeled_dataset(trainset, model)
     validset_predictions, valid_accuracy = classify_labeled_dataset(validset, model)
+    positive_accuracy = classify_images(cell_images, model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images)
+    negative_accuracy = (1 - classify_images(non_cell_images, model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images)
 
     print()
     print(f'Model trained on {len(cell_images)} cell patches and {len(non_cell_images)} non cell patches.')
     print()
-    print('Brief evaluation')
+    print('Brief evaluation - best validation accuracy model')
     print('----------------')
     print('Training accuracy:\t', f'{train_accuracy:.3f}')
     print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
     print()
-    print('Positive accuracy:\t',
-          f'{classify_images(cell_images, model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images):.3f}')
-    print('Negative accuracy:\t',
-          f'{(1 - classify_images(non_cell_images, model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images):.3f}')
+    print('Positive accuracy:\t', f'{positive_accuracy:.3f}')
+    print('Negative accuracy:\t', f'{negative_accuracy:.3f}')
+
+    train_model = results.recorded_train_model
+    train_model.eval()
+
+    _, train_accuracy = classify_labeled_dataset(trainset, train_model)
+    _, valid_accuracy = classify_labeled_dataset(validset, train_model)
+    positive_accuracy = classify_images(cell_images, train_model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images)
+    negative_accuracy = (1 - classify_images(non_cell_images, train_model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images)
+
+    print()
+    print('Brief evaluation - best training accuracy model')
+    print('----------------')
+    print('Training accuracy:\t', f'{train_accuracy:.3f}')
+    print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
+    print()
+    print('Positive accuracy:\t', f'{positive_accuracy:.3f}')
+    print('Negative accuracy:\t', f'{negative_accuracy:.3f}')
 
     return model, results
 
