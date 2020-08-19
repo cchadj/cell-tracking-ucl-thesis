@@ -792,7 +792,6 @@ if __name__ == '__main__':
     cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = create_cell_and_no_cell_patches(
         video_sessions=reg_video_sessions,
         mixed_channel_patches=True,
-        normalize=False,
         n_negatives_per_positive=1,
         v=True,
         vv=False
