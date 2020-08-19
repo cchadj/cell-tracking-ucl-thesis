@@ -394,6 +394,8 @@ def get_cell_and_no_cell_patches(
             print("Non cell images array shape:", non_cell_images.shape)
 
     if apply_data_augmentation_to_dataset:
+        if v:
+            print('Doing center crop on patches to bring to original patch size...')
         # bring back patches to their original size
         cell_images = center_crop_images(cell_images, patch_size)
         non_cell_images = center_crop_images(non_cell_images, patch_size)

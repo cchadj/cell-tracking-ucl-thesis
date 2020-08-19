@@ -95,7 +95,9 @@ def train_model_demo(
         try_load_data_from_cache=True,
         try_load_model_from_cache=True,
         train_params=None,
-        additional_displays=None
+        additional_displays=None,
+        v=False,
+        vv=False,
 ):
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
@@ -116,6 +118,7 @@ def train_model_demo(
             apply_data_augmentation_to_dataset=apply_data_augmentation_to_dataset,
             do_hist_match=do_hist_match,
             try_load_from_cache=try_load_data_from_cache,
+            v=v, vv=vv,
         )
     assert len(cell_images.shape) == 3 or len(cell_images.shape) == 4
     assert len(non_cell_images.shape) == 3 or len(non_cell_images.shape) == 4
@@ -131,7 +134,7 @@ def train_model_demo(
 
     if additional_displays is None:
         additional_displays = []
-    additional_displays.append(f'Cell patches: {cell_images.shape}. Non cell patches: {non_cell_images.shape}\n')
+    additional_displays.append(f'Cell patches: {cell_images.shape}. Non cell patches: {non_cell_images.shape}')
     try:
         if not try_load_model_from_cache:
             raise FileNotFoundError
@@ -149,10 +152,9 @@ def train_model_demo(
         if try_load_model_from_cache:
             additional_displays.append('Model or results not found in cache.')
 
-        additional_displays.append(
-            'Training new model.\n'
-            'You can interrupt(ctr - C or interrupt kernel in notebook) any time to get '
-            'the model with the best validation accuracy at the current time.')
+        additional_displays.append('Training new model.')
+        additional_displays.append('You can interrupt(ctr - C or interrupt kernel in notebook) any time to get '
+                                   'the model with the best validation accuracy at the current time.')
 
         if train_params is None:
             train_params = collections.OrderedDict(
@@ -183,6 +185,8 @@ def train_model_demo(
         })
         additional_displays.append(run_configuration_display)
 
+        if v:
+            print('Starting training')
         # set the model in training mode
         model.train()
         results: TrainingTracker = train(model,

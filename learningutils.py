@@ -85,7 +85,6 @@ class LabeledImageDataset(ImageDataset):
         assert labels.dtype == np.int, f'Labels must be integers not {labels.dtype}'
         assert len(labels.shape) == 1, f'Labels should be a list of one label for each image, shape given {labels.shape}'
 
-        print(self.transform)
         self.labels = torch.from_numpy(labels)
 
     def __getitem__(self, idx):

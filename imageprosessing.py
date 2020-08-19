@@ -330,7 +330,7 @@ def center_crop_images(images, patch_size):
 
     for batch in loader:
         # NxCxHxW -> NxHxWxC
-        return batch.permute(0, 2, 3, 1).cpu().numpy().squeeze()
+        return batch.permute(0, 2, 3, 1).cpu().numpy().squeeze().astype(images.dtype)
 
 
 if __name__ == '__main__':
