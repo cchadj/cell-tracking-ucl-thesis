@@ -55,7 +55,7 @@ class ImageDataset(torch.utils.data.Dataset):
         if self.transform and not torch.is_tensor(image):
             image = self.transform(image)
 
-        return image.to(self.device)
+        return image
 
 
 class LabeledImageDataset(ImageDataset):
@@ -83,7 +83,7 @@ class LabeledImageDataset(ImageDataset):
         assert labels.dtype == np.int, f'Labels must be integers not {labels.dtype}'
         assert len(labels.shape) == 1, f'Labels should be a list of one label for each image, shape given {labels.shape}'
 
-        self.labels = torch.from_numpy(labels).to(self.device).type(torch.LongTensor)
+        self.labels = torch.from_numpy(labels)
 
     def __getitem__(self, idx):
         image = self.images[idx]
@@ -92,7 +92,7 @@ class LabeledImageDataset(ImageDataset):
         if self.transform:
             image = self.transform(image)
 
-        return image.to(self.device), label
+        return image, label
 
 
 if __name__ == '__main__':

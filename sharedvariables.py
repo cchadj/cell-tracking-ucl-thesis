@@ -364,7 +364,6 @@ class VideoSession(object):
     def fully_masked_frames_oa790(self):
         """ The frames from the oa790nm channel masked with the vessel mask image and the mask frames from the mask video.
         """
-        print('hello')
         if self._fully_masked_frames_oa790 is None:
             self._fully_masked_frames_oa790 = np.ma.empty_like(self.frames_oa790)
             for i, frame in enumerate(self.frames_oa790):

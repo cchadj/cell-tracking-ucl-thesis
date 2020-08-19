@@ -111,7 +111,6 @@ def train_model_demo(
             do_hist_match=do_hist_match,
             try_load_from_cache=try_load_data_from_cache,
         )
-
     assert len(cell_images.shape) == 3 or len(cell_images.shape) == 4
     assert len(non_cell_images.shape) == 3 or len(non_cell_images.shape) == 4
     assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8,\
@@ -278,24 +277,40 @@ def main():
 
 
 def main_tmp():
-    patch_size = 21
-    temporal_width = 1
-    hist_match = False
-    standardize = True
-    npp = 1
-    device = 'cuda'
+    import collections
+    from copy import deepcopy
 
-    train_model_demo(
-        patch_size=patch_size,
-        temporal_width=temporal_width,
-        do_hist_match=hist_match,
-        n_negatives_per_positive=npp,
-        standardize_dataset=standardize,
-        device=device,
+    from sharedvariables import get_video_sessions
 
+    train_params = collections.OrderedDict(
+        epochs=250,
+        lr=.001,
+
+        weight_decay=0.01,
+        batch_size=512,  # can be a number or None/'all' to train all trainset at once.
+        do_early_stop=True,  # Optional default True
+        early_stop_patience=60,  # How many epochs with no validation accuracy improvement before stopping early
+        learning_rate_scheduler_patience=20,
+        # How many epochs with no validation accuracy improvement before lowering learning rate
+        evaluate_epochs=10,
+
+        shuffle=True)
+
+    video_sessions_registered = get_video_sessions(should_have_marked_cells=True, should_be_registered=True)
+    model, results = train_model_demo(
+        patch_size=31,
+        mixed_channel_patches=True,
+        temporal_width=0,
+        do_hist_match=False,
+        n_negatives_per_positive=1,
+        standardize_dataset=True,
+
+        video_sessions=video_sessions_registered,
+        train_params=deepcopy(train_params),
         try_load_data_from_cache=True,
-        try_load_model_from_cache=True,
+        try_load_model_from_cache=False,
     )
+    print(results.best_valid_accuracy)
 
 
 if __name__ == '__main__':
