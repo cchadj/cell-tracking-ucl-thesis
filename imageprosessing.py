@@ -1,11 +1,16 @@
 from typing import List, Any
-from matplotlib import pyplot as plt
+
 import numpy as np
 import mahotas as mh
 import tqdm
 from skimage.morphology import extrema
 from skimage.exposure import match_histograms
 from plotutils import cvimshow
+
+from learningutils import ImageDataset
+import torch.utils.data
+import torchvision
+
 
 import skimage
 
@@ -309,6 +314,25 @@ class SessionPreprocessor(object):
         self.apply_preprocessing_to_oa850()
 
 
+def center_crop_images(images, patch_size):
+    """ Crops the centre of the stack of images and returns the result
+
+    Args:
+        images: NxHxWxC (or NxHxW)
+        patch_size (int or tuple): The dimensions of the patch to crop in the middle
+
+    Returns:
+      N x patch height x patch width x C ( or Nx patch height x patch width) numpy array
+    """
+    crop_transform = [torchvision.transforms.CenterCrop(patch_size)]
+    dataset = ImageDataset(images, data_augmentation_transforms=crop_transform)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset), shuffle=False)
+
+    for batch in loader:
+        # NxCxHxW -> NxHxWxC
+        return batch.permute(0, 2, 3, 1).cpu().numpy().squeeze()
+
+
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
 
@@ -324,5 +348,3 @@ if __name__ == '__main__':
 
     # plt.subplot(121)
     cvimshow('', vs.frames_oa790[0])
-
-    pass

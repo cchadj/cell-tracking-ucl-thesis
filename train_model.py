@@ -32,6 +32,7 @@ def load_model_from_cache(model,
                           n_negatives_per_positive=3,
                           temporal_width=0,
                           standardize_dataset=True,
+                          data_augmentation=False,
                           hist_match=False):
     """ Attempts to find the model weights to model from cache.
 
@@ -61,6 +62,9 @@ def load_model_from_cache(model,
         f for f in potential_model_directories if extract_value_from_string(f, 'st') == str(standardize_dataset).lower()
     ]
     potential_model_directories = [
+        f for f in potential_model_directories if extract_value_from_string(f, 'da') == str(data_augmentation).lower()
+    ]
+    potential_model_directories = [
         f for f in potential_model_directories if extract_value_from_string(f, 'tw') == temporal_width
     ]
 
@@ -87,6 +91,7 @@ def train_model_demo(
         n_negatives_per_positive=3,
         device='cuda',
         standardize_dataset=True,
+        apply_data_augmentation_to_dataset=False,
         try_load_data_from_cache=True,
         try_load_model_from_cache=True,
         train_params=None,
@@ -108,6 +113,7 @@ def train_model_demo(
             n_negatives_per_positive=n_negatives_per_positive,
             standardize_dataset=standardize_dataset,
             temporal_width=temporal_width,
+            apply_data_augmentation_to_dataset=apply_data_augmentation_to_dataset,
             do_hist_match=do_hist_match,
             try_load_from_cache=try_load_data_from_cache,
         )
@@ -184,14 +190,15 @@ def train_model_demo(
                                          criterion=torch.nn.CrossEntropyLoss(),
                                          device=device, additional_displays=additional_displays)
 
+        postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}' \
+                  f'_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}' \
+                  f'_st_{str(standardize_dataset).lower()}_da_{str(apply_data_augmentation_to_dataset).lower()}'
+
         output_directory = os.path.join(CACHED_MODELS_FOLDER,
-                                        f'blood_cell_classifier_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}'
-                                        f'_npp_{n_negatives_per_positive}_va_{results.recorded_model_valid_accuracy:.3f}')
+                                        f'blood_cell_classifier_va_{results.recorded_model_valid_accuracy:.3f}{postfix}')
         pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
         output_name = os.path.join(output_directory,
-                                   f'blood_cell_classifier_ps_{patch_size[0]}_hm_{str(do_hist_match).lower()}'
-                                   f'_npp_{n_negatives_per_positive}_va_{results.recorded_model_valid_accuracy:.3f}'
-                                   f'_st_{str(standardize_dataset).lower()}_tw_{temporal_width}')
+                                   f'blood_cell_classifier_va_{results.recorded_model_valid_accuracy:.3f}{postfix}')
 
         print(f'Saving model as {output_name}')
         results.save(output_name)

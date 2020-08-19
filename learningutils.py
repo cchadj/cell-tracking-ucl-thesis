@@ -65,7 +65,7 @@ class LabeledImageDataset(ImageDataset):
     """
     samples: List[Tuple[np.ndarray, int]]
 
-    def __init__(self, images, labels, standardize=False, to_grayscale=False, augmentation_transformations=None):
+    def __init__(self, images, labels, standardize=False, to_grayscale=False, data_augmentation_transformations=None):
         """
         Args:
           images (ndarray):
@@ -76,7 +76,7 @@ class LabeledImageDataset(ImageDataset):
               The corresponding list of labels.
               Should have the same length as images. (one label for each image)
         """
-        super().__init__(images, standardize, to_grayscale, augmentation_transformations)
+        super().__init__(images, standardize, to_grayscale, data_augmentation_transformations)
 
         # if labels already ndarray nothing changes, if list makes to a numpy array
         labels = np.array(labels).squeeze()
@@ -85,6 +85,7 @@ class LabeledImageDataset(ImageDataset):
         assert labels.dtype == np.int, f'Labels must be integers not {labels.dtype}'
         assert len(labels.shape) == 1, f'Labels should be a list of one label for each image, shape given {labels.shape}'
 
+        print(self.transform)
         self.labels = torch.from_numpy(labels)
 
     def __getitem__(self, idx):
@@ -142,7 +143,10 @@ def test_transformations():
 
     translation_pixels = 4
     final_patch_size = 31
-    cell_image_creation_patchsize = final_patch_size + translation_pixels
+    cell_image_creation_patchsize = final_patch_size + round(final_patch_size * .5) + translation_pixels
+    if cell_image_creation_patchsize % 2 == 0:
+        cell_image_creation_patchsize += 1
+
     translation_ratio = translation_pixels / cell_image_creation_patchsize
 
     _, _, cell_images, non_cell_images, _, _, _ = get_cell_and_no_cell_patches(
@@ -150,20 +154,23 @@ def test_transformations():
         patch_size=cell_image_creation_patchsize
     )
 
-    labeled_dataset = LabeledImageDataset(cell_images[:2],
-                                          np.ones((len(cell_images[:2]), ), dtype=np.int)
-                                          , standardize=False,
-                                          augmentation_transformations=[
-                                              torchvision.transforms.RandomAffine(0, translate=(translation_ratio, translation_ratio)),
-                                              torchvision.transforms.RandomRotation(degrees=(90, -90)),
-                                              torchvision.transforms.CenterCrop(final_patch_size)
-                                          ])
-    import PIL
-    print(PIL.PILLOW_VERSION)
+    import PIL.Image
+    labeled_dataset = LabeledImageDataset(
+        cell_images[:2],
+        np.ones((len(cell_images[:2]), ), dtype=np.int),
+        standardize=False,
+        data_augmentation_transformations=[
+            torchvision.transforms.RandomAffine(degrees=(90, -90),
+                                                translate=(translation_ratio, translation_ratio),
+                                                resample=PIL.Image.BILINEAR,
+                                                fillcolor=int(cell_images.mean())),
+            torchvision.transforms.CenterCrop(final_patch_size)
+        ])
+
     labeled_loader = torch.utils.data.DataLoader(labeled_dataset, batch_size=1, shuffle=False)
     from plotutils import cvimshow
 
-    for _ in range(30):
+    for _ in range(60):
         i = 0
         for images, labels in labeled_loader:
             if i % 2 == 0:
