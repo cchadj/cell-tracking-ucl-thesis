@@ -323,7 +323,8 @@ class TrainingTracker:
         # display epoch information and show progress
         with pd.option_context('display.max_rows', 7,
                                'display.max_colwidth', 30,
-                               'display.max_columns', None):  # more options can be specified also
+                               'display.max_columns', None,
+                               'display.width', 1000):  # more options can be specified also
             clear_output()
             for additional_display in self.additional_displays:
                 if type(additional_display) == dict or type(additional_display) == collections.OrderedDict:
@@ -542,8 +543,6 @@ class TrainingTracker:
             output = self.model(images)
             loss = self.criterion(output, targets)
 
-            print("Output", output.shape)
-            print("Targets", targets.shape)
             total_loss += loss.item()
 
             predictions = torch.argmax(output, dim=1).type(torch.int)
@@ -552,7 +551,6 @@ class TrainingTracker:
 
         total_loss /= n_samples
         accuracy = n_correct / n_samples
-        print("Accuracy", accuracy)
 
         self.model.train()
         return total_loss, accuracy
@@ -571,13 +569,13 @@ class TrainingInterruptSignalHandler(object):
         self.signal_raised = False
 
     def handle(self, sig, frm):
-        print(f"Signal {sig} captured.")
+        print(f'Signal {sig} captured.')
         self.tracker.manually_stopped = True
         self.signal_raised = True
 
 
 def train(cnn, params,
-          device="cuda",
+          device='cuda',
           criterion=nn.BCELoss(),
           additional_displays=None
           ):
@@ -586,8 +584,11 @@ def train(cnn, params,
         additional_displays = []
 
     batch_size = int(0.75 * len(params['trainset']))
-    if params['batch_size'] in [None, 'all']:
-        batch_size = len(params['trainset'])
+    if 'batch_size' in params:
+        if params['batch_size'] in [None, 'all']:
+            batch_size = len(params['trainset'])
+        else:
+            batch_size = params['batch_size']
 
     train_loader = torch.utils.data.DataLoader(
         params['trainset'],

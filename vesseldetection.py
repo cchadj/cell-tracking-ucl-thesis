@@ -1,4 +1,6 @@
+import skimage
 import skimage.filters
+import skimage.exposure
 from matplotlib import pylab as plt
 import numpy as np
 import cv2
@@ -22,8 +24,6 @@ def create_average_and_stdev_image(frames, masks=None):
 
 
 def detect_vessels(im, visualise_intermediate_results=False):
-
-
     # im_blurred = skimage.filters.median(im,  mode='nearest', cval=0)
     im_blurred = im
     # im_blurred = skimage.filters.gaussian(im_blurred, sigma=3)
@@ -32,9 +32,6 @@ def detect_vessels(im, visualise_intermediate_results=False):
                                           beta=.5,
                                           black_ridges=False)
     frangi_image_normalised = cv2.normalize(frangi_image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-
-    minLineLength = 1
-    maxLineGap = 150
 
     binary_threshold = skimage.filters.threshold_otsu(frangi_image_normalised, nbins=256)
     BW = np.zeros_like(frangi_image_normalised)
@@ -64,24 +61,34 @@ def detect_vessels(im, visualise_intermediate_results=False):
 
 def create_vessel_mask(vessel_image,
                        n_iterations=1,
+
+                       normalise_fangi=False,
+                       equalize_frangi_hist=False,
+
                        opening_kernel_size=5,
                        closing_kernel_size=13,
                        padding=cv2.BORDER_REPLICATE,
+                       padding_size=30,
+                       padding_value=None,
+
                        visualise_intermediate_steps=False):
-    vessel_image = vessel_image.copy()
-    vessel_image = cv2.copyMakeBorder(vessel_image, dst, top, bottom, left, right, borderType, value)
+    vessel_image = cv2.copyMakeBorder(vessel_image,
+                                      padding_size,
+                                      padding_size,
+                                      padding_size,
+                                      padding_size,
+                                      padding,
+                                      value=padding_value)
 
     try:
         opening_kernel_size = opening_kernel_size, opening_kernel_size
     except:
         assert isinstance(opening_kernel_size, tuple) and len(opening_kernel_size) == 2
-        pass
 
     try:
         closing_kernel_size = closing_kernel_size, closing_kernel_size
     except:
         assert isinstance(closing_kernel_size, tuple) and len(closing_kernel_size) == 2
-        pass
 
     opening_kernel = np.ones(opening_kernel_size, np.uint8)
     closing_kernel = np.ones(closing_kernel_size, np.uint8)
@@ -90,15 +97,15 @@ def create_vessel_mask(vessel_image,
         # sample_vessel_image_blurred = skimage.filters.gaussian(sample_vessel_image_blurred, sigma=3)
         frangi_image = skimage.filters.frangi(vessel_image_blurred,
                                               alpha=.5, beta=.5, black_ridges=False)
-        frangi_image_normalised = cv2.normalize(frangi_image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        if normalise_fangi:
+            frangi_image = cv2.normalize(frangi_image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
 
-        minLineLength = 1
-        maxLineGap = 150
+        if equalize_frangi_hist:
+            frangi_image = skimage.exposure.equalize_adapthist(frangi_image)
 
-
-        binary_threshold = skimage.filters.threshold_otsu(frangi_image_normalised, nbins=256)
-        BW = np.zeros_like(frangi_image_normalised)
-        BW[frangi_image_normalised > binary_threshold * 0.05] = 1
+        binary_threshold = skimage.filters.threshold_otsu(frangi_image, nbins=256)
+        BW = np.zeros_like(frangi_image)
+        BW[frangi_image > binary_threshold * 0.5] = 1
         BW = np.uint8(BW)
 
         # Opening get's rid of small specles
@@ -108,19 +115,19 @@ def create_vessel_mask(vessel_image,
 
         if visualise_intermediate_steps:
             fig, axes = plt.subplots(1, 6, figsize=(60, 60))
-            axes[0].imshow(vessel_image, cmap='gray')
+            axes[0].imshow(vessel_image[padding_size:-padding_size, padding_size:-padding_size], cmap='gray')
             axes[0].set_title('Vessel image', fontsize=60)
-            axes[1].imshow(vessel_image_blurred, cmap='gray')
+            axes[1].imshow(vessel_image_blurred[padding_size:-padding_size, padding_size:-padding_size], cmap='gray')
             axes[1].set_title('Blurred image', fontsize=60)
-            axes[2].imshow(frangi_image)
+            axes[2].imshow(frangi_image[padding_size:-padding_size, padding_size:-padding_size])
             axes[2].set_title('Frangi image', fontsize=60)
-            axes[3].imshow(BW)
+            axes[3].imshow(BW[padding_size:-padding_size, padding_size:-padding_size])
             axes[3].set_title('Binary image', fontsize=60)
-            axes[4].imshow(opening)
+            axes[4].imshow(opening[padding_size:-padding_size, padding_size:-padding_size])
             axes[4].set_title('Opening', fontsize=60)
-            axes[5].imshow(closing)
+            axes[5].imshow(closing[padding_size:-padding_size, padding_size:-padding_size])
             axes[5].set_title('Closing', fontsize=60)
 
         vessel_image = closing
 
-    return vessel_image
+    return vessel_image[padding_size:-padding_size, padding_size:-padding_size]
