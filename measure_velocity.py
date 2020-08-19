@@ -180,7 +180,7 @@ def find_bloodcell_correspondance(im_790, im_850, method='template_match', ret_c
 
     correlation_im = None
     if method in template_matching_methods:
-        if method is 'template_match':
+        if method == 'template_match':
             # default template matching method is cross corellation
             method = cv2.TM_CCORR_NORMED
 
@@ -190,7 +190,7 @@ def find_bloodcell_correspondance(im_790, im_850, method='template_match', ret_c
                         centre_col - 11:centre_col + 11]
         (matched_x, matched_y), correlation_im = match_template(im_850, template_cell, method)
     elif method in feature_matching_methods:
-        if method is 'surf':
+        if method == 'surf':
             im_790 = np.uint8(im_790)
             im_890 = np.uint8(im_850)
             for i in range(400, 0, -10):
@@ -201,7 +201,7 @@ def find_bloodcell_correspondance(im_790, im_850, method='template_match', ret_c
                 kp1, des1 = surf.detectAndCompute(im_790, None)
                 kp2, des2 = surf.detectAndCompute(im_890, None)
 
-                if des1 is None or des2 is None or len(kp1) is 0 or len(kp2) is 0:
+                if des1 is None or des2 is None or len(kp1) == 0 or len(kp2) == 0:
                     continue
 
                 # create BFMatcher object
@@ -209,7 +209,7 @@ def find_bloodcell_correspondance(im_790, im_850, method='template_match', ret_c
                 # Match descriptors.
                 matches = bf.match(des1, des2)
 
-                if len(matches) is 0:
+                if len(matches) == 0:
                     continue
                 # Sort them in the order of their distance.
                 matches = sorted(matches, key=lambda x: x.distance)
