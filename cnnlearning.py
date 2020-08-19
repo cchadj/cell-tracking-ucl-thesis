@@ -653,7 +653,7 @@ def train(cnn, params,
             # print("Images", images.shape)
             labels = batch[1].to(device).type(torch.long)
             output = cnn(images).type(torch.float32).to(device)
-
+    
             # print("output", output.shape, output.dtype)
             # print("labels", labels.shape, labels.dtype)
             # print("Output max", output.max())

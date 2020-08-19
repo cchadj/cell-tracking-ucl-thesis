@@ -143,7 +143,6 @@ def create_dataset_from_cell_and_no_cell_images(
         validset_ratio=0.2,
         standardize=True,
         to_grayscale=False,
-        device='cuda',
         v=False):
     if v:
         print('Creating dataset from cell and non cell patches')
@@ -153,8 +152,7 @@ def create_dataset_from_cell_and_no_cell_images(
         np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)),
                        axis=0),
         standardize=standardize,
-        to_grayscale=to_grayscale,
-        device=device
+        to_grayscale=to_grayscale
     )
 
     if v:
@@ -354,7 +352,7 @@ def get_cell_and_no_cell_patches(patch_size=(21, 21),
                                             video_sessions=video_sessions,
                                             normalize=normalise_patches,
                                             do_hist_match=False,
-                                            n_negatives_per_positive=1,
+                                            n_negatives_per_positive=n_negatives_per_positive,
                                             temporal_width=temporal_width,
                                             v=v, vv=vv)
 

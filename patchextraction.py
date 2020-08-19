@@ -277,7 +277,10 @@ def get_mask_bounds(mask):
         x_min = 0
 
         ys, xs = np.where(np.diff(mask))
-        x_max = xs.max()
+        try:
+            x_max = xs.max()
+        except:
+            print('helo')
     else:
         ys, xs = np.where(np.diff(mask))
         x_min, x_max = xs.min(), xs.max()
@@ -431,7 +434,7 @@ class SessionPatchExtractor(object):
         positions = np.delete(positions, np.where(positions[:, 1] + np.ceil(self._patch_size[0] / 2) >= frame_height - 1)[0],
                               axis=0)
 
-        if mask is not None:
+        if mask is not None and not np.all(mask):
             # remove positions whose patches get outside the mask
             x_min, x_max, y_min, y_max = get_mask_bounds(mask)
             positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0], axis=0)
