@@ -9,17 +9,15 @@ from torch.utils.data import Dataset
 class ImageDataset(torch.utils.data.Dataset):
     """ Used to create a DataLoader compliant Dataset for binary classifiers
     """
-    def __init__(self, images, standardize=True, to_grayscale=False, device='cuda'):
+    def __init__(self, images, standardize=True, to_grayscale=False, data_augmentation_transforms=None):
         """
         Args:
+          data_augmentation_transforms (list): list of torchvision transformation for data augmentation.
           images (ndarray):
               The images.
               shape -> N x height x width x channels or N x height x width. dtype should be uint8.
 
         """
-        assert device in ['cuda', 'cpu'], f'Device must be  one of {["cuda", "cpu"]}'
-        self.device = device
-
         #  Handle images ( self.images should be NxHxWxC even when C is 1, and image type should be uint8
         assert len(images.shape) == 3 or len(images.shape) == 4, \
             f'Expected images shape to be one of NxHxWxC or NxHxW. Shape given {images.shape}.'
@@ -32,12 +30,16 @@ class ImageDataset(torch.utils.data.Dataset):
         self.images = images
 
         # Handle transforms
-        transforms = []
+        # ToPILImage Takes ndarray input with shape HxWxC
+        transforms = [torchvision.transforms.ToPILImage()]
+
         if self.n_channels > 1 and to_grayscale:
-            # Takes ndarray input with shape HxWxC
-            transforms.append(torchvision.transforms.ToPILImage())
             # Grayscale takes a PILImage as an input
             transforms.append(torchvision.transforms.Grayscale(num_output_channels=1))
+
+        if data_augmentation_transforms is not None:
+            transforms.extend(data_augmentation_transforms)
+
         # ToTensor accept uint8 [0, 255] numpy image of shape H x W x C and scales to [0, 1]
         transforms.append(torchvision.transforms.ToTensor())
         if standardize:
@@ -63,7 +65,7 @@ class LabeledImageDataset(ImageDataset):
     """
     samples: List[Tuple[np.ndarray, int]]
 
-    def __init__(self, images, labels, standardize=False, to_grayscale=False, device='cuda'):
+    def __init__(self, images, labels, standardize=False, to_grayscale=False, augmentation_transformations=None):
         """
         Args:
           images (ndarray):
@@ -74,7 +76,7 @@ class LabeledImageDataset(ImageDataset):
               The corresponding list of labels.
               Should have the same length as images. (one label for each image)
         """
-        super().__init__(images, standardize, to_grayscale, device)
+        super().__init__(images, standardize, to_grayscale, augmentation_transformations)
 
         # if labels already ndarray nothing changes, if list makes to a numpy array
         labels = np.array(labels).squeeze()
@@ -95,7 +97,7 @@ class LabeledImageDataset(ImageDataset):
         return image, label
 
 
-if __name__ == '__main__':
+def test_1():
     # A test to check that the LabeledImageDataset and ImageDataset yields the same results
     from generate_datasets import get_cell_and_no_cell_patches, create_dataset_from_cell_and_no_cell_images
 
@@ -133,3 +135,44 @@ if __name__ == '__main__':
 
     for images_1, (images_2, labels) in zip(image_loader, labeled_loader):
         assert not images_1.allclose(images_2)
+
+
+def test_transformations():
+    from generate_datasets import get_cell_and_no_cell_patches, create_dataset_from_cell_and_no_cell_images
+
+    translation_pixels = 4
+    final_patch_size = 31
+    cell_image_creation_patchsize = final_patch_size + translation_pixels
+    translation_ratio = translation_pixels / cell_image_creation_patchsize
+
+    _, _, cell_images, non_cell_images, _, _, _ = get_cell_and_no_cell_patches(
+        try_load_from_cache=True,
+        patch_size=cell_image_creation_patchsize
+    )
+
+    labeled_dataset = LabeledImageDataset(cell_images[:2],
+                                          np.ones((len(cell_images[:2]), ), dtype=np.int)
+                                          , standardize=False,
+                                          augmentation_transformations=[
+                                              torchvision.transforms.RandomAffine(0, translate=(translation_ratio, translation_ratio)),
+                                              torchvision.transforms.RandomRotation(degrees=(90, -90)),
+                                              torchvision.transforms.CenterCrop(final_patch_size)
+                                          ])
+    import PIL
+    print(PIL.PILLOW_VERSION)
+    labeled_loader = torch.utils.data.DataLoader(labeled_dataset, batch_size=1, shuffle=False)
+    from plotutils import cvimshow
+
+    for _ in range(30):
+        i = 0
+        for images, labels in labeled_loader:
+            if i % 2 == 0:
+                print(i)
+                print(images[0].squeeze().shape)
+                cvimshow('window', images[0].squeeze().numpy())
+            i += 1
+
+
+if __name__ == '__main__':
+    # test_1()
+    test_transformations()
