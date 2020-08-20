@@ -162,6 +162,7 @@ def get_cell_and_no_cell_patches(
         temporal_width=0,
         mixed_channel_patches=False,
         n_negatives_per_positive=1,
+        negative_patch_search_radius=21,
         do_hist_match=False,
         standardize_dataset=True,
         dataset_to_grayscale=False,
@@ -176,6 +177,8 @@ def get_cell_and_no_cell_patches(
         created and if not then it creates it and saves it in cache.
 
     Args:
+        negative_patch_search_radius:
+            The radius of the window for the negative patches.
         patch_size (int, tuple): The patch size (height, width) or int for square.
 
         temporal_width (int):
@@ -340,6 +343,7 @@ def get_cell_and_no_cell_patches(
                                             mixed_channel_patches=mixed_channel_patches,
                                             video_sessions=video_sessions,
                                             n_negatives_per_positive=n_negatives_per_positive,
+                                            negative_patch_search_radius=negative_patch_search_radius,
                                             v=v, vv=vv)
 
         if mixed_channel_patches:
