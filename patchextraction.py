@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 import cv2
 import torch
 import matplotlib
@@ -290,6 +292,7 @@ def get_mask_bounds(mask):
 
 
 class SessionPatchExtractor(object):
+    _non_cell_positions: Dict[int, np.ndarray]
     _temporal_width: int
 
     def __init__(self,
@@ -305,6 +308,7 @@ class SessionPatchExtractor(object):
             session (VideoSession):  The video session to extract patches from
         """
         self.session = session
+        self._non_cell_positions = {}
         assert type(patch_size) is int or type(patch_size) is tuple
 
         if type(patch_size) is tuple:
@@ -352,6 +356,30 @@ class SessionPatchExtractor(object):
 
         self._non_cell_patches_oa790_at_frame = {}
         self._marked_non_cell_patches_oa790_at_frame = {}
+
+    @property
+    def non_cell_positions(self):
+        if len(self._non_cell_positions) == 0:
+            for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+                cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
+                rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
+                                                         n_points_per_rect=self.n_negatives_per_positive)
+                non_cell_positions = np.int32(np.array([rx, ry]).T)
+                non_cell_positions = self._delete_invalid_positions(non_cell_positions)
+                self._non_cell_positions[frame_idx] = non_cell_positions
+
+        return self._non_cell_positions.copy()
+
+    def visualize_patch_extraction(self, ax=None):
+        from plotutils import plot_patch_rois_at_positions
+
+        frames = self.cell_patches_oa790_at_frame
+        if ax is None:
+            _, ax = plt.subplot()
+        ax.imshow(frames[0])
+        ax.scatter(self.session.cell_positions[0])
+        plot_patch_rois_at_positions(self.session.cell_positions[0], self.patch_size)
+
 
     def _reset_positive_patches(self):
         self._cell_patches_oa790 = None
@@ -578,12 +606,15 @@ class SessionPatchExtractor(object):
             non_cell_positions = np.int32(np.array([rx, ry]).T)
             non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
 
+            self._non_cell_positions[frame_idx] = non_cell_positions
+
             cur_frame_patches = extract_patches_at_positions(frame,
                                                              non_cell_positions,
                                                              patch_size=self._patch_size,
                                                              mask=mask)
             frame_idx_to_patch_dict[frame_idx] = cur_frame_patches
             non_cell_patches = np.concatenate((non_cell_patches, cur_frame_patches), axis=0)
+
         return non_cell_patches
 
     @property
@@ -602,7 +633,8 @@ class SessionPatchExtractor(object):
                                                                                  self._marked_non_cell_patches_oa790_at_frame)
         return self._marked_non_cell_patches_oa790
 
-    def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict=None, masks=None):
+    def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict=None, masks=None,
+                              visualize_patch_extraction=False):
         cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
 
         for frame_idx, frame_cell_positions in cell_positions.items():
@@ -619,6 +651,7 @@ class SessionPatchExtractor(object):
             if frame_idx_to_patch_dict is not None:
                 frame_idx_to_patch_dict[frame_idx] = cur_frame_cell_patches
             cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)
+
         return cell_patches
 
     @property
