@@ -83,10 +83,8 @@ def create_cell_and_no_cell_patches(
             cur_session_cell_images = patch_extractor.temporal_cell_patches_oa790
             cur_session_non_cell_images = patch_extractor.temporal_non_cell_patches_oa790
         elif mixed_channel_patches:
-            # We only want the oa790 and oa850 channel as confocal channel doesn't guarantee that the bloodcell
-            # will be visible. (2nd and 3rd channel of mixed channel is oa790 and oa850, 1st is confocal)
-            cur_session_cell_images = patch_extractor.mixed_channel_cell_patches[..., 1:]
-            cur_session_non_cell_images = patch_extractor.mixed_channel_non_cell_patches[..., 1:]
+            cur_session_cell_images = patch_extractor.mixed_channel_cell_patches
+            cur_session_non_cell_images = patch_extractor.mixed_channel_non_cell_patches
         else:
             cur_session_cell_images = patch_extractor.cell_patches_oa790
             cur_session_non_cell_images = patch_extractor.non_cell_patches_oa790
@@ -102,8 +100,8 @@ def create_cell_and_no_cell_patches(
             cur_session_marked_cell_images = patch_extractor.temporal_marked_cell_patches_oa790
             cur_session_marked_non_cell_images = patch_extractor.temporal_marked_non_cell_patches_oa790
         elif mixed_channel_patches:
-            cur_session_marked_cell_images = patch_extractor.mixed_channel_marked_cell_patches[..., 1:]
-            cur_session_marked_non_cell_images = patch_extractor.mixed_channel_marked_non_cell_patches[..., 1:]
+            cur_session_marked_cell_images = patch_extractor.mixed_channel_marked_cell_patches
+            cur_session_marked_non_cell_images = patch_extractor.mixed_channel_marked_non_cell_patches
         else:
             cur_session_marked_cell_images = patch_extractor.marked_cell_patches_oa790
             cur_session_marked_non_cell_images = patch_extractor.marked_non_cell_patches_oa790
@@ -334,6 +332,14 @@ def get_cell_and_no_cell_patches(
                                             video_sessions=video_sessions,
                                             n_negatives_per_positive=n_negatives_per_positive,
                                             v=v, vv=vv)
+
+        if mixed_channel_patches:
+            # We only want the oa790 and oa850 channel as confocal channel doesn't guarantee that the bloodcell
+            # will be visible. (2nd and 3rd channel of mixed channel is oa790 and oa850, 1st is confocal)
+            cell_images = cell_images[1:]
+            non_cell_images = non_cell_images[1:]
+            cell_images_marked = cell_images_marked[1:]
+            non_cell_images_marked = non_cell_images_marked[1:]
 
         hist_match_template = cell_images[0]
         if do_hist_match:
