@@ -307,7 +307,7 @@ class VideoSession(object):
         if self._masked_frames_oa790 is None:
             # We invert the mask because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
-            self._masked_frames_oa790 = np.ma.masked_array(self.frames_oa790, ~self.mask_frames_oa790)
+            self._masked_frames_oa790 = np.ma.masked_array(self.frames_oa790, ~self.mask_frames_oa790[:len(self.frames_oa790)])
         return self._masked_frames_oa790
 
     @property
@@ -317,7 +317,7 @@ class VideoSession(object):
         if self._masked_frames_oa850 is None:
             # We invert the mask because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
-            self._masked_frames_oa850 = np.ma.masked_array(self.frames_oa850, ~self.mask_frames_oa850)
+            self._masked_frames_oa850 = np.ma.masked_array(self.frames_oa850, ~self.mask_frames_oa850[:len(self.frames_oa850)])
         return self._masked_frames_oa850
 
     @property
@@ -327,7 +327,7 @@ class VideoSession(object):
         if self._masked_frames_confocal is None:
             # We invert the mask because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
-            self._masked_frames_confocal = np.ma.masked_array(self.frames_confocal, ~self.mask_frames_confocal)
+            self._masked_frames_confocal = np.ma.masked_array(self.frames_confocal, ~self.mask_frames_confocal[:len(self.frames_oa850)])
         return self._masked_frames_confocal
 
     @property
@@ -489,10 +489,10 @@ class VideoSession(object):
         """ A dictionary with {frame index -> Nx2 x,y cell positions}.
 
         Returns the positions of the blood cells as a dictionary indexed by the frame index as is in the csv file
-        but 0 indexed instead!. To get the first frame do  session.cell_positions[0] instead of session.cell_positions[1].
+        but 0 indexed instead!. To get the first frame do  session.positions[0] instead of session.positions[1].
 
         To access ith frame's cell positions do:
-        self.cell_positions[i - 1]
+        self.positions[i - 1]
         """
         if len(self._cell_position_csv_files) == 0:
             raise Exception(f"No csv found with cell positions for video session {basename(self.video_oa790_file)}")

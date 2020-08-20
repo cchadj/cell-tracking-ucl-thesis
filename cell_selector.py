@@ -354,7 +354,7 @@ def parse_arguments():
 
     frames = get_frames_from_video(video_filename)
 
-    # cell_positions[frame_idx] will contain 2xN_cells_in_frame array for each frame
+    # positions[frame_idx] will contain 2xN_cells_in_frame array for each frame
     cell_positions = {}
     [frame_idxs, idxs] = np.unique(frame_indices, return_index=True)
     for i in range(len(frame_idxs)):

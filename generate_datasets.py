@@ -32,6 +32,7 @@ def clean_folder(folder):
 def create_cell_and_no_cell_patches(
         video_sessions=None,
         patch_size=(21, 21),
+        negative_patch_search_radius=21,
         temporal_width=0,
         mixed_channel_patches=False,
         n_negatives_per_positive=1,
@@ -77,7 +78,11 @@ def create_cell_and_no_cell_patches(
         marked_video_file = session.marked_video_oa790_file
         csv_cell_coord_files = session.cell_position_csv_files
 
-        patch_extractor = SessionPatchExtractor(session, patch_size, temporal_width, n_negatives_per_positive)
+        patch_extractor = SessionPatchExtractor(session,
+                                                patch_size=patch_size,
+                                                temporal_width=temporal_width,
+                                                n_negatives_per_positive=n_negatives_per_positive,
+                                                negative_patch_extraction_radius=negative_patch_search_radius)
 
         if vv:
             print('Unmarked', basename(video_file), '<->')

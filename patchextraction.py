@@ -1,3 +1,5 @@
+from typing import Dict, Any
+
 import cv2
 import torch
 import matplotlib
@@ -92,7 +94,7 @@ def get_patch(im, x, y, patch_size):
         patch_size = patch_size, patch_size
     height, width = patch_size
     return im[int(y - height / 2):int(y + height / 2),
-              int(x - width / 2):int(x + width / 2), ...]
+           int(x - width / 2):int(x + width / 2), ...]
 
 
 def extract_patches(img,
@@ -221,7 +223,7 @@ def extract_patches_at_positions(image,
                                    padding_width,
                                    padding_width,
                                    padding)
-    assert positions[:, 1].max() < image.shape[0] and positions[:, 0].max() < image.shape[1],\
+    assert positions[:, 1].max() < image.shape[0] and positions[:, 0].max() < image.shape[1], \
         'Position coordinates must not go outside of image boundaries.'
     if len(image.shape) == 2:
         n_channels = 1
@@ -290,20 +292,26 @@ def get_mask_bounds(mask):
 
 
 class SessionPatchExtractor(object):
+    _non_cell_positions: Dict[int, np.ndarray]
     _temporal_width: int
 
     def __init__(self,
                  session,
                  patch_size=21,
-                 negative_patch_extraction_radius=21,
                  temporal_width=1,
-                 n_negatives_per_positive=1):
+                 n_negatives_per_positive=1,
+                 negative_patch_extraction_radius=21,
+                 ):
         """
 
         Args:
             session (VideoSession):  The video session to extract patches from
         """
         self.session = session
+
+        self._cell_positions = {}
+        self._non_cell_positions = {}
+
         assert type(patch_size) is int or type(patch_size) is tuple
 
         if type(patch_size) is tuple:
@@ -315,7 +323,7 @@ class SessionPatchExtractor(object):
 
         self._negative_patch_extraction_radius = negative_patch_extraction_radius
 
-        self.n_negatives_per_positive = n_negatives_per_positive
+        self._n_negatives_per_positive = n_negatives_per_positive
         self._all_patches_oa790 = None
         self._all_patches_oa850 = None
 
@@ -337,6 +345,12 @@ class SessionPatchExtractor(object):
         self._mixed_channel_marked_cell_patches = None
         self._mixed_channel_marked_non_cell_patches = None
 
+        self._mixed_channel_cell_patches_at_frame = {}
+        self._mixed_channel_non_cell_patches_at_frame = {}
+
+        self._mixed_channel_marked_cell_patches_at_frame = {}
+        self._mixed_channel_marked_non_cell_patches_at_frame = {}
+
         self._temporal_cell_patches_oa790 = None
         self._temporal_marked_cell_patches_oa790 = None
 
@@ -344,13 +358,98 @@ class SessionPatchExtractor(object):
         self._temporal_marked_non_cell_patches_oa790 = None
 
         self._temporal_cell_patches_oa790_at_frame = {}
-        self._marked_temporal_cell_patches_oa790_at_frame = {}
+        self._temporal_marked_cell_patches_oa790_at_frame = {}
 
         self._temporal_non_cell_patches_oa790_at_frame = {}
         self._temporal_marked_non_cell_patches_oa790_at_frame = {}
 
         self._non_cell_patches_oa790_at_frame = {}
         self._marked_non_cell_patches_oa790_at_frame = {}
+
+        self._reset_patches()
+
+    @property
+    def cell_positions(self):
+        if len(self._cell_positions) == 0:
+            for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+                mask = self.session.mask_frames_oa790[frame_idx]
+                frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask)
+                self._cell_positions[frame_idx] = frame_cell_positions
+
+        return self._cell_positions
+
+    @property
+    def non_cell_positions(self):
+        if len(self._non_cell_positions) == 0:
+            for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+                mask = self.session.mask_frames_oa790[frame_idx]
+                cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
+                rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
+                                                         n_points_per_rect=self._n_negatives_per_positive)
+                non_cell_positions = np.int32(np.array([rx, ry]).T)
+                non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
+                self._non_cell_positions[frame_idx] = non_cell_positions
+
+        return self._non_cell_positions
+
+    def _visualize_patch_extraction(self,
+                                    session_frames,
+                                    frame_idx_to_cell_patch_dict,
+                                    frame_idx_to_non_cell_patch_dict,
+                                    ax=None, figsize=(50, 40), linewidth=3):
+        """ Shows the patch extraction on the first marked frame that has cell positions in it's csv.
+        """
+        from plotutils import plot_patch_rois_at_positions, plot_images_as_grid
+
+        # Find the first frame index that has marked cell position and patches were extracted
+        for frame_idx in list(self.cell_positions.keys()):
+            frame = session_frames[frame_idx]
+
+            # In case of temporal patches, if frame_idx < temporal width there aren't any patches for that frame
+            if frame_idx not in frame_idx_to_cell_patch_dict:
+                continue
+
+            cell_positions = self.cell_positions[frame_idx]
+            cell_patches = frame_idx_to_cell_patch_dict[frame_idx]
+
+            non_cell_positions = self.non_cell_positions[frame_idx]
+            non_cell_patches = frame_idx_to_non_cell_patch_dict[frame_idx]
+            break
+
+        if ax is None:
+            _, ax = plt.subplots(figsize=figsize)
+        ax.imshow(frame, cmap='gray')
+        ax.set_title(f'Frame {frame_idx}', fontsize=20)
+        plot_patch_rois_at_positions(cell_positions, self.negative_patch_extraction_radius, ax=ax,
+                                     label='Negative patch extraction radius',
+                                     edgecolor='y', pointcolor='gray', linewidth=linewidth)
+        plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax,
+                                     edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
+        plot_patch_rois_at_positions(non_cell_positions, self.patch_size, ax=ax, label='Non cell patches',
+                                     edgecolor='r', pointcolor='r', linewidth=linewidth)
+
+        plot_images_as_grid(cell_patches, title='Cell patches')
+        plot_images_as_grid(non_cell_patches, title='Non cell patches')
+        ax.legend()
+
+    def visualize_patch_extraction(self, ax=None, figsize=(50, 40), linewidth=3):
+        self._visualize_patch_extraction(self.session.marked_frames_oa790,
+                                         self.marked_cell_patches_oa790_at_frame,
+                                         self.marked_non_cell_patches_oa790_at_frame,
+                                         ax=ax, figsize=figsize, linewidth=linewidth)
+
+    def visualize_temporal_patch_extraction(self, ax=None, figsize=(50, 40), linewidth=3):
+        assert self.temporal_width == 1, 'Visualising temporal patches only works when temporal width is 1'
+        self._visualize_patch_extraction(self.session.marked_frames_oa790,
+                                         self.temporal_marked_cell_patches_oa790_at_frame,
+                                         self.temporal_marked_non_cell_patches_oa790_at_frame,
+                                         ax=ax, figsize=figsize, linewidth=linewidth)
+
+    def visualize_mixed_channel_patch_extraction(self, ax=None, figsize=(50, 40), linewidth=2):
+        self._visualize_patch_extraction(self.session.marked_frames_oa790,
+                                         self.mixed_channel_marked_cell_patches_at_frame,
+                                         self.mixed_channel_marked_non_cell_patches_at_frame,
+                                         ax=ax, figsize=figsize, linewidth=linewidth)
 
     def _reset_positive_patches(self):
         self._cell_patches_oa790 = None
@@ -363,9 +462,9 @@ class SessionPatchExtractor(object):
         self._temporal_marked_cell_patches_oa790 = None
 
         self._mixed_channel_cell_patches = None
-        self._mixed_channel_marked__cell_patches = None
-
         self._mixed_channel_marked_cell_patches = None
+
+        self._cell_positions = {}
 
     def _reset_negative_patches(self):
         self._non_cell_patches_oa790 = None
@@ -376,6 +475,8 @@ class SessionPatchExtractor(object):
 
         self._mixed_channel_non_cell_patches = None
         self._mixed_channel_marked_non_cell_patches = None
+
+        self._non_cell_positions = {}
 
     def _reset_patches(self):
         self._reset_positive_patches()
@@ -403,8 +504,16 @@ class SessionPatchExtractor(object):
     @negative_patch_extraction_radius.setter
     def negative_patch_extraction_radius(self, radius):
         assert type(radius) == int
-        self.negative_patch_extraction_radius = radius
+        self._negative_patch_extraction_radius = radius
+        self._reset_negative_patches()
 
+    @property
+    def n_negatives_per_positive(self):
+        return self._n_negatives_per_positive
+
+    @n_negatives_per_positive.setter
+    def n_negatives_per_positive(self, n):
+        self._n_negatives_per_positive = n
         self._reset_negative_patches()
 
     @property
@@ -412,6 +521,18 @@ class SessionPatchExtractor(object):
         tmp = self.temporal_cell_patches_oa790
 
         return self._temporal_cell_patches_oa790_at_frame
+
+    @property
+    def temporal_marked_cell_patches_oa790_at_frame(self):
+        tmp = self.temporal_marked_cell_patches_oa790
+
+        return self._temporal_marked_cell_patches_oa790_at_frame
+
+    @property
+    def temporal_marked_non_cell_patches_oa790_at_frame(self):
+        tmp = self.temporal_marked_non_cell_patches_oa790
+
+        return self._temporal_marked_non_cell_patches_oa790_at_frame
 
     @property
     def all_patches_oa790(self):
@@ -450,16 +571,20 @@ class SessionPatchExtractor(object):
         positions = np.int32(positions)
         positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < 0)[0], axis=0)
         positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < 0)[0], axis=0)
-        positions = np.delete(positions, np.where(positions[:, 0] + np.ceil(self._patch_size[1] / 2) >= frame_width - 1)[0],
+        positions = np.delete(positions,
+                              np.where(positions[:, 0] + np.ceil(self._patch_size[1] / 2) >= frame_width - 1)[0],
                               axis=0)
-        positions = np.delete(positions, np.where(positions[:, 1] + np.ceil(self._patch_size[0] / 2) >= frame_height - 1)[0],
+        positions = np.delete(positions,
+                              np.where(positions[:, 1] + np.ceil(self._patch_size[0] / 2) >= frame_height - 1)[0],
                               axis=0)
 
         if mask is not None and not np.all(mask):
             # remove positions whose patches get outside the mask
             x_min, x_max, y_min, y_max = get_mask_bounds(mask)
-            positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0], axis=0)
-            positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < y_min)[0], axis=0)
+            positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0],
+                                  axis=0)
+            positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < y_min)[0],
+                                  axis=0)
             positions = np.delete(positions, np.where(positions[:, 0] + np.ceil(self._patch_size[1] / 2) >= x_max)[0],
                                   axis=0)
             positions = np.delete(positions, np.where(positions[:, 1] + np.ceil(self._patch_size[0] / 2) >= y_max)[0],
@@ -467,89 +592,83 @@ class SessionPatchExtractor(object):
 
         return positions
 
-    def _extract_temporal_cell_patches(self, session_frames, cell_positions, frame_idx_to_temporal_patch_dict):
-        temporal_cell_patches = np.empty((0, *self._patch_size, 2 * self.temporal_width + 1), dtype=np.uint8)
+    def _extract_temporal_patches(self,
+                                  session_frames,
+                                  positions,
+                                  frame_idx_to_temporal_patch_dict,
+                                  masks=None):
+        n_channels = 2 * self.temporal_width + 1
+        temporal_patches = np.empty((0, *self._patch_size, n_channels), dtype=np.uint8)
 
         _, frame_height, frame_width = session_frames.shape
-        for frame_idx, frame_cell_positions in cell_positions.items():
+        for frame_idx, frame_positions in positions.items():
             if frame_idx >= len(session_frames):
                 break
+
             if frame_idx < self.temporal_width or frame_idx > len(session_frames) - self.temporal_width:
                 continue
 
-            frame_cell_positions = self._delete_invalid_positions(frame_cell_positions)
-            cur_frame_temporal_patches = np.empty((len(frame_cell_positions), *self._patch_size, 2 * self.temporal_width + 1),
-                                                  dtype=np.uint8)
-            for i, frame in enumerate(session_frames[frame_idx - self.temporal_width:frame_idx + self.temporal_width + 1]):
-                cur_frame_temporal_patches[..., i] = extract_patches_at_positions(frame, frame_cell_positions,
-                                                                                  patch_size=self._patch_size)
+            if masks is not None:
+                mask = masks[frame_idx]
 
-            frame_idx_to_temporal_patch_dict[frame_idx] = cur_frame_temporal_patches
-            temporal_cell_patches = np.concatenate((temporal_cell_patches, cur_frame_temporal_patches), axis=0)
+            frame_positions = self._delete_invalid_positions(frame_positions, mask)
+            frame_temporal_patches = np.empty((len(frame_positions), *self._patch_size, n_channels), dtype=np.uint8)
 
-        return temporal_cell_patches
+            for i, frame in enumerate(
+                    session_frames[frame_idx - self.temporal_width:frame_idx + self.temporal_width + 1]):
+                frame_temporal_patches[..., i] = extract_patches_at_positions(frame,
+                                                                              frame_positions,
+                                                                              mask=mask,
+                                                                              patch_size=self._patch_size)
 
-    def _extract_temporal_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_temporal_patch_dict):
-        temporal_non_cell_patches = np.empty((0, *self._patch_size, 2 * self.temporal_width + 1), dtype=np.uint8)
+            frame_idx_to_temporal_patch_dict[frame_idx] = frame_temporal_patches
+            temporal_patches = np.concatenate((temporal_patches, frame_temporal_patches), axis=0)
 
-        _, frame_height, frame_width = session_frames.shape
-        for frame_idx, frame_cell_positions in cell_positions.items():
-            if frame_idx >= len(session_frames):
-                break
-            if frame_idx < self.temporal_width or frame_idx > len(session_frames) - self.temporal_width:
-                continue
-
-            cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
-                                                     n_points_per_rect=self.n_negatives_per_positive)
-            non_cell_positions = np.int32(np.array([rx, ry]).T)
-            non_cell_positions = self._delete_invalid_positions(non_cell_positions)
-
-            cur_frame_temporal_patches = np.empty((len(non_cell_positions), *self._patch_size, 2 * self.temporal_width + 1),
-                                                  dtype=np.uint8)
-            for i, frame in enumerate(session_frames[frame_idx - self.temporal_width:frame_idx + self.temporal_width + 1]):
-                cur_frame_temporal_patches[..., i] = extract_patches_at_positions(frame, non_cell_positions,
-                                                                                  patch_size=self._patch_size)
-
-            frame_idx_to_temporal_patch_dict[frame_idx] = cur_frame_temporal_patches
-            temporal_non_cell_patches = np.concatenate((temporal_non_cell_patches, cur_frame_temporal_patches), axis=0)
-
-        return temporal_non_cell_patches
+        return temporal_patches
 
     @property
     def temporal_cell_patches_oa790(self):
         if self._temporal_cell_patches_oa790 is None:
             self._temporal_cell_patches_oa790_at_frame = {}
-            self._temporal_cell_patches_oa790 = self._extract_temporal_cell_patches(self.session.frames_oa790,
-                                                                                    self.session.cell_positions,
-                                                                                    self._temporal_cell_patches_oa790_at_frame)
+            self._temporal_cell_patches_oa790 = self._extract_temporal_patches(
+                self.session.frames_oa790,
+                self.cell_positions,
+                frame_idx_to_temporal_patch_dict=self._temporal_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790)
         return self._temporal_cell_patches_oa790
 
     @property
     def temporal_marked_cell_patches_oa790(self):
         if self._temporal_marked_cell_patches_oa790 is None:
-            self._temporal_marked_non_cell_patches_oa790_at_frame = {}
-            self._temporal_marked_cell_patches_oa790 = self._extract_temporal_cell_patches(self.session.marked_frames_oa790,
-                                                                                           self.session.cell_positions,
-                                                                                           self._marked_temporal_cell_patches_oa790_at_frame)
+            self._temporal_marked_cell_patches_oa790_at_frame = {}
+            self._temporal_marked_cell_patches_oa790 = self._extract_temporal_patches(
+                self.session.marked_frames_oa790,
+                self.cell_positions,
+                frame_idx_to_temporal_patch_dict=self._temporal_marked_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790)
         return self._temporal_marked_cell_patches_oa790
 
     @property
     def temporal_non_cell_patches_oa790(self):
         if self._temporal_non_cell_patches_oa790 is None:
             self._temporal_non_cell_patches_oa790_at_frame = {}
-            self._temporal_non_cell_patches_oa790 = self._extract_temporal_non_cell_patches(self.session.frames_oa790,
-                                                                                            self.session.cell_positions,
-                                                                                            self._temporal_non_cell_patches_oa790_at_frame)
+            self._temporal_non_cell_patches_oa790 = self._extract_temporal_patches(
+                self.session.frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_temporal_patch_dict=self._temporal_non_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790)
         return self._temporal_non_cell_patches_oa790
 
     @property
     def temporal_marked_non_cell_patches_oa790(self):
         if self._temporal_marked_non_cell_patches_oa790 is None:
             self._temporal_marked_non_cell_patches_oa790_at_frame = {}
-            self._temporal_marked_non_cell_patches_oa790 = self._extract_temporal_non_cell_patches(self.session.marked_frames_oa790,
-                                                                                                   self.session.cell_positions,
-                                                                                                   self._temporal_marked_non_cell_patches_oa790_at_frame)
+            self._temporal_marked_non_cell_patches_oa790 = self._extract_temporal_patches(
+                self.session.marked_frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_temporal_patch_dict=self._temporal_marked_non_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790,
+            )
         return self._temporal_marked_non_cell_patches_oa790
 
     @property
@@ -557,54 +676,46 @@ class SessionPatchExtractor(object):
         # TODO: extract all temporal patches, from 2nd frame to the penultimate frame.
         raise NotImplemented
 
-    def _extract_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict, masks=None):
-        non_cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
-
-        for frame_idx, frame_cell_positions in cell_positions.items():
-            if frame_idx >= len(session_frames):
-                break
-
-            mask = None
-            if masks is not None:
-                mask = masks[frame_idx]
-
-            frame = session_frames[frame_idx]
-            # get non cell positions at random points along the perimeter of the patch.
-            cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
-                                                     n_points_per_rect=self.n_negatives_per_positive)
-
-            non_cell_positions = np.int32(np.array([rx, ry]).T)
-            non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
-
-            cur_frame_patches = extract_patches_at_positions(frame,
-                                                             non_cell_positions,
-                                                             patch_size=self._patch_size,
-                                                             mask=mask)
-            frame_idx_to_patch_dict[frame_idx] = cur_frame_patches
-            non_cell_patches = np.concatenate((non_cell_patches, cur_frame_patches), axis=0)
-        return non_cell_patches
-
     @property
     def non_cell_patches_oa790(self):
         if self._non_cell_patches_oa790 is None:
-            self._non_cell_patches_oa790 = self._extract_non_cell_patches(self.session.frames_oa790,
-                                                                          self.session.cell_positions,
-                                                                          self._non_cell_patches_oa790_at_frame)
+            self._non_cell_patches_oa790 = self._extract_patches_at_positions(
+                self.session.frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_patch_dict=self._non_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790
+            )
         return self._non_cell_patches_oa790
 
     @property
     def marked_non_cell_patches_oa790(self):
         if self._marked_non_cell_patches_oa790 is None:
-            self._marked_non_cell_patches_oa790 = self._extract_non_cell_patches(self.session.marked_frames_oa790,
-                                                                                 self.session.cell_positions,
-                                                                                 self._marked_non_cell_patches_oa790_at_frame)
+            self._marked_non_cell_patches_oa790 = self._extract_patches_at_positions(
+                self.session.marked_frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_patch_dict=self._marked_non_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790)
+
         return self._marked_non_cell_patches_oa790
 
-    def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict=None, masks=None):
-        cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
+    def _extract_patches_at_positions(self, session_frames, positions, frame_idx_to_patch_dict=None, masks=None):
+        """ Extracts patches for each position and frame in positions dictionary
 
-        for frame_idx, frame_cell_positions in cell_positions.items():
+        Args:
+            session_frames: The frames to extract the patches from
+            positions: A DICTIONARY frame index -> N x 2  of positions per for frames at each frame index
+            frame_idx_to_patch_dict:
+                A dictionary to get the patches from that frame.
+                Pass an empty dictionary to fill.
+            masks:
+                The mask of each frame. If position + patch size goes outside the mask the position is discarded.
+
+        Returns:
+            Nx patch height x patch width (x C) patches
+        """
+        patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
+
+        for frame_idx, frame_cell_positions in positions.items():
             if frame_idx >= len(session_frames):
                 break
             frame = session_frames[frame_idx]
@@ -614,28 +725,31 @@ class SessionPatchExtractor(object):
 
             frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask)
 
-            cur_frame_cell_patches = extract_patches_at_positions(frame, frame_cell_positions, mask=mask, patch_size=self._patch_size)
+            cur_frame_cell_patches = extract_patches_at_positions(frame, frame_cell_positions, mask=mask,
+                                                                  patch_size=self._patch_size)
             if frame_idx_to_patch_dict is not None:
                 frame_idx_to_patch_dict[frame_idx] = cur_frame_cell_patches
-            cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)
-        return cell_patches
+
+            patches = np.concatenate((patches, cur_frame_cell_patches), axis=0)
+
+        return patches
 
     @property
     def cell_patches_oa790(self):
         if self._cell_patches_oa790 is None:
-            self._cell_patches_oa790 = self._extract_cell_patches(self.session.frames_oa790,
-                                                                  self.session.cell_positions,
-                                                                  self._cell_patches_oa790_at_frame,
-                                                                  masks=self.session.mask_frames_oa790)
+            self._cell_patches_oa790 = self._extract_patches_at_positions(self.session.frames_oa790,
+                                                                          self.cell_positions,
+                                                                          self._cell_patches_oa790_at_frame,
+                                                                          masks=self.session.mask_frames_oa790)
         return self._cell_patches_oa790
 
     @property
     def marked_cell_patches_oa790(self):
         if self._marked_cell_patches_oa790 is None:
-            self._marked_cell_patches_oa790 = self._extract_cell_patches(self.session.marked_frames_oa790,
-                                                                         self.session.cell_positions,
-                                                                         self._marked_cell_patches_oa790_at_frame,
-                                                                         masks=self.session.mask_frames_oa790)
+            self._marked_cell_patches_oa790 = self._extract_patches_at_positions(self.session.marked_frames_oa790,
+                                                                                 self.cell_positions,
+                                                                                 self._marked_cell_patches_oa790_at_frame,
+                                                                                 masks=self.session.mask_frames_oa790)
         return self._marked_cell_patches_oa790
 
     @property
@@ -643,7 +757,7 @@ class SessionPatchExtractor(object):
         raise NotImplementedError('Cell patches only for oa790 channel currently')
         # if self._cell_patches_oa850 is None:
         #     self._cell_patches_oa850 = self._extract_cell_patches(self.session.frames_oa850,
-        #                                                           self.session.cell_positions)
+        #                                                           self.session.positions)
         # return self._cell_patches_oa850
 
     @property
@@ -651,7 +765,7 @@ class SessionPatchExtractor(object):
         raise NotImplementedError('Cell patches only for oa790 channel currently')
         # if self._marked_cell_patches_oa850 is None:
         #     self._marked_cell_patches_oa850 = self._extract_cell_patches(self.session.marked_frames_oa850,
-        #                                                                  self.session.cell_positions)
+        #                                                                  self.session.positions)
         # return self._marked_cell_patches_oa850
 
     @property
@@ -680,7 +794,11 @@ class SessionPatchExtractor(object):
         tmp = self.marked_non_cell_patches_oa790
         return self._marked_non_cell_patches_oa790_at_frame
 
-    def _extract_mixed_channel_cell_patches(self, frames_oa790):
+    def _extract_mixed_channel_cell_patches(self,
+                                            frames_oa790,
+                                            positions,
+                                            frame_idx_to_patch_dict=None
+                                            ):
         from measure_velocity import ImageRegistator
         frames_oa850 = self.session.frames_oa850
         frames_confocal = self.session.frames_confocal
@@ -695,22 +813,41 @@ class SessionPatchExtractor(object):
             registered_frames_oa850[i] = ir.apply_registration(frame)
             registered_mask_frames_oa850[i] = ir.apply_registration(mask)
 
-        cell_patches_confocal = self._extract_cell_patches(
+        frame_idx_to_confocal_patches = {}
+        frame_idx_to_oa790_patches = {}
+        frame_idx_to_oa850_patches = {}
+        cell_patches_confocal = self._extract_patches_at_positions(
             frames_confocal,
-            self.session.cell_positions,
+            positions,
+            frame_idx_to_patch_dict=frame_idx_to_confocal_patches,
             masks=registered_mask_frames_oa850
         )
-        cell_patches_oa790 = self._extract_cell_patches(
+        cell_patches_oa790 = self._extract_patches_at_positions(
             frames_oa790,
-            self.session.cell_positions,
+            positions,
+            frame_idx_to_patch_dict=frame_idx_to_oa790_patches,
             masks=registered_mask_frames_oa850
         )
-        cell_patches_oa850 = self._extract_cell_patches(
+        cell_patches_oa850 = self._extract_patches_at_positions(
             registered_frames_oa850,
-            self.session.cell_positions,
+            positions,
+            frame_idx_to_patch_dict=frame_idx_to_oa850_patches,
             masks=registered_mask_frames_oa850
         )
         assert len(cell_patches_oa790) == len(cell_patches_oa850), 'Not the same of patches extracted'
+
+        if frame_idx_to_patch_dict is not None:
+            for frame_idx in frame_idx_to_oa850_patches.keys():
+                patches_confocal = frame_idx_to_confocal_patches[frame_idx]
+                patches_oa790 = frame_idx_to_oa790_patches[frame_idx]
+                patches_oa850 = frame_idx_to_oa850_patches[frame_idx]
+
+                mixed_channel_patches = np.empty([*patches_confocal.shape, 3], dtype=frames_oa790.dtype)
+                mixed_channel_patches[..., 0] = patches_confocal
+                mixed_channel_patches[..., 1] = patches_oa790
+                mixed_channel_patches[..., 2] = patches_oa850
+
+                frame_idx_to_patch_dict[frame_idx] = mixed_channel_patches
 
         mixed_channel_cell_patches = np.empty([*cell_patches_oa790.shape, 3], dtype=frames_oa790.dtype)
         mixed_channel_cell_patches[..., 0] = cell_patches_confocal
@@ -719,61 +856,29 @@ class SessionPatchExtractor(object):
 
         return mixed_channel_cell_patches
 
-    def _extract_mixed_channel_non_cell_patches(self, frames_oa790):
-        from measure_velocity import ImageRegistator
-        frames_oa850 = self.session.frames_oa850
-        frames_confocal = self.session.frames_confocal
-        masks_oa850 = self.session.mask_frames_oa850
+    @property
+    def mixed_channel_cell_patches_at_frame(self):
+        tmp = self.mixed_channel_cell_patches
 
-        ir = ImageRegistator(source=self.session.vessel_mask_oa850, target=self.session.vessel_mask_confocal)
-        ir.register_vertically()
+        return self._mixed_channel_cell_patches_at_frame
 
-        # Register all oa850 frames
-        registered_frames_oa850 = np.empty_like(frames_oa850)
-        registered_mask_frames_oa850 = np.empty_like(masks_oa850)
-        for i, (frame, mask) in enumerate(zip(frames_oa850, masks_oa850)):
-            registered_frames_oa850[i] = ir.apply_registration(frame)
-            registered_mask_frames_oa850[i] = ir.apply_registration(mask)
+    @property
+    def mixed_channel_non_cell_patches_at_frame(self):
+        tmp = self.mixed_channel_non_cell_patches
 
-        non_cell_patches_oa790 = np.zeros((0, *self._patch_size), dtype=frames_oa790.dtype)
-        non_cell_patches_oa850 = np.zeros((0, *self._patch_size), dtype=frames_oa850.dtype)
-        non_cell_patches_confocal = np.zeros((0, *self._patch_size), dtype=frames_confocal.dtype)
+        return self._mixed_channel_non_cell_patches_at_frame
 
-        for frame_idx, frame_cell_positions in self.session.cell_positions.items():
-            if frame_idx >= len(frames_oa790):
-                break
+    @property
+    def mixed_channel_marked_cell_patches_at_frame(self):
+        tmp = self.mixed_channel_marked_cell_patches
 
-            frame_oa790 = frames_oa790[frame_idx]
-            frame_confocal = frames_confocal[frame_idx]
-            frame_oa850 = registered_frames_oa850[frame_idx]
-            mask = registered_mask_frames_oa850[frame_idx]
+        return self._mixed_channel_marked_cell_patches_at_frame
 
-            # get non cell positions at random points along the perimeter of the patch.
-            cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
-                                                     n_points_per_rect=self.n_negatives_per_positive)
+    @property
+    def mixed_channel_marked_non_cell_patches_at_frame(self):
+        tmp = self.mixed_channel_marked_non_cell_patches
 
-            non_cell_positions = np.int32(np.array([rx, ry]).T)
-            non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask=mask)
-
-            cur_frame_patches_confocal = extract_patches_at_positions(frame_confocal, non_cell_positions,
-                                                                     patch_size=self._patch_size, mask=mask)
-            cur_frame_patches_oa790 = extract_patches_at_positions(frame_oa790, non_cell_positions,
-                                                                   patch_size=self._patch_size, mask=mask)
-            cur_frame_patches_oa850 = extract_patches_at_positions(frame_oa850, non_cell_positions,
-                                                                   patch_size=self._patch_size, mask=mask)
-
-            non_cell_patches_confocal = np.concatenate((non_cell_patches_confocal, cur_frame_patches_confocal), axis=0)
-            non_cell_patches_oa790 = np.concatenate((non_cell_patches_oa790, cur_frame_patches_oa790), axis=0)
-            non_cell_patches_oa850 = np.concatenate((non_cell_patches_oa850, cur_frame_patches_oa850), axis=0)
-
-        assert len(non_cell_patches_oa790) == len(non_cell_patches_oa850), 'Not the same of patches extracted'
-        mixed_channel_non_cell_patches = np.empty([*non_cell_patches_oa790.shape, 3], dtype=frame_oa790.dtype)
-        mixed_channel_non_cell_patches[..., 0] = non_cell_patches_confocal
-        mixed_channel_non_cell_patches[..., 1] = non_cell_patches_oa790
-        mixed_channel_non_cell_patches[..., 2] = non_cell_patches_oa850
-
-        return mixed_channel_non_cell_patches
+        return self._mixed_channel_marked_non_cell_patches_at_frame
 
     @property
     def mixed_channel_cell_patches(self):
@@ -785,26 +890,46 @@ class SessionPatchExtractor(object):
             third channel is oa850,
         """
         if self._mixed_channel_cell_patches is None:
-            self._mixed_channel_cell_patches = self._extract_mixed_channel_cell_patches(self.session.frames_oa790)
+            self._mixed_channel_cell_patches_at_frame = {}
+            self._mixed_channel_cell_patches = self._extract_mixed_channel_cell_patches(
+                self.session.frames_oa790,
+                self.cell_positions,
+                frame_idx_to_patch_dict=self._mixed_channel_cell_patches_at_frame
+            )
         return self._mixed_channel_cell_patches
 
     @property
     def mixed_channel_marked_cell_patches(self):
         if self._mixed_channel_marked_cell_patches is None:
-            self._mixed_channel_marked_cell_patches = self._extract_mixed_channel_cell_patches(self.session.marked_frames_oa790)
+            self._mixed_channel_marked_cell_patches_at_frame = {}
+            self._mixed_channel_marked_cell_patches = self._extract_mixed_channel_cell_patches(
+                self.session.marked_frames_oa790,
+                self.cell_positions,
+                frame_idx_to_patch_dict=self._mixed_channel_marked_cell_patches_at_frame,
+            )
 
         return self._mixed_channel_marked_cell_patches
 
     @property
     def mixed_channel_non_cell_patches(self):
         if self._mixed_channel_non_cell_patches is None:
-            self._mixed_channel_non_cell_patches = self._extract_mixed_channel_non_cell_patches(self.session.frames_oa790)
+            self._mixed_channel_non_cell_patches_at_frame = {}
+            self._mixed_channel_non_cell_patches = self._extract_mixed_channel_cell_patches(
+                self.session.frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_patch_dict=self._mixed_channel_non_cell_patches_at_frame,
+            )
         return self._mixed_channel_non_cell_patches
 
     @property
     def mixed_channel_marked_non_cell_patches(self):
         if self._mixed_channel_marked_non_cell_patches is None:
-            self._mixed_channel_marked_non_cell_patches = self._extract_mixed_channel_non_cell_patches(self.session.marked_frames_oa790)
+            self._mixed_channel_marked_non_cell_patches_at_frame = {}
+            self._mixed_channel_marked_non_cell_patches = self._extract_mixed_channel_cell_patches(
+                self.session.marked_frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_patch_dict=self._mixed_channel_marked_non_cell_patches_at_frame,
+            )
         return self._mixed_channel_marked_non_cell_patches
 
 
