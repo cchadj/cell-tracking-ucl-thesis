@@ -47,11 +47,15 @@ def create_cell_and_no_cell_patches(
             'Make sure that either temporal width is greater than 0 or mixed channel patches is True.'
 
     if temporal_width > 0:
-        cell_images = np.zeros([0, *patch_size, 2 * temporal_width + 1], dtype=np.uint8)
+        # for example, for temporal width 1 we have 1 patch for the next frame 1 for the previous and 1 for current (3).
+        n_channels = 2 * temporal_width + 1
     elif mixed_channel_patches:
-        cell_images = np.zeros([0, *patch_size, 2], dtype=np.uint8)
+        # first channel is confocal, second is oa790, third is oa850
+        n_channels = 3
     else:
-        cell_images = np.zeros([0, *patch_size], dtype=np.uint8)
+        n_channels = 1
+
+    cell_images = np.zeros([0, *patch_size, n_channels], dtype=np.uint8).squeeze()
     non_cell_images = np.zeros_like(cell_images)
 
     cell_images_marked = np.zeros_like(cell_images)
