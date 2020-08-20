@@ -295,9 +295,10 @@ class SessionPatchExtractor(object):
     def __init__(self,
                  session,
                  patch_size=21,
-                 negative_patch_extraction_radius=21,
                  temporal_width=1,
-                 n_negatives_per_positive=1):
+                 n_negatives_per_positive=1,
+                 negative_patch_extraction_radius=21,
+                 ):
         """
 
         Args:

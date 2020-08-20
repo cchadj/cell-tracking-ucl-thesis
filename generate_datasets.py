@@ -77,7 +77,10 @@ def create_cell_and_no_cell_patches(
         marked_video_file = session.marked_video_oa790_file
         csv_cell_coord_files = session.cell_position_csv_files
 
-        patch_extractor = SessionPatchExtractor(session, patch_size, temporal_width, n_negatives_per_positive)
+        patch_extractor = SessionPatchExtractor(session,
+                                                patch_size=patch_size,
+                                                temporal_width=temporal_width,
+                                                n_negatives_per_positive=n_negatives_per_positive)
 
         if vv:
             print('Unmarked', basename(video_file), '<->')
