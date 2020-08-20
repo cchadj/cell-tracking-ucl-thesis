@@ -20,7 +20,7 @@ def extract_value_from_string(string, value_prefix, delimiter='_'):
     val = None
     for i, s in enumerate(strings):
         if s == value_prefix:
-            # val = float(re.findall(r"[-+]?\d*\.\d+|\d+", strings[i + 1])[0])
+            # radius = float(re.findall(r"[-+]?\d*\.\d+|\d+", strings[i + 1])[0])
             val = strings[i + 1]
             break
 

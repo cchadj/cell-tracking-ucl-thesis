@@ -280,7 +280,7 @@ def get_mask_bounds(mask):
         try:
             x_max = xs.max()
         except:
-            print('helo')
+            print('hello')
     else:
         ys, xs = np.where(np.diff(mask))
         x_min, x_max = xs.min(), xs.max()
@@ -295,6 +295,7 @@ class SessionPatchExtractor(object):
     def __init__(self,
                  session,
                  patch_size=21,
+                 negative_patch_extraction_radius=21,
                  temporal_width=1,
                  n_negatives_per_positive=1):
         """
@@ -311,6 +312,8 @@ class SessionPatchExtractor(object):
             self._patch_size = patch_size, patch_size
 
         self.temporal_width = temporal_width
+
+        self._negative_patch_extraction_radius = negative_patch_extraction_radius
 
         self.n_negatives_per_positive = n_negatives_per_positive
         self._all_patches_oa790 = None
@@ -349,16 +352,9 @@ class SessionPatchExtractor(object):
         self._non_cell_patches_oa790_at_frame = {}
         self._marked_non_cell_patches_oa790_at_frame = {}
 
-    @property
-    def patch_size(self):
-        return self._patch_size
-
-    def _reset_patches(self):
+    def _reset_positive_patches(self):
         self._cell_patches_oa790 = None
-
         self._marked_cell_patches_oa790 = None
-        self._non_cell_patches_oa790 = None
-        self._marked_non_cell_patches_oa790 = None
 
         self._cell_patches_oa850 = None
         self._marked_cell_patches_oa850 = None
@@ -366,14 +362,28 @@ class SessionPatchExtractor(object):
         self._temporal_cell_patches_oa790 = None
         self._temporal_marked_cell_patches_oa790 = None
 
+        self._mixed_channel_cell_patches = None
+        self._mixed_channel_marked__cell_patches = None
+
+        self._mixed_channel_marked_cell_patches = None
+
+    def _reset_negative_patches(self):
+        self._non_cell_patches_oa790 = None
+        self._marked_non_cell_patches_oa790 = None
+
         self._temporal_non_cell_patches_oa790 = None
         self._temporal_marked_non_cell_patches_oa790 = None
 
-        self._mixed_channel_cell_patches = None
         self._mixed_channel_non_cell_patches = None
-
-        self._mixed_channel_marked_cell_patches = None
         self._mixed_channel_marked_non_cell_patches = None
+
+    def _reset_patches(self):
+        self._reset_positive_patches()
+        self._reset_negative_patches()
+
+    @property
+    def patch_size(self):
+        return self._patch_size
 
     @patch_size.setter
     def patch_size(self, patch_size):
@@ -384,7 +394,18 @@ class SessionPatchExtractor(object):
         if type(patch_size) is int:
             self._patch_size = patch_size, patch_size
 
-        self._reset_patches()
+        self._reset_positive_patches()
+
+    @property
+    def negative_patch_extraction_radius(self):
+        return self._negative_patch_extraction_radius
+
+    @negative_patch_extraction_radius.setter
+    def negative_patch_extraction_radius(self, radius):
+        assert type(radius) == int
+        self.negative_patch_extraction_radius = radius
+
+        self._reset_negative_patches()
 
     @property
     def temporal_cell_patches_oa790_at_frame(self):
@@ -479,7 +500,7 @@ class SessionPatchExtractor(object):
                 continue
 
             cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self._patch_size,
+            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                      n_points_per_rect=self.n_negatives_per_positive)
             non_cell_positions = np.int32(np.array([rx, ry]).T)
             non_cell_positions = self._delete_invalid_positions(non_cell_positions)
@@ -550,7 +571,7 @@ class SessionPatchExtractor(object):
             frame = session_frames[frame_idx]
             # get non cell positions at random points along the perimeter of the patch.
             cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self._patch_size,
+            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                      n_points_per_rect=self.n_negatives_per_positive)
 
             non_cell_positions = np.int32(np.array([rx, ry]).T)
@@ -729,7 +750,7 @@ class SessionPatchExtractor(object):
 
             # get non cell positions at random points along the perimeter of the patch.
             cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self._patch_size,
+            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                      n_points_per_rect=self.n_negatives_per_positive)
 
             non_cell_positions = np.int32(np.array([rx, ry]).T)
