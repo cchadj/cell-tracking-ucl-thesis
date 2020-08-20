@@ -451,6 +451,8 @@ class SessionPatchExtractor(object):
 
         _, frame_height, frame_width = session_frames.shape
         for frame_idx, frame_cell_positions in cell_positions.items():
+            if frame_idx >= len(session_frames):
+                break
             if frame_idx < self.temporal_width or frame_idx > len(session_frames) - self.temporal_width:
                 continue
 
@@ -471,6 +473,8 @@ class SessionPatchExtractor(object):
 
         _, frame_height, frame_width = session_frames.shape
         for frame_idx, frame_cell_positions in cell_positions.items():
+            if frame_idx >= len(session_frames):
+                break
             if frame_idx < self.temporal_width or frame_idx > len(session_frames) - self.temporal_width:
                 continue
 
@@ -536,6 +540,9 @@ class SessionPatchExtractor(object):
         non_cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
 
         for frame_idx, frame_cell_positions in cell_positions.items():
+            if frame_idx >= len(session_frames):
+                break
+
             mask = None
             if masks is not None:
                 mask = masks[frame_idx]
@@ -577,6 +584,8 @@ class SessionPatchExtractor(object):
         cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
 
         for frame_idx, frame_cell_positions in cell_positions.items():
+            if frame_idx >= len(session_frames):
+                break
             frame = session_frames[frame_idx]
             mask = None
             if masks is not None:
@@ -710,6 +719,9 @@ class SessionPatchExtractor(object):
         non_cell_patches_confocal = np.zeros((0, *self._patch_size), dtype=frames_confocal.dtype)
 
         for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+            if frame_idx >= len(frames_oa790):
+                break
+
             frame_oa790 = frames_oa790[frame_idx]
             frame_confocal = frames_confocal[frame_idx]
             frame_oa850 = registered_frames_oa850[frame_idx]
