@@ -370,16 +370,33 @@ class SessionPatchExtractor(object):
 
         return self._non_cell_positions.copy()
 
-    def visualize_patch_extraction(self, ax=None):
-        from plotutils import plot_patch_rois_at_positions
+    def visualize_patch_extraction(self, ax=None, figsize=(50, 40), linewidth=2):
+        """ Shows the patch extraction on the first marked frame that has cell positions in it's csv.
+        """
+        from plotutils import plot_patch_rois_at_positions, plot_images_as_grid
 
-        frames = self.cell_patches_oa790_at_frame
+        frame_idx = list(self.session.cell_positions.keys())[0]
+        frame = self.session.marked_frames_oa790[frame_idx]
+
+        cell_positions = self.session.cell_positions[frame_idx]
+        cell_patches = self.marked_cell_patches_oa790_at_frame[frame_idx]
+
+        non_cell_positions = self.non_cell_positions[frame_idx]
+        non_cell_patches = self.marked_non_cell_patches_oa790_at_frame[frame_idx]
+
         if ax is None:
-            _, ax = plt.subplot()
-        ax.imshow(frames[0])
-        ax.scatter(self.session.cell_positions[0])
-        plot_patch_rois_at_positions(self.session.cell_positions[0], self.patch_size)
+            _, ax = plt.subplots(figsize=figsize)
+        ax.imshow(frame, cmap='gray')
+        plot_patch_rois_at_positions(cell_positions, self.negative_patch_extraction_radius, ax=ax, label='Negative patch extraction radius',
+                                     edgecolor='gray', pointcolor='gray', linewidth=linewidth)
+        plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax,
+                                     edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
+        plot_patch_rois_at_positions(non_cell_positions, self.patch_size, ax=ax, label='Non cell patches',
+                                     edgecolor='r', pointcolor='r', linewidth=linewidth)
 
+        plot_images_as_grid(cell_patches, title='Cell patches')
+        plot_images_as_grid(non_cell_patches, title='Non cell patches')
+        ax.legend()
 
     def _reset_positive_patches(self):
         self._cell_patches_oa790 = None
@@ -405,6 +422,8 @@ class SessionPatchExtractor(object):
 
         self._mixed_channel_non_cell_patches = None
         self._mixed_channel_marked_non_cell_patches = None
+
+        self._non_cell_positions = {}
 
     def _reset_patches(self):
         self._reset_positive_patches()
@@ -586,58 +605,46 @@ class SessionPatchExtractor(object):
         # TODO: extract all temporal patches, from 2nd frame to the penultimate frame.
         raise NotImplemented
 
-    def _extract_non_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict, masks=None):
-        non_cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
-
-        for frame_idx, frame_cell_positions in cell_positions.items():
-            if frame_idx >= len(session_frames):
-                break
-
-            mask = None
-            if masks is not None:
-                mask = masks[frame_idx]
-
-            frame = session_frames[frame_idx]
-            # get non cell positions at random points along the perimeter of the patch.
-            cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
-            rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
-                                                     n_points_per_rect=self.n_negatives_per_positive)
-
-            non_cell_positions = np.int32(np.array([rx, ry]).T)
-            non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
-
-            self._non_cell_positions[frame_idx] = non_cell_positions
-
-            cur_frame_patches = extract_patches_at_positions(frame,
-                                                             non_cell_positions,
-                                                             patch_size=self._patch_size,
-                                                             mask=mask)
-            frame_idx_to_patch_dict[frame_idx] = cur_frame_patches
-            non_cell_patches = np.concatenate((non_cell_patches, cur_frame_patches), axis=0)
-
-        return non_cell_patches
-
     @property
     def non_cell_patches_oa790(self):
         if self._non_cell_patches_oa790 is None:
-            self._non_cell_patches_oa790 = self._extract_non_cell_patches(self.session.frames_oa790,
-                                                                          self.session.cell_positions,
-                                                                          self._non_cell_patches_oa790_at_frame)
+            self._non_cell_patches_oa790 = self._extract_patches_at_positions(
+                self.session.frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_patch_dict=self._non_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790
+            )
         return self._non_cell_patches_oa790
 
     @property
     def marked_non_cell_patches_oa790(self):
         if self._marked_non_cell_patches_oa790 is None:
-            self._marked_non_cell_patches_oa790 = self._extract_non_cell_patches(self.session.marked_frames_oa790,
-                                                                                 self.session.cell_positions,
-                                                                                 self._marked_non_cell_patches_oa790_at_frame)
+            self._marked_non_cell_patches_oa790 = self._extract_patches_at_positions(
+                self.session.marked_frames_oa790,
+                self.non_cell_positions,
+                frame_idx_to_patch_dict=self._marked_non_cell_patches_oa790_at_frame,
+                masks=self.session.mask_frames_oa790)
+
         return self._marked_non_cell_patches_oa790
 
-    def _extract_cell_patches(self, session_frames, cell_positions, frame_idx_to_patch_dict=None, masks=None,
-                              visualize_patch_extraction=False):
-        cell_patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
+    def _extract_patches_at_positions(self, session_frames, positions, frame_idx_to_patch_dict=None, masks=None):
+        """ Extracts patches for each position and frame in positions dictionary
 
-        for frame_idx, frame_cell_positions in cell_positions.items():
+        Args:
+            session_frames: The frames to extract the patches from
+            positions: A DICTIONARY frame index -> N x 2  of positions per for frames at each frame index
+            frame_idx_to_patch_dict:
+                A dictionary to get the patches from that frame.
+                Pass an empty dictionary to fill.
+            masks:
+                The mask of each frame. If position + patch size goes outside the mask the position is discarded.
+
+        Returns:
+            Nx patch height x patch width (x C) patches
+        """
+        patches = np.zeros((0, *self._patch_size), dtype=session_frames.dtype)
+
+        for frame_idx, frame_cell_positions in positions.items():
             if frame_idx >= len(session_frames):
                 break
             frame = session_frames[frame_idx]
@@ -650,26 +657,27 @@ class SessionPatchExtractor(object):
             cur_frame_cell_patches = extract_patches_at_positions(frame, frame_cell_positions, mask=mask, patch_size=self._patch_size)
             if frame_idx_to_patch_dict is not None:
                 frame_idx_to_patch_dict[frame_idx] = cur_frame_cell_patches
-            cell_patches = np.concatenate((cell_patches, cur_frame_cell_patches), axis=0)
 
-        return cell_patches
+            patches = np.concatenate((patches, cur_frame_cell_patches), axis=0)
+
+        return patches
 
     @property
     def cell_patches_oa790(self):
         if self._cell_patches_oa790 is None:
-            self._cell_patches_oa790 = self._extract_cell_patches(self.session.frames_oa790,
-                                                                  self.session.cell_positions,
-                                                                  self._cell_patches_oa790_at_frame,
-                                                                  masks=self.session.mask_frames_oa790)
+            self._cell_patches_oa790 = self._extract_patches_at_positions(self.session.frames_oa790,
+                                                                          self.session.cell_positions,
+                                                                          self._cell_patches_oa790_at_frame,
+                                                                          masks=self.session.mask_frames_oa790)
         return self._cell_patches_oa790
 
     @property
     def marked_cell_patches_oa790(self):
         if self._marked_cell_patches_oa790 is None:
-            self._marked_cell_patches_oa790 = self._extract_cell_patches(self.session.marked_frames_oa790,
-                                                                         self.session.cell_positions,
-                                                                         self._marked_cell_patches_oa790_at_frame,
-                                                                         masks=self.session.mask_frames_oa790)
+            self._marked_cell_patches_oa790 = self._extract_patches_at_positions(self.session.marked_frames_oa790,
+                                                                                 self.session.cell_positions,
+                                                                                 self._marked_cell_patches_oa790_at_frame,
+                                                                                 masks=self.session.mask_frames_oa790)
         return self._marked_cell_patches_oa790
 
     @property
@@ -677,7 +685,7 @@ class SessionPatchExtractor(object):
         raise NotImplementedError('Cell patches only for oa790 channel currently')
         # if self._cell_patches_oa850 is None:
         #     self._cell_patches_oa850 = self._extract_cell_patches(self.session.frames_oa850,
-        #                                                           self.session.cell_positions)
+        #                                                           self.session.positions)
         # return self._cell_patches_oa850
 
     @property
@@ -685,7 +693,7 @@ class SessionPatchExtractor(object):
         raise NotImplementedError('Cell patches only for oa790 channel currently')
         # if self._marked_cell_patches_oa850 is None:
         #     self._marked_cell_patches_oa850 = self._extract_cell_patches(self.session.marked_frames_oa850,
-        #                                                                  self.session.cell_positions)
+        #                                                                  self.session.positions)
         # return self._marked_cell_patches_oa850
 
     @property
@@ -729,17 +737,17 @@ class SessionPatchExtractor(object):
             registered_frames_oa850[i] = ir.apply_registration(frame)
             registered_mask_frames_oa850[i] = ir.apply_registration(mask)
 
-        cell_patches_confocal = self._extract_cell_patches(
+        cell_patches_confocal = self._extract_patches_at_positions(
             frames_confocal,
             self.session.cell_positions,
             masks=registered_mask_frames_oa850
         )
-        cell_patches_oa790 = self._extract_cell_patches(
+        cell_patches_oa790 = self._extract_patches_at_positions(
             frames_oa790,
             self.session.cell_positions,
             masks=registered_mask_frames_oa850
         )
-        cell_patches_oa850 = self._extract_cell_patches(
+        cell_patches_oa850 = self._extract_patches_at_positions(
             registered_frames_oa850,
             self.session.cell_positions,
             masks=registered_mask_frames_oa850

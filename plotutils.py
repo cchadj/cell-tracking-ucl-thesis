@@ -45,7 +45,7 @@ def no_ticks(axes=None):
 
 def plot_patch_rois_at_positions(positions, patch_size=(21, 21),
                                  edgecolor='r', pointcolor='b', label=None,
-                                 ax=None, image=None):
+                                 ax=None, image=None, linewidth=2):
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
         patch_size = patch_size, patch_size
@@ -62,7 +62,7 @@ def plot_patch_rois_at_positions(positions, patch_size=(21, 21),
         rect = Rectangle((x - patch_width / 2,
                           y - patch_height / 2),
                          patch_width, patch_height,
-                         linewidth=1, edgecolor=edgecolor, facecolor='none')
+                         linewidth=linewidth, edgecolor=edgecolor, facecolor='none')
 
         ax.add_patch(rect)
         ax.annotate(patch_count - 1, (x, y))

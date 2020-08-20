@@ -489,10 +489,10 @@ class VideoSession(object):
         """ A dictionary with {frame index -> Nx2 x,y cell positions}.
 
         Returns the positions of the blood cells as a dictionary indexed by the frame index as is in the csv file
-        but 0 indexed instead!. To get the first frame do  session.cell_positions[0] instead of session.cell_positions[1].
+        but 0 indexed instead!. To get the first frame do  session.positions[0] instead of session.positions[1].
 
         To access ith frame's cell positions do:
-        self.cell_positions[i - 1]
+        self.positions[i - 1]
         """
         if len(self._cell_position_csv_files) == 0:
             raise Exception(f"No csv found with cell positions for video session {basename(self.video_oa790_file)}")
