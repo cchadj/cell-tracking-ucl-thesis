@@ -13,6 +13,7 @@ from cnnlearning import CNN, train, TrainingTracker
 from generate_datasets import get_cell_and_no_cell_patches
 from classificationutils import classify_images, classify_labeled_dataset
 from sharedvariables import CACHED_MODELS_FOLDER
+from learningutils import LabeledImageDataset
 
 
 def extract_value_from_string(string, value_prefix, delimiter='_'):
@@ -213,20 +214,28 @@ def train_model_demo(
 
         print('Done')
 
-    # Print the final validation accuracy on the training and validation set
     model = results.recorded_model
     model.eval()
 
+    positive_dataset = LabeledImageDataset(
+        cell_images, np.ones(len(cell_images), dtype=np.int), standardize=standardize_dataset
+    )
+    negative_dataset = LabeledImageDataset(
+        non_cell_images, np.zeros(len(non_cell_images), dtype=np.int), standardize=standardize_dataset
+    )
+
     _, train_accuracy = classify_labeled_dataset(trainset, model)
     _, valid_accuracy = classify_labeled_dataset(validset, model)
-    positive_accuracy = classify_images(cell_images, model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images)
-    negative_accuracy = (1 - classify_images(non_cell_images, model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images)
+
+    _, positive_accuracy = classify_labeled_dataset(positive_dataset, model)
+    _, negative_accuracy = classify_labeled_dataset(negative_dataset, model)
 
     print()
     print(f'Model trained on {len(cell_images)} cell patches and {len(non_cell_images)} non cell patches.')
     print()
     print('Brief evaluation - best validation accuracy model')
     print('----------------')
+    print(f'Epoch:\t', results.recorded_model_epoch)
     print('Training accuracy:\t', f'{train_accuracy:.3f}')
     print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
     print()
@@ -238,12 +247,14 @@ def train_model_demo(
 
     _, train_accuracy = classify_labeled_dataset(trainset, train_model)
     _, valid_accuracy = classify_labeled_dataset(validset, train_model)
-    positive_accuracy = classify_images(cell_images, train_model, standardize_dataset=standardize_dataset).sum().item() / len(cell_images)
-    negative_accuracy = (1 - classify_images(non_cell_images, train_model, standardize_dataset=standardize_dataset)).sum().item() / len(non_cell_images)
+
+    _, positive_accuracy = classify_labeled_dataset(positive_dataset, train_model)
+    _, negative_accuracy = classify_labeled_dataset(negative_dataset, train_model)
 
     print()
     print('Brief evaluation - best training accuracy model')
     print('----------------')
+    print(f'Epoch:\t', results.recorded_train_model_epoch)
     print('Training accuracy:\t', f'{train_accuracy:.3f}')
     print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
     print()

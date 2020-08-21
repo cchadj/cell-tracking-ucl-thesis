@@ -99,6 +99,7 @@ def get_patch(im, x, y, patch_size):
 
 def extract_patches(img,
                     patch_size=(21, 21),
+                    temporal_width=0,
                     padding='valid'
                     ):
     """

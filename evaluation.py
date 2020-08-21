@@ -2,8 +2,6 @@ import numpy as np
 from nearest_neighbors import get_nearest_neighbor_distances
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
-import mahotas as mh
-from imageprosessing import imextendedmax
 
 
 def get_positions_too_close_to_border(patch_positions, image_shape, patch_size=(33, 33)):

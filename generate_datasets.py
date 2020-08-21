@@ -132,14 +132,14 @@ def create_dataset_from_cell_and_no_cell_images(
         standardize=True,
         to_grayscale=False,
         v=False):
+    """ The cell images are labeled as 1 and non cell images are labeled as 0.
+    """
     if v:
         print('Creating dataset from cell and non cell patches')
         print('-----------------------------------------------')
-    print('Hello')
     dataset = LabeledImageDataset(
         np.concatenate((cell_images[:len(cell_images), ...], non_cell_images[:len(non_cell_images), ...]), axis=0),
-        np.concatenate((np.ones(len(cell_images)).astype(np.int), np.zeros(len(non_cell_images)).astype(np.int)),
-                       axis=0),
+        np.concatenate((np.ones(len(cell_images), dtype=np.int), np.zeros(len(non_cell_images), dtype=np.int)), axis=0),
         standardize=standardize,
         to_grayscale=to_grayscale,
         data_augmentation_transformations=data_augmentation_transformations

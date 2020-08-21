@@ -1,5 +1,6 @@
 from cnnlearning import *
 from learningutils import *
+import os
 from scipy.spatial import Voronoi
 
 

@@ -4,6 +4,8 @@ import skimage.exposure
 from matplotlib import pylab as plt
 import numpy as np
 import cv2
+import mahotas as mh
+from imageprosessing import crop_mask, normalize_data
 
 
 def create_average_and_stdev_image(frames, masks=None):
@@ -37,10 +39,10 @@ def detect_vessels(im, visualise_intermediate_results=False):
     BW = np.zeros_like(frangi_image_normalised)
     BW[frangi_image_normalised > binary_threshold * 0.5] = 1
 
-    kernel = np.ones((13, 13),np.uint8)
+    kernel = np.ones((13, 13), np.uint8)
     # closing = cv2.morphologyEx(BW, cv2.MORPH_CLOSE, kernel)
     dilation = cv2.dilate(BW, kernel, iterations=1)
-    kernel = np.ones((7, 7),np.uint8)
+    kernel = np.ones((7, 7), np.uint8)
     errosion = cv2.erode(dilation, kernel, iterations=2)
 
     if visualise_intermediate_results:
@@ -59,19 +61,19 @@ def detect_vessels(im, visualise_intermediate_results=False):
     return errosion
 
 
-def create_vessel_mask(vessel_image,
-                       n_iterations=1,
+def create_vessel_mask_from_vessel_image(
+        vessel_image,
+        n_iterations=1,
+        normalise_fangi=False,
+        equalize_frangi_hist=False,
 
-                       normalise_fangi=False,
-                       equalize_frangi_hist=False,
+        opening_kernel_size=5,
+        closing_kernel_size=13,
+        padding=cv2.BORDER_REPLICATE,
+        padding_size=30,
+        padding_value=None,
 
-                       opening_kernel_size=5,
-                       closing_kernel_size=13,
-                       padding=cv2.BORDER_REPLICATE,
-                       padding_size=30,
-                       padding_value=None,
-
-                       visualise_intermediate_steps=False):
+        visualise_intermediate_steps=False):
     vessel_image = cv2.copyMakeBorder(vessel_image,
                                       padding_size,
                                       padding_size,
@@ -131,3 +133,64 @@ def create_vessel_mask(vessel_image,
         vessel_image = closing
 
     return vessel_image[padding_size:-padding_size, padding_size:-padding_size]
+
+
+def create_vessel_image(frames,
+                        masks=None,
+                        method='de_castro',
+                        adapt_hist=True,
+                        sigma=0.75):
+    # 20. J. Tam, J. A. Martin, and A. Roorda, “Noninvasive visualization and analysis of parafoveal capillaries in humans,”
+    # Invest. Ophthalmol. Vis. Sci. 51(3), 1691–1698 (2010).
+    assert method in [None, 'j_tam', 'de_castro']
+    from skimage import exposure
+
+    frames = frames.copy()
+    if frames.dtype == np.uint8:
+        frames = np.float32(frames) / 255
+
+    sigma = 1
+
+    if sigma >= 0.125:
+        for i, frame in enumerate(frames):
+            frames[i, ...] = mh.gaussian_filter(frame, sigma)
+
+    if masks is None:
+        masked_frames = frames.copy()
+    else:
+        # crop ~15 pixels from the left part of the mask to avoid vertical streak artifacts.
+        mask_frames = crop_mask(masks, 15)
+        masked_frames = np.ma.masked_array(frames, ~mask_frames)
+    if method == 'de_castro':
+        # We invert the mask because True values mean that the values are masked and therefor invalid
+        # https://numpy.org/doc/stable/reference/maskedarray.generic.html
+        for i, masked_frame in enumerate(masked_frames):
+            masked_frames[i, ...] = masked_frame / np.ma.mean(masked_frame)
+
+        m = np.ma.mean(masked_frames, axis=0)
+        for i, masked_frame in enumerate(masked_frames):
+            masked_frames[i, ...] = masked_frame / m
+
+        final_processed_frames = masked_frames
+    elif method == 'j_tam':
+        # Create division frames by dividing consecutive frames (last frame remains unprocessed)
+        division_frames = masked_frames
+        for j in range(len(masked_frames) - 1):
+            division_frames[j] = masked_frames[j] / masked_frames[j + 1]
+        division_frames = division_frames[:-1]
+
+        # Create multiframe frames by averaging consecutive division frames (last frame remains unprocessed)
+        multiframe_div_frames = division_frames.copy()
+        for j in range(len(division_frames) - 1):
+            multiframe_div_frames[j] = (division_frames[j] + division_frames[j + 1]) / 2
+            if adapt_hist:
+                try:
+                    multiframe_div_frames[j] = exposure.equalize_adapthist(
+                        normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
+                except:
+                    return multiframe_div_frames[j], division_frames[j], division_frames[j + 1]
+        final_processed_frames = multiframe_div_frames[:-1]
+    elif method is None:
+        final_processed_frames = masked_frames
+
+    return skimage.exposure.equalize_adapthist(final_processed_frames.std(0))

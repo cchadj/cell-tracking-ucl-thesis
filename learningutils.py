@@ -63,9 +63,7 @@ class ImageDataset(torch.utils.data.Dataset):
 class LabeledImageDataset(ImageDataset):
     """ Used to create a DataLoader compliant Dataset for binary classifiers
     """
-    samples: List[Tuple[np.ndarray, int]]
-
-    def __init__(self, images, labels, standardize=False, to_grayscale=False, data_augmentation_transformations=None):
+    def __init__(self, images, labels, standardize=True, to_grayscale=False, data_augmentation_transformations=None):
         """
         Args:
           images (ndarray):

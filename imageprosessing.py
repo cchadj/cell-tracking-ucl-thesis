@@ -1,5 +1,6 @@
 from typing import List, Any
 
+import evaluation
 import numpy as np
 import mahotas as mh
 import tqdm
@@ -7,11 +8,10 @@ from skimage.morphology import extrema
 from skimage.exposure import match_histograms
 from plotutils import cvimshow
 
+import cv2
 from learningutils import ImageDataset
 import torch.utils.data
 import torchvision
-
-
 import skimage
 
 
@@ -216,104 +216,6 @@ def enhance_motion_contrast(frames, sigma=1, adapt_hist=False, mask_crop_pixels=
     return final_processed_frames
 
 
-def std_image(frames,
-              masks=None,
-              method='de_castro',
-              adapt_hist=False,
-              sigma=0.75):
-    # 20. J. Tam, J. A. Martin, and A. Roorda, “Noninvasive visualization and analysis of parafoveal capillaries in humans,”
-    # Invest. Ophthalmol. Vis. Sci. 51(3), 1691–1698 (2010).
-    assert method in [None, 'j_tam', 'de_castro']
-    from skimage import exposure
-
-    frames = frames.copy()
-    if frames.dtype == np.uint8:
-        frames = np.float32(frames) / 255
-
-    sigma = 1
-
-    if sigma >= 0.125:
-        for i, frame in enumerate(frames):
-            frames[i, ...] = mh.gaussian_filter(frame, sigma)
-
-    if masks is None:
-        masked_frames = frames.copy()
-    else:
-        # crop ~15 pixels from the left part of the mask to avoid vertical streak artifacts.
-        mask_frames = crop_mask(masks, 15)
-        masked_frames = np.ma.masked_array(frames, ~mask_frames)
-    if method == 'de_castro':
-        # We invert the mask because True values mean that the values are masked and therefor invalid
-        # https://numpy.org/doc/stable/reference/maskedarray.generic.html
-        for i, masked_frame in enumerate(masked_frames):
-            masked_frames[i, ...] = masked_frame / np.ma.mean(masked_frame)
-
-        m = np.ma.mean(masked_frames, axis=0)
-        for i, masked_frame in enumerate(masked_frames):
-            masked_frames[i, ...] = masked_frame / m
-
-        final_processed_frames = masked_frames
-    elif method == 'j_tam':
-        # Create division frames by dividing consecutive frames (last frame remains unprocessed)
-        division_frames = masked_frames
-        for j in range(len(masked_frames) - 1):
-            division_frames[j] = masked_frames[j] / masked_frames[j + 1]
-        division_frames = division_frames[:-1]
-
-        # Create multiframe frames by averaging consecutive division frames (last frame remains unprocessed)
-        multiframe_div_frames = division_frames.copy()
-        for j in range(len(division_frames) - 1):
-            multiframe_div_frames[j] = (division_frames[j] + division_frames[j + 1]) / 2
-            if adapt_hist:
-                try:
-                    multiframe_div_frames[j] = exposure.equalize_adapthist(
-                        normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
-                except:
-                    return multiframe_div_frames[j], division_frames[j], division_frames[j + 1]
-        final_processed_frames = multiframe_div_frames[:-1]
-    elif method is None:
-        final_processed_frames = masked_frames
-
-    return final_processed_frames.std(0)
-
-
-class SessionPreprocessor(object):
-    preprocess_functions: List[Any]
-
-    from sharedvariables import VideoSession
-    session: VideoSession
-
-    def __init__(self, session, preprocess_functions=None):
-        from collections.abc import Iterable
-        if preprocess_functions is None:
-            preprocess_functions = []
-        elif not isinstance(preprocess_functions, Iterable):
-            preprocess_functions = [preprocess_functions]
-
-        self.preprocess_functions = preprocess_functions
-        self.session = session
-
-    def _apply_preprocessing(self, masked_frames):
-        for fun in self.preprocess_functions:
-            masked_frames = fun(masked_frames)
-        frames = masked_frames.filled(masked_frames.mean(0))
-        return frames
-
-    def apply_preprocessing_to_oa790(self):
-        self.session.frames_oa790 = self._apply_preprocessing(self.session.masked_frames_oa790)
-
-    def apply_preprocessing_to_oa850(self):
-        self.session.frames_oa850 = self._apply_preprocessing(self.session.masked_frames_oa850)
-
-    def apply_preprocessing_to_confocal(self):
-        self.session.frames_confocal = self._apply_preprocessing(self.session.masked_frames_confocal)
-
-    def apply_preprocessing(self):
-        self.apply_preprocessing_to_confocal()
-        self.apply_preprocessing_to_oa790()
-        self.apply_preprocessing_to_oa850()
-
-
 def center_crop_images(images, patch_size):
     """ Crops the centre of the stack of images and returns the result
 
@@ -333,8 +235,91 @@ def center_crop_images(images, patch_size):
         return batch.permute(0, 2, 3, 1).cpu().numpy().squeeze().astype(images.dtype)
 
 
+class ImageRegistator(object):
+    def __init__(self, source, target):
+        self.source = source
+        self.target = target
+
+        # Warp affine doesn't work with boolean
+        if source.dtype == np.bool8:
+            self.source = np.float32(self.source)
+        if target.dtype == np.bool8:
+            self.target = np.float32(self.target)
+
+        self.best_dice = evaluation.dice(source, target)
+        self.dices = [self.best_dice]
+        self.vertical_displacement = 0
+        self.horizontal_displacement = 0
+        self.registered_source = source
+
+    def register_vertically(self):
+        dx = 0
+        dys = np.int32(np.arange(1, 200, 1))
+
+        # fig, axes = plt.subplots(len(dys), 1, figsize=(100, 100))
+
+        dices = []
+        for i, dy in enumerate(dys):
+            translation = np.float32([[1, 0, dx],
+                                      [0, 1, dy]])
+
+            height, width = self.source.shape[:2]
+
+            translated_source = cv2.warpAffine(self.source, translation, (width, height))
+            dice_v = evaluation.dice(self.target, translated_source)
+            dices.append(dice_v)
+
+        # Get displacement that gives best dice coefficient.
+        dy = dys[np.argmax(dices)]
+
+        translation = np.float32([[1, 0, dx],
+                                  [0, 1, dy]])
+        height, width = self.source.shape[:2]
+        translated_source = cv2.warpAffine(self.source, translation, (width, height))
+
+        self.registered_source = translated_source
+        self.vertical_displacement = dy
+        self.best_dice = max(dices)
+        self.dices = dices
+
+        return self.registered_source
+
+    def apply_registration(self, im):
+        dx, dy = self.horizontal_displacement, self.vertical_displacement
+        if im.dtype == np.bool:
+            im = np.float32(im)
+
+        translation = np.float32([[1, 0, dx],
+                                  [0, 1, dy]])
+        height, width = im.shape[:2]
+        im = cv2.warpAffine(im, translation, (width, height))
+
+        return im
+
+    @staticmethod
+    def vertical_image_registration(source, target):
+        dx = 0
+        dys = np.int32(np.arange(1, 200, 1))
+
+        # fig, axes = plt.subplots(len(dys), 1, figsize=(100, 100))
+
+        dices = []
+        for i, dy in enumerate(dys):
+            translation = np.float32([[1, 0, dx],
+                                      [0, 1, dy]])
+
+            height, width = source.shape[:2]
+
+            translated_source = cv2.warpAffine(source, translation, (width, height))
+            dice_v = evaluation.dice(target, translated_source)
+            dices.append(dice_v)
+
+        return translated_source, dy
+
+
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
+    from video_session import SessionPreprocessor
 
     video_sessions = get_video_sessions(should_have_marked_cells=True)
     vs = video_sessions[0]
@@ -348,3 +333,4 @@ if __name__ == '__main__':
 
     # plt.subplot(121)
     cvimshow('', vs.frames_oa790[0])
+
