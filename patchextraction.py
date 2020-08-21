@@ -12,7 +12,7 @@ from sharedvariables import VideoSession
 from nearest_neighbors import get_nearest_neighbor, get_nearest_neighbor_distances
 
 
-def get_random_points_on_circles(points, n_points_per_circle=1, ret_radii=False):
+def get_random_points_on_circles(points,n_points_per_circle=1, max_radius=None, ret_radii=False):
     assert 1 <= n_points_per_circle <= 7, f'Points per circle must be between 1 and 7 not {n_points_per_circle}'
 
     neighbor_distances, _ = get_nearest_neighbor(points, 2)
@@ -33,6 +33,8 @@ def get_random_points_on_circles(points, n_points_per_circle=1, ret_radii=False)
         centre_point = points[centre_point_idx]
 
         r = (np.min(distances) * 1.3) / 2
+        if r > max_radius:
+            r = max_radius
         radii[centre_point_idx] = r
         cx, cy = centre_point
 
@@ -444,6 +446,7 @@ class SessionPatchExtractor(object):
                 else:
                     rx, ry, radii = get_random_points_on_circles(frame_cell_positions,
                                                                  n_points_per_circle=self.n_negatives_per_positive,
+                                                                 max_radius=self.negative_patch_extraction_radius,
                                                                  ret_radii=True,
                                                                  )
                     self.frame_negative_search_radii[frame_idx] = radii
