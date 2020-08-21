@@ -306,24 +306,26 @@ def get_cell_and_no_cell_patches(
         if v:
             print('Trying to load data from cache')
             print('--------------------------')
-            print(f"loading training set from '{trainset_filename}'...")
+
+        if v:
+            print(f"loading training set from:\t'{trainset_filename}'...")
         trainset = torch.load(trainset_filename)
         if v:
-            print(f"loading validation set from '{validset_filename}'...")
+            print(f"loading validation set from:\t'{validset_filename}'...")
         validset = torch.load(validset_filename)
 
         if v:
-            print(f"loading bloodcell patches from '{cell_images_filename}'...")
+            print(f"loading cell patches from:\t'{cell_images_filename}'...")
         cell_images = np.load(cell_images_filename)
         if v:
-            print(f"loading non bloodcell patches from '{non_cell_images_filename}'...")
+            print(f"loading non cell patches from:\t'{non_cell_images_filename}'...")
         non_cell_images = np.load(non_cell_images_filename)
 
         if v:
-            print(f"loading marked bloodcell patches from '{cell_images_marked_filename}'...")
+            print(f"loading marked cell patches from:\t'{cell_images_marked_filename}'...")
         cell_images_marked = np.load(cell_images_marked_filename)
         if v:
-            print(f"loading marked non bloodcell patches from '{non_cell_images_marked_filename}'")
+            print(f"loading marked non cell patches from:\t'{non_cell_images_marked_filename}'")
         non_cell_images_marked = np.load(non_cell_images_marked_filename)
 
         if do_hist_match:
@@ -369,7 +371,7 @@ def get_cell_and_no_cell_patches(
             non_cell_images_marked = non_cell_images_marked[..., 1:]
 
             if v:
-                print(f'Dropped confocal channel from cell images : '
+                print(f'Dropped confocal channel from cell images.\n '
                       f'Cell image shape: {cell_images.shape}, Non cell images shape: {non_cell_images.shape}')
 
         hist_match_template = None
@@ -419,16 +421,17 @@ def get_cell_and_no_cell_patches(
             np.save(template_image_filename + '.npy', hist_match_template)
 
         if v:
-            print(f"Saved training set as: '{trainset_filename}'")
-            print(f"Saved validation set as: '{validset_filename}'")
-            print('Saving cell and non cell images')
-            print(f"Saved cell images as: '{cell_images_filename}'")
-            print(f"Saved non cell images as: '{non_cell_images_filename}'")
-            print(f"Saved marked cell images (for debugging) as: '{cell_images_marked_filename}'")
-            print(f"Saved marked non cell images (for debugging) as: '{non_cell_images_marked_filename}'")
+            print(f"Saved training set as:\t'{trainset_filename}'")
+            print(f"Saved validation set as:\t'{validset_filename}'")
+            print()
+            print(f"Saved cell images as:\t'{cell_images_filename}'")
+            print(f"Saved non cell images as:\t'{non_cell_images_filename}'")
+            print()
+            print(f"Saved marked cell images (for debugging) as:\t'{cell_images_marked_filename}'")
+            print(f"Saved marked non cell images (for debugging) as:\t'{non_cell_images_marked_filename}'")
             if do_hist_match:
-                print(f"Saved histogram matching template as: {template_image_filename}.png")
-                print(f"Saved histogram matching template (npy array) as: {template_image_filename}.npy")
+                print(f"Saved histogram matching template as:\t {template_image_filename}.png")
+                print(f"Saved histogram matching template (npy array) as:\t{template_image_filename}.npy")
             # print(f"Saved normalisation data range as: {normalisation_data_range}.npy")
             print("Cell images array shape:", cell_images.shape)
             print("Non cell images array shape:", non_cell_images.shape)
