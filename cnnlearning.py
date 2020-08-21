@@ -590,11 +590,7 @@ class TrainingInterruptSignalHandler(object):
         self.signal_raised = True
 
 
-def train(cnn, params,
-          device='cuda',
-          criterion=nn.BCELoss(),
-          additional_displays=None
-          ):
+def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', additional_displays=None):
     # if params changes, following line of code should reflect the changes too
     if additional_displays is None:
         additional_displays = []

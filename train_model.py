@@ -228,10 +228,8 @@ def train_model_demo(
             print('Starting training')
         # set the model in training mode
         model.train()
-        results: TrainingTracker = train(model,
-                                         train_params,
-                                         criterion=torch.nn.CrossEntropyLoss(),
-                                         device=device, additional_displays=additional_displays)
+        results: TrainingTracker = train(model, train_params, criterion=torch.nn.CrossEntropyLoss(),
+                                         additional_displays=additional_displays, device=device)
 
         postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}'\
                   f'_dc_{str(drop_confocal_channel).lower()}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}' \

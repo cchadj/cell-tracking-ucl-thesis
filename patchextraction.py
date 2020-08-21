@@ -26,13 +26,13 @@ def get_random_points_on_circles(points,n_points_per_circle=1, max_radius=None, 
                                             3 * np.math.pi * 0.25, 5 * np.math.pi * 0.25,
                                             7 * np.math.pi * 0.25]).squeeze()
     c = 0
-    rxs = np.empty(len(points) * nnp)
-    rys = np.empty(len(points) * nnp)
+    rxs = np.empty(len(points) * nnp, dtype=np.int32)
+    rys = np.empty(len(points) * nnp, dtype=np.int32)
     radii = np.empty(len(points))
     for centre_point_idx, distances in enumerate(neighbor_distances):
         centre_point = points[centre_point_idx]
 
-        r = (np.min(distances) * 1.3) / 2
+        r = np.ceil(np.min(distances) / 2)
         if r > max_radius:
             r = max_radius
         radii[centre_point_idx] = r
@@ -41,8 +41,8 @@ def get_random_points_on_circles(points,n_points_per_circle=1, max_radius=None, 
         angle = np.random.rand() * np.math.pi * 2
         random_angles = np.array(angle + uniform_angle_displacements).squeeze()
 
-        rx = np.array([cx + np.cos(random_angles[:nnp]) * r]).squeeze()
-        ry = np.array([cy + np.sin(random_angles[:nnp]) * r]).squeeze()
+        rx = np.array([cx + np.cos(random_angles[:nnp]) * r], dtype=np.int32).squeeze()
+        ry = np.array([cy + np.sin(random_angles[:nnp]) * r], dtype=np.int32).squeeze()
 
         rxs[c:c + nnp] = rx
         rys[c:c + nnp] = ry
@@ -352,6 +352,7 @@ class SessionPatchExtractor(object):
                  temporal_width=1,
                  n_negatives_per_positive=1,
                  negative_patch_extraction_radius=21,
+                 random_rect_points=False,
                  ):
         """
 
@@ -372,7 +373,7 @@ class SessionPatchExtractor(object):
 
         self.temporal_width = temporal_width
 
-        self.random_rect_points = False
+        self.random_rect_points = random_rect_points
         self.frame_negative_search_radii = {}
 
         self._negative_patch_extraction_radius = negative_patch_extraction_radius
