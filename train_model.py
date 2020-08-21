@@ -272,7 +272,9 @@ def train_model_demo(
     print()
     print('Positive accuracy:\t', f'{positive_accuracy:.3f}')
     print('Negative accuracy:\t', f'{negative_accuracy:.3f}')
-
+    print()
+    print(f'{train_accuracy:.3f} {valid_accuracy:.3f} {positive_accuracy:.3f} {negative_accuracy:.3f}')
+    print()
     train_model = results.recorded_train_model
     train_model.eval()
 
