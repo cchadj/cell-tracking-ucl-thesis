@@ -17,7 +17,7 @@ from learningutils import LabeledImageDataset
 
 
 def extract_value_from_string(string, value_prefix, delimiter='_'):
-    strings = pathlib.Path(string).with_suffix('').name.split(delimiter)
+    strings = pathlib.Path(string).name.split(delimiter)
     val = None
     for i, s in enumerate(strings):
         if s == value_prefix:
@@ -28,13 +28,17 @@ def extract_value_from_string(string, value_prefix, delimiter='_'):
     return val
 
 
-def load_model_from_cache(model,
-                          patch_size=(21, 21),
-                          n_negatives_per_positive=3,
-                          temporal_width=0,
-                          standardize_dataset=True,
-                          data_augmentation=False,
-                          hist_match=False):
+def load_model_from_cache(
+        model,
+        train_model=None,
+        patch_size=(21, 21),
+        n_negatives_per_positive=1,
+        mixed_channel=False,
+        drop_confocal_channel=False,
+        temporal_width=0,
+        standardize_dataset=True,
+        data_augmentation=False,
+        hist_match=False):
     """ Attempts to find the model weights to model from cache.
 
     Args:
@@ -51,13 +55,19 @@ def load_model_from_cache(model,
         f for f in os.listdir(CACHED_MODELS_FOLDER) if os.path.isdir(os.path.join(CACHED_MODELS_FOLDER, f))
     ]
     potential_model_directories = [
-        f for f in potential_model_directories if int(extract_value_from_string(f, 'npp')) == n_negatives_per_positive
+        f for f in potential_model_directories if extract_value_from_string(f, 'npp') == str(n_negatives_per_positive)
     ]
     potential_model_directories = [
-        f for f in potential_model_directories if int(extract_value_from_string(f, 'ps')) == patch_size[0]
+        f for f in potential_model_directories if extract_value_from_string(f, 'ps') == str(patch_size[0])
     ]
     potential_model_directories = [
         f for f in potential_model_directories if extract_value_from_string(f, 'hm') == str(hist_match).lower()
+    ]
+    potential_model_directories = [
+        f for f in potential_model_directories if extract_value_from_string(f, 'mc') == str(mixed_channel).lower()
+    ]
+    potential_model_directories = [
+        f for f in potential_model_directories if extract_value_from_string(f, 'dc') == str(drop_confocal_channel).lower()
     ]
     potential_model_directories = [
         f for f in potential_model_directories if extract_value_from_string(f, 'st') == str(standardize_dataset).lower()
@@ -66,7 +76,7 @@ def load_model_from_cache(model,
         f for f in potential_model_directories if extract_value_from_string(f, 'da') == str(data_augmentation).lower()
     ]
     potential_model_directories = [
-        f for f in potential_model_directories if extract_value_from_string(f, 'tw') == temporal_width
+        f for f in potential_model_directories if extract_value_from_string(f, 'tw') == str(temporal_width)
     ]
 
     if len(potential_model_directories) == 0:
@@ -76,9 +86,17 @@ def load_model_from_cache(model,
     best_model_directory = os.path.join(CACHED_MODELS_FOLDER, potential_model_directories[best_model_idx])
 
     best_model_file = \
-        [os.path.join(best_model_directory, f) for f in os.listdir(best_model_directory) if f.endswith('.pt')][0]
+        [os.path.join(best_model_directory, f) for f in os.listdir(best_model_directory) if f.endswith('.pt')
+         and 'train' not in f][0]
     model.load_state_dict(torch.load(best_model_file))
     model.eval()
+
+    if train_model is not None:
+        best_model_file = \
+            [os.path.join(best_model_directory, f) for f in os.listdir(best_model_directory) if f.endswith('.pt')
+             and 'train' in f][0]
+        train_model.load_state_dict(torch.load(best_model_file))
+        train_model.eval()
 
     return best_model_directory
 
@@ -86,17 +104,23 @@ def load_model_from_cache(model,
 def train_model_demo(
         video_sessions=None,
         patch_size=(21, 21),
-        mixed_channel_patches=False,
         temporal_width=0,
+
+        mixed_channel_patches=False,
+        drop_confocal_channel=True,
+
         do_hist_match=False,
-        n_negatives_per_positive=3,
-        device='cuda',
+
         standardize_dataset=True,
+        dataset_to_grayscale=False,
         apply_data_augmentation_to_dataset=False,
+
+        n_negatives_per_positive=1,
+        train_params=None,
         try_load_data_from_cache=True,
         try_load_model_from_cache=True,
-        train_params=None,
         additional_displays=None,
+        device='cuda',
         v=False,
         vv=False,
 ):
@@ -106,24 +130,31 @@ def train_model_demo(
 
     print('Creating (or loading from cache) data...')
     trainset, validset, \
-        cell_images, non_cell_images, \
-        cell_images_marked, non_cell_images_marked, \
-        hist_match_template = \
+    cell_images, non_cell_images, \
+    cell_images_marked, non_cell_images_marked, \
+    hist_match_template = \
         get_cell_and_no_cell_patches(
             video_sessions=video_sessions,
-            mixed_channel_patches=mixed_channel_patches,
             patch_size=patch_size,
-            n_negatives_per_positive=n_negatives_per_positive,
-            standardize_dataset=standardize_dataset,
             temporal_width=temporal_width,
-            apply_data_augmentation_to_dataset=apply_data_augmentation_to_dataset,
+
+            mixed_channel_patches=mixed_channel_patches,
+            drop_confocal_channel=drop_confocal_channel,
+
             do_hist_match=do_hist_match,
+
+            standardize_dataset=standardize_dataset,
+            dataset_to_grayscale=dataset_to_grayscale,
+            apply_data_augmentation_to_dataset=apply_data_augmentation_to_dataset,
+
+            n_negatives_per_positive=n_negatives_per_positive,
+
             try_load_from_cache=try_load_data_from_cache,
             v=v, vv=vv,
         )
     assert len(cell_images.shape) == 3 or len(cell_images.shape) == 4
     assert len(non_cell_images.shape) == 3 or len(non_cell_images.shape) == 4
-    assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8,\
+    assert cell_images.dtype == np.uint8 and non_cell_images.dtype == np.uint8, \
         f'Cell images dtype {cell_images.dtype} non cell images dtype {non_cell_images.dtype}'
     assert cell_images.min() >= 0 and cell_images.max() <= 255
     assert non_cell_images.min() >= 0 and non_cell_images.max() <= 255
@@ -142,9 +173,16 @@ def train_model_demo(
 
         additional_displays.append(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
                                    f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
-        model_directory = load_model_from_cache(model, patch_size=patch_size,
-                                                hist_match=do_hist_match,
-                                                n_negatives_per_positive=n_negatives_per_positive)
+        model_directory = \
+            load_model_from_cache(
+                model,
+                patch_size=patch_size,
+                n_negatives_per_positive=n_negatives_per_positive,
+                temporal_width=temporal_width,
+                standardize_dataset=standardize_dataset,
+                data_augmentation=apply_data_augmentation_to_dataset,
+                hist_match=do_hist_match
+            )
         print(f"Model found. Loaded model from '{model_directory}'")
         with open(os.path.join(model_directory, 'results.pkl'), 'rb') as results_file:
             results = pickle.load(results_file)
@@ -195,15 +233,14 @@ def train_model_demo(
                                          criterion=torch.nn.CrossEntropyLoss(),
                                          device=device, additional_displays=additional_displays)
 
-        postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}' \
-                  f'_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}' \
+        postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}'\
+                  f'_dc_{str(drop_confocal_channel).lower()}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}' \
                   f'_st_{str(standardize_dataset).lower()}_da_{str(apply_data_augmentation_to_dataset).lower()}'
 
         output_directory = os.path.join(CACHED_MODELS_FOLDER,
-                                        f'blood_cell_classifier_va_{results.recorded_model_valid_accuracy:.3f}{postfix}')
+                                        f'model_va_{results.recorded_model_valid_accuracy:.3f}{postfix}')
         pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
-        output_name = os.path.join(output_directory,
-                                   f'blood_cell_classifier_va_{results.recorded_model_valid_accuracy:.3f}{postfix}')
+        output_name = os.path.join(output_directory, 'model')
 
         print(f'Saving model as {output_name}')
         results.save(output_name)
@@ -211,7 +248,6 @@ def train_model_demo(
         print(f"Saving results as {results_file}")
         with open(results_file, 'wb') as output_file:
             pickle.dump(results, output_file, pickle.HIGHEST_PROTOCOL)
-
         print('Done')
 
     model = results.recorded_model
@@ -268,7 +304,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-ps', '-p', '--patch-size', default=21, type=int, help='Patch size')
     parser.add_argument('-tw', '-t', '--temporal-width', default=0, type=int, help='Temporal width')
-    parser.add_argument('-st', '-s', '--standardize', action='store_true', help='Set this flag to standardize dataset output between -1 and 1')
+    parser.add_argument('-st', '-s', '--standardize', action='store_true',
+                        help='Set this flag to standardize dataset output between -1 and 1')
     parser.add_argument('-hm', '--hist-match', action='store_true',
                         help='Set this flag to do histogram match.')
     parser.add_argument('-npp', '-n', '--n-negatives-per-positive', default=3, type=int)
@@ -337,6 +374,31 @@ def main_tmp():
 
 if __name__ == '__main__':
     import sys
+    from sharedvariables import get_video_sessions
+
+    video_sessions = get_video_sessions(should_be_registered=True, should_have_marked_cells=True)
+
+    model, results = train_model_demo(
+        video_sessions=video_sessions,  # The video sessions the data will be created from
+
+        patch_size=27,
+        temporal_width=0,
+        mixed_channel_patches=True,
+
+        do_hist_match=False,
+        n_negatives_per_positive=1,
+
+        standardize_dataset=True,
+        apply_data_augmentation_to_dataset=False,
+
+        try_load_data_from_cache=True,
+        # If true attemps to load data from cache. If false just created new (and overwrites old if exist)
+        try_load_model_from_cache=True,  # Attemps to load model from cache. If false creates new
+
+        train_params=None,  # The training train parameters
+        additional_displays=None,
+        v=True, vv=True,
+    )
     if len(sys.argv) > 1:
         main()
     else:

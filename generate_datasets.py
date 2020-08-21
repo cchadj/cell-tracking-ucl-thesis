@@ -160,7 +160,10 @@ def get_cell_and_no_cell_patches(
         video_sessions=None,
         patch_size=(21, 21),
         temporal_width=0,
+
         mixed_channel_patches=False,
+        drop_confocal_channel=True,
+
         n_negatives_per_positive=1,
         negative_patch_search_radius=21,
         do_hist_match=False,
@@ -194,6 +197,10 @@ def get_cell_and_no_cell_patches(
           The patches returned have two channels, the first is the regular oa790 patch and the second
           channel is the patch at the same position at the registered oa850 frame
           **DOES NOT work with temporal patches. (temporal width must be 0)**
+        drop_confocal_channel (bool):
+            This option is only for mixed channel patches.
+            If True then drops the first channel from the mixed channel patches which is the patch from the
+            confocal video.
 
         video_sessions (list[VideoSessions]):
           The list of video sessions to use. If None automatically uses all video sessions available from
@@ -236,9 +243,16 @@ def get_cell_and_no_cell_patches(
             'Make sure that either temporal width is greater than 0 or mixed channel patches is True.'
 
     if v:
-        print(f'patch size {(height, width)}')
+        print(f'Patch size {(height, width)}')
+        print(f'Temporal width {temporal_width}')
+        print(f'Mixed channel patches: {mixed_channel_patches}')
+        if mixed_channel_patches:
+            print(f'Drop confocal channel: {drop_confocal_channel}')
         print(f'do hist match: {do_hist_match}')
         print(f'Negatives per positive: {n_negatives_per_positive}')
+        print(f'Standardize dataset: {standardize_dataset}')
+        print(f'Dataset to grayscale: {dataset_to_grayscale}')
+        print(f'Data augmentation: {apply_data_augmentation_to_dataset}')
         print()
     if vv:
         v = True
@@ -249,7 +263,7 @@ def get_cell_and_no_cell_patches(
     patch_size = (height, width)
 
     postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}' \
-              f'_hm_{str(do_hist_match).lower()}_nnp_{n_negatives_per_positive}' \
+              f'_dc_{str(drop_confocal_channel).lower()}_hm_{str(do_hist_match).lower()}_npp_{n_negatives_per_positive}' \
               f'_st_{str(standardize_dataset).lower()}_da_{str(apply_data_augmentation_to_dataset).lower()}'
 
     dataset_folder = os.path.join(
@@ -259,23 +273,23 @@ def get_cell_and_no_cell_patches(
 
     trainset_filename = os.path.join(
         dataset_folder,
-        f'trainset_bloodcells{postfix}.pt')
+        f'trainset.pt')
     validset_filename = os.path.join(
         dataset_folder,
-        f'validset_bloodcells{postfix}.pt')
+        f'validset.pt')
 
     cell_images_filename = os.path.join(
         dataset_folder,
-        f'bloodcells{postfix}.npy')
+        f'cells.npy')
     non_cell_images_filename = os.path.join(
         dataset_folder,
-        f'non_bloodcells{postfix}.npy')
+        f'non_cells.npy')
     cell_images_marked_filename = os.path.join(
         dataset_folder,
-        f'bloodcells_marked{postfix}.npy')
+        f'cells_marked.npy')
     non_cell_images_marked_filename = os.path.join(
         dataset_folder,
-        f'non_bloodcells_marked{postfix}.npy')
+        f'non_cells_marked.npy')
     template_image_filename = os.path.join(
         dataset_folder,
         f'hist_match_template_image'
@@ -346,23 +360,30 @@ def get_cell_and_no_cell_patches(
                                             negative_patch_search_radius=negative_patch_search_radius,
                                             v=v, vv=vv)
 
-        if mixed_channel_patches:
+        if mixed_channel_patches and drop_confocal_channel:
             # We only want the oa790 and oa850 channel as confocal channel doesn't guarantee that the bloodcell
             # will be visible. (2nd and 3rd channel of mixed channel is oa790 and oa850, 1st is confocal)
-            cell_images = cell_images[1:]
-            non_cell_images = non_cell_images[1:]
-            cell_images_marked = cell_images_marked[1:]
-            non_cell_images_marked = non_cell_images_marked[1:]
+            cell_images = cell_images[..., 1:]
+            non_cell_images = non_cell_images[..., 1:]
+            cell_images_marked = cell_images_marked[..., 1:]
+            non_cell_images_marked = non_cell_images_marked[..., 1:]
 
-        hist_match_template = cell_images[0]
+            if v:
+                print(f'Dropped confocal channel from cell images : '
+                      f'Cell image shape: {cell_images.shape}, Non cell images shape: {non_cell_images.shape}')
+
+        hist_match_template = None
         if do_hist_match:
             if v:
                 print('Doing histogram matching')
+
             if vv:
                 print('Doing histogram matching on cell images')
+            hist_match_template = cell_images[0]
             cell_images = hist_match_images(cell_images, hist_match_template)
             if vv:
                 print('Doing histogram matching on non cell images')
+
             non_cell_images = hist_match_images(cell_images, hist_match_template)
 
         data_augmentation_transformations = None
