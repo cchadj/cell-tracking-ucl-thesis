@@ -113,6 +113,8 @@ def predict_probability_single_patch(patch, model, device='cuda'):
 def create_probability_map(
         image,
         model,
+        mixed_channel=True,
+        drop_confocal_channel=True,
         patch_size=(21, 21),
         padding=cv2.BORDER_REPLICATE,
         standardize=True,

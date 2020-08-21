@@ -70,6 +70,7 @@ class VideoSession(object):
 
         self._registered_frames_oa850 = None
         self._registered_mask_frames_oa850 = None
+        self._registered_vessel_mask_oa850 = None
 
         self._mask_frames_oa790 = None
         self._mask_frames_oa850 = None
@@ -140,6 +141,7 @@ class VideoSession(object):
 
         self._registered_frames_oa850 = None
         self._registered_mask_frames_oa850 = None
+        self._registered_vessel_mask_oa850 = None
 
         self._frames_oa850 = new_frames
 
@@ -151,6 +153,7 @@ class VideoSession(object):
 
             self._registered_frames_oa850 = np.empty_like(self.frames_oa850)
             self._registered_mask_frames_oa850 = np.empty_like(self.mask_frames_oa850)
+            self._registered_vessel_mask_oa850 = ir.apply_registration(self.vessel_mask_oa850)
 
             for i, (frame, mask) in enumerate(zip(self.frames_oa850, self.mask_frames_oa850)):
                 self._registered_frames_oa850[i] = ir.apply_registration(frame)
@@ -161,9 +164,14 @@ class VideoSession(object):
     @property
     def registered_mask_frames_oa850(self):
         if self._registered_mask_frames_oa850 is None:
-            tmp = self.registered_mask_frames_oa850
-
+            tmp = self.registered_frames_oa850
         return self._registered_mask_frames_oa850
+
+    @property
+    def registered_vessel_mask_oa850(self):
+        if self._registered_vessel_mask_oa850 is None:
+            tmp = self.registered_frames_oa850
+        return self._registered_vessel_mask_oa850
 
     @property
     def frames_confocal(self):
@@ -482,8 +490,9 @@ class VideoSession(object):
         self._vessel_mask_oa850 = val
         self._vessel_masked_frames_oa850 = None
         self._fully_masked_frames_oa850 = None
+
         self._registered_mask_frames_oa850 = None
-        self._registered_mask_frames_oa850 = None
+        self._registered_vessel_mask_oa850 = None
 
     @property
     def vessel_mask_confocal(self):

@@ -88,11 +88,15 @@ class CNN(nn.Module):
             if dataset_sample:
                 # In order for the image sample to work we must append a batch number dimension
                 # HxWxC -> 1xHxWxC
-                image_batch = image_sample[None, ...].to('cpu')
+                image_batch = image_sample[None, ...].cpu()
+                batch_size = 1
 
-                # output shape is 1x output C x out H x out W.
-                # to get the dense input dimensions we multiply all the shape args except batch size.
-                dense_input_dims = np.prod(np.array(self.convolutional(image_batch).shape[1:]))
+                with torch.no_grad():
+                    # output shape is 1 x output C x out H x out W.
+                    # to get the dense input dimensions we get the convolutional output and
+                    # reshape so every dimension other than batch size is multiplied together.
+                    convolutional_output = self.convolutional(image_batch)
+                    dense_input_dims = convolutional_output.reshape(batch_size, -1).shape[-1]
 
             self.dense = nn.Sequential(
                 nn.Linear(dense_input_dims, 64),
@@ -123,6 +127,7 @@ class CNN(nn.Module):
                 nn.AvgPool2d(kernel_size=(3, 3), stride=1),
                 # Print("nn.AvgPool2d(kernel_size=(3, 3), stride=2"),
             )
+
             # Fully connected layer
             self.dense = nn.Sequential(
                 nn.Dropout(),
@@ -139,8 +144,9 @@ class CNN(nn.Module):
 
     # define forward function
     def forward(self, t):
+        batch_size = len(t)
         t = self.convolutional(t)
-        t = t.reshape(-1, self.dense_input_dims)
+        t = t.reshape(batch_size, -1)
         t = self.dense(t)
         return t
 
