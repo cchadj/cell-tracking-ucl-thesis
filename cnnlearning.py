@@ -358,6 +358,8 @@ class TrainingTracker:
             model:
         """
         import os.path
+        import pathlib
+        pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
         # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
         # save recorded model (usually best validation accuracy)
         torch.save(self.recorded_model.state_dict(), os.path.join(output_directory, 'valid_model.pt'))
@@ -378,11 +380,19 @@ class TrainingTracker:
         run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
         run_data_df = pd.DataFrame.from_dict(self.run_data, orient='columns')
 
-        with open(os.path.join(output_directory, 'run_data.txt', 'w')) as fo:
-            fo.write(run_data_df.__repr__())
+        with open(os.path.join(output_directory, 'run_data.txt'), 'w') as output_file:
+            output_file.write(run_data_df.__repr__())
 
-        with open(os.path.join(output_directory, 'run_parameters.txt', 'w')) as fo:
-            fo.write(run_parameters_df.__repr__())
+        with open(os.path.join(output_directory, 'run_parameters.txt'), 'w') as output_file:
+            output_file.write(run_parameters_df.__repr__())
+
+        with open(os.path.join(output_directory, 'results_file.pkl'), 'wb') as output_file:
+            pickle.dump(self, output_file, pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def from_file(cls, file):
+        with open(file, 'rb') as input_file:
+            return pickle.load(input_file)
 
     # noinspection DuplicatedCode
     @torch.no_grad()

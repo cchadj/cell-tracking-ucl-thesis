@@ -240,14 +240,9 @@ def train_model_demo(
         output_directory = os.path.join(CACHED_MODELS_FOLDER,
                                         f'model_va_{results.recorded_model_valid_accuracy:.3f}{postfix}')
         pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
-        output_name = os.path.join(output_directory, 'model')
 
-        print(f'Saving model as {output_name}')
-        results.save(output_name)
-        results_file = os.path.join(output_directory, 'results.pkl')
-        print(f"Saving results as {results_file}")
-        with open(results_file, 'wb') as output_file:
-            pickle.dump(results, output_file, pickle.HIGHEST_PROTOCOL)
+        print(f'Saving results to directory: {output_directory}')
+        results.save(output_directory)
         print('Done')
 
     model = results.recorded_model
