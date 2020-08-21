@@ -343,7 +343,7 @@ class TrainingTracker:
         model.eval()
 
     @torch.no_grad()
-    def save(self, output_name):
+    def save(self, output_directory):
         """ Saves the recorded model as {output_name}.pt among other info files.
 
         Makes {output_name}.pt, {output_name}.txt with recorded epoch loss, accuracy and other run parameters
@@ -357,12 +357,13 @@ class TrainingTracker:
             model:
             model:
         """
+        import os.path
         # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
         # save recorded model (usually best validation accuracy)
-        torch.save(self.recorded_model.state_dict(), f'{output_name}.pt')
+        torch.save(self.recorded_model.state_dict(), os.path.join(output_directory, 'valid_model.pt'))
 
         # save secondary recorded model (usually for best traiing accuracy_
-        torch.save(self.recorded_train_model.state_dict(), f'{output_name}_train_model.pt')
+        torch.save(self.recorded_train_model.state_dict(), os.path.join(output_directory, 'train_model.pt'))
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
@@ -370,18 +371,17 @@ class TrainingTracker:
 
         # Record hyper-params into 'results'
         for k, v in self.run_params.items():
-            if k in ['batch_size', 'do_early_stop',
-                     'early_stop_patience', 'learning_rate_scheduler_patience',
-                     'epochs', 'shuffle']:
+            if k in ['batch_size', 'do_early_stop', 'early_stop_patience',
+                     'learning_rate_scheduler_patience', 'epochs', 'shuffle']:
                 run_parameters[k] = v
 
         run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
-        df = pd.DataFrame.from_dict(self.run_data, orient='columns')
+        run_data_df = pd.DataFrame.from_dict(self.run_data, orient='columns')
 
-        with open(f'{output_name}.txt', 'w') as fo:
-            fo.write(df.__repr__())
+        with open(os.path.join(output_directory, 'run_data.txt', 'w')) as fo:
+            fo.write(run_data_df.__repr__())
 
-        with open(f'{output_name}_run_parameters.txt', 'w') as fo:
+        with open(os.path.join(output_directory, 'run_parameters.txt', 'w')) as fo:
             fo.write(run_parameters_df.__repr__())
 
     # noinspection DuplicatedCode
