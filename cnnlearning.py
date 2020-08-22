@@ -40,8 +40,8 @@ class CNN(nn.Module):
 
         Args:
             dataset_sample (LabeledImageDataset):
-             Dataset sample based on which the model is configured. (input dimension and such
-            model_type: One of 0 or 1.
+             If provided dataset automatically configures the model.
+            model_type: One of 0 or 1 or 2.
             input_dims: The number of channels for the input images. Not needed if dataset_sample is provided.
             output_classes: How many output classes there are.
             dense_input_dims: The input dimensions of the dense part of this model. Not needed if dataset_sample is
@@ -65,12 +65,35 @@ class CNN(nn.Module):
                 # PrintLayer("2"),
                 nn.MaxPool2d(kernel_size=(3, 3), stride=2),
                 # PrintLayer("3"),
+                nn.ReLU(),
+                nn.Dropout(),
+
+                nn.Conv2d(32, 64, padding=2, kernel_size=5),
+                # PrintLayer("9"),
+                nn.BatchNorm2d(64),
+                # PrintLayer("11"),
+                nn.ReLU(),
+                nn.Dropout(),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+                # PrintLayer("12"),
+            )
+            self.convolutional = nn.Sequential(
+                nn.Conv2d(input_dims, 32, padding=2, kernel_size=5),
+                # PrintLayer("1"),
+                nn.BatchNorm2d(32),
+                # PrintLayer("2"),
+                nn.MaxPool2d(kernel_size=(3, 3), stride=2),
+                # PrintLayer("3"),
+                nn.ReLU(),
+                nn.Dropout(),
 
                 nn.Conv2d(32, 32, padding=2, kernel_size=5),
                 # PrintLayer("4"),
                 nn.BatchNorm2d(32),
                 # PrintLayer("5"),
                 nn.ReLU(),
+                nn.Dropout(),
+
                 # PrintLayer("6"),
                 nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
                 # PrintLayer("7"),
@@ -80,6 +103,7 @@ class CNN(nn.Module):
                 nn.BatchNorm2d(64),
                 # PrintLayer("11"),
                 nn.ReLU(),
+                nn.Dropout(),
                 nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
                 # PrintLayer("12"),
             )
@@ -120,42 +144,34 @@ class CNN(nn.Module):
                 convolutional_output = self.convolutional(image_batch)
                 dense_input_dims = convolutional_output.reshape(batch_size, -1).shape[-1]
 
-        if model_type == 1:
-            self.dense = nn.Sequential(
-                nn.Linear(dense_input_dims, 64),
-                nn.ReLU(),
-                nn.Dropout(),
-                nn.BatchNorm1d(64),
-
-                nn.Linear(64, 32),
-                nn.ReLU(),
-                nn.Dropout(),
-                nn.BatchNorm1d(32),
-
-                nn.Linear(32, 2)
-            )
         if model_type == 0:
             self.dense = nn.Sequential(
                 nn.Linear(dense_input_dims, 64),
                 nn.BatchNorm1d(64),
-                nn.ReLU(64),
+                nn.ReLU(),
+                nn.Dropout(),
+
                 nn.Linear(64, 32),
                 nn.BatchNorm1d(32),
+                nn.ReLU(),
+                nn.Dropout(),
                 nn.Linear(32, 2)
             )
-        elif model_type == 2:
-            # Fully connected layer
+        if model_type == 1:
             self.dense = nn.Sequential(
                 nn.Dropout(),
-                nn.Linear(self.dense_input_dims, 8),
-                nn.Dropout(),
+                nn.Linear(dense_input_dims, 64),
                 nn.ReLU(),
-                nn.Linear(8, 4),
                 nn.Dropout(),
-                nn.ReLU(),
-                nn.Linear(4, output_classes),
-            )
+                nn.BatchNorm1d(64),
 
+                nn.Linear(64, 32),
+                nn.ReLU(),
+                nn.Dropout(),
+                nn.BatchNorm1d(32),
+
+                nn.Linear(32, 2)
+            )
         self.dense_input_dims = dense_input_dims
 
     # define forward function
@@ -410,11 +426,12 @@ class TrainingTracker:
         import os.path
         import pathlib
         pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
+
         # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
         # save recorded model (usually best validation accuracy)
         torch.save(self.recorded_model.state_dict(), os.path.join(output_directory, 'valid_model.pt'))
 
-        # save secondary recorded model (usually for best traiing accuracy_
+        # save secondary recorded model (usually for best training) accuracy
         torch.save(self.recorded_train_model.state_dict(), os.path.join(output_directory, 'train_model.pt'))
 
         run_parameters = collections.OrderedDict()
@@ -437,7 +454,9 @@ class TrainingTracker:
             output_file.write(run_parameters_df.__repr__())
 
         with open(os.path.join(output_directory, 'results_file.pkl'), 'wb') as output_file:
+            self.model = copy.deepcopy(self.model)
             pickle.dump(self, output_file, pickle.HIGHEST_PROTOCOL)
+
 
     @classmethod
     def from_file(cls, file):
@@ -446,10 +465,9 @@ class TrainingTracker:
 
     # noinspection DuplicatedCode
     @torch.no_grad()
-    def track_loss_and_accuracy(self, train_loss=None, train_accuracy=None):
-        if train_loss is None or train_accuracy is None:
-            train_loss, train_accuracy, train_positive_accuracy, train_negative_accuracy = \
-                self._get_loss_and_accuracy(self.train_loader)
+    def track_performance(self):
+        train_loss, train_accuracy, train_positive_accuracy, train_negative_accuracy = \
+            self._get_loss_and_accuracy(self.train_loader)
         self.train_losses[self.epoch_count] = train_loss
         self.train_accuracies[self.epoch_count] = train_accuracy
         self.train_positive_accuracies[self.epoch_count] = train_positive_accuracy
@@ -502,9 +520,9 @@ class TrainingTracker:
     def get_last_valid_loss(self):
         return self.valid_losses[self.epoch_count]
 
-    def record_train_model(self, model=None):
-        if model is None:
-            model = self.model
+    # noinspection DuplicatedCode
+    def record_train_model(self):
+        model = self.model.eval()
 
         self.recorded_train_model_weights = copy.deepcopy(model.state_dict())
         self.recorded_train_model = copy.deepcopy(model)
@@ -516,11 +534,11 @@ class TrainingTracker:
         self.recorded_train_model_valid_loss = self.valid_losses[self.epoch_count]
 
         self.is_train_model_recorded = True
+        self.model = self.model.train()
 
     # noinspection DuplicatedCode
-    def record_model(self, model=None):
-        if model is None:
-            model = self.model
+    def record_model(self):
+        model = self.model.eval()
 
         self.recorded_model_weights = copy.deepcopy(model.state_dict())
         self.recorded_model = copy.deepcopy(model)
@@ -532,6 +550,7 @@ class TrainingTracker:
         self.recorded_model_train_loss = self.train_losses[self.epoch_count]
 
         self.is_model_recorded = True
+        self.model = self.model.train()
 
     @torch.no_grad()
     # accumulate loss of batch into entire epoch loss
@@ -596,7 +615,7 @@ class TrainingTracker:
 
     @torch.no_grad()
     def _get_loss_and_accuracy(self, loader):
-        self.model.eval()
+        self.model = self.model.eval()
 
         total_loss = 0
 
@@ -634,7 +653,7 @@ class TrainingTracker:
         positive_accuracy = n_positive_correct / n_positive_samples
         negative_accuracy = n_negative_correct / n_negative_samples
 
-        self.model.train()
+        self.model = self.model.train()
         return total_loss, accuracy, positive_accuracy, negative_accuracy
 
 
@@ -720,6 +739,8 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', add
 
         tracker.start_epoch()
 
+        cnn = cnn.train()
+
         total_loss = 0
         n_samples = 0
         n_correct = 0
@@ -727,10 +748,11 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', add
             # https://stackoverflow.com/questions/48001598/why-do-we-need-to-call-zero-grad-in-pytorch
             optimizer.zero_grad()
 
+            # as per good practice we cast to device to save on gpu memory
             images = batch[0].to(device).type(torch.float32)
-            # print("Images", images.shape)
             labels = batch[1].to(device).type(torch.long)
-            output = cnn(images).type(torch.float32).to(device)
+
+            output = cnn(images).to(device).type(torch.float32)
 
             loss = criterion(output, labels)
 
@@ -749,7 +771,7 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', add
         accuracy = n_correct / n_samples
         if epoch % evaluation_epochs == 0 or epoch == epochs - 1:
             # tracker.track_loss_and_accuracy(train_loss=total_loss, train_accuracy=accuracy)
-            tracker.track_loss_and_accuracy()
+            tracker.track_performance()
 
             if tracker.is_best_valid_accuracy_recorded:
                 tracker.record_model()
