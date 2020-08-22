@@ -101,6 +101,7 @@ def load_model_from_cache(
     return best_model_directory
 
 
+# noinspection DuplicatedCode
 def train_model_demo(
         video_sessions=None,
         patch_size=(21, 21),
@@ -243,54 +244,63 @@ def train_model_demo(
         results.save(output_directory)
         print('Done')
 
-    model = results.recorded_model
-    model.eval()
+    model = results.recorded_model.eval()
 
-    positive_dataset = LabeledImageDataset(
-        cell_images, np.ones(len(cell_images), dtype=np.int), standardize=standardize_dataset
-    )
-    negative_dataset = LabeledImageDataset(
-        non_cell_images, np.zeros(len(non_cell_images), dtype=np.int), standardize=standardize_dataset
-    )
-
-    _, train_accuracy = classify_labeled_dataset(trainset, model)
-    _, valid_accuracy = classify_labeled_dataset(validset, model)
-
-    _, positive_accuracy = classify_labeled_dataset(positive_dataset, model)
-    _, negative_accuracy = classify_labeled_dataset(negative_dataset, model)
+    _, train_accuracy, train_positive_accuracy, train_negative_accuracy = classify_labeled_dataset(trainset, model, ret_pos_and_neg_acc=True)
+    _, valid_accuracy, valid_positive_accuracy, valid_negative_accuracy = classify_labeled_dataset(validset, model, ret_pos_and_neg_acc=True)
 
     print()
     print(f'Model trained on {len(cell_images)} cell patches and {len(non_cell_images)} non cell patches.')
     print()
-    print('Brief evaluation - best validation accuracy model')
+    print('Brief evaluation - Best validation accuracy model')
     print('----------------')
     print(f'Epoch:\t', results.recorded_model_epoch)
     print('Training accuracy:\t', f'{train_accuracy:.3f}')
     print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
     print()
-    print('Positive accuracy:\t', f'{positive_accuracy:.3f}')
-    print('Negative accuracy:\t', f'{negative_accuracy:.3f}')
+    print('Positive train accuracy:\t', f'{train_positive_accuracy:.3f}')
+    print('Negative train accuracy:\t', f'{train_negative_accuracy:.3f}')
     print()
-    print(f'{train_accuracy:.3f} {valid_accuracy:.3f} {positive_accuracy:.3f} {negative_accuracy:.3f}')
+    print('Positive valid accuracy:\t', f'{valid_positive_accuracy:.3f}')
+    print('Negative valid accuracy:\t', f'{valid_negative_accuracy:.3f}')
     print()
-    train_model = results.recorded_train_model
-    train_model.eval()
 
-    _, train_accuracy = classify_labeled_dataset(trainset, train_model)
-    _, valid_accuracy = classify_labeled_dataset(validset, train_model)
+    print(f'{train_accuracy:.3f} {valid_accuracy:.3f} '
+          f'{train_positive_accuracy:.3f} {train_negative_accuracy:.3f} '
+          f'{valid_positive_accuracy:.3f} {valid_negative_accuracy:.3f}')
 
-    _, positive_accuracy = classify_labeled_dataset(positive_dataset, train_model)
-    _, negative_accuracy = classify_labeled_dataset(negative_dataset, train_model)
+    epoch = results.recorded_model_epoch
+    print(f'{results.train_accuracies[epoch]:.3f} {results.valid_accuracies[epoch]:.3f} '
+          f'{results.train_positive_accuracies[epoch]:.3f} {results.train_negative_accuracies[epoch]:.3f} '
+          f'{results.valid_positive_accuracies[epoch]:.3f} {results.valid_negative_accuracies[epoch]:.3f}')
+
+    model = results.recorded_train_model.eval()
+    _, train_accuracy, train_positive_accuracy, train_negative_accuracy = classify_labeled_dataset(trainset, model, ret_pos_and_neg_acc=True)
+    _, valid_accuracy, valid_positive_accuracy, valid_negative_accuracy = classify_labeled_dataset(validset, model, ret_pos_and_neg_acc=True)
 
     print()
-    print('Brief evaluation - best training accuracy model')
+    print(f'Model trained on {len(cell_images)} cell patches and {len(non_cell_images)} non cell patches.')
+    print()
+    print('Brief evaluation - Best training accuracy model')
     print('----------------')
-    print(f'Epoch:\t', results.recorded_train_model_epoch)
+    print(f'Epoch:\t', results.recorded_model_epoch)
     print('Training accuracy:\t', f'{train_accuracy:.3f}')
     print('Validation accuracy:\t', f'{valid_accuracy:.3f}')
     print()
-    print('Positive accuracy:\t', f'{positive_accuracy:.3f}')
-    print('Negative accuracy:\t', f'{negative_accuracy:.3f}')
+    print('Positive train accuracy:\t', f'{train_positive_accuracy:.3f}')
+    print('Negative train accuracy:\t', f'{train_negative_accuracy:.3f}')
+    print()
+    print('Positive valid accuracy:\t', f'{valid_positive_accuracy:.3f}')
+    print('Negative valid accuracy:\t', f'{valid_negative_accuracy:.3f}')
+    print()
+
+    print(f'{train_accuracy:.3f} {valid_accuracy:.3f} {train_positive_accuracy:.3f} {train_negative_accuracy:.3f} '
+          f'{valid_positive_accuracy:.3f} {valid_negative_accuracy:.3f}')
+
+    epoch = results.recorded_train_model_epoch
+    print(f'{results.train_accuracies[epoch]:.3f} {results.valid_accuracies[epoch]:.3f} '
+          f'{results.train_positive_accuracies[epoch]:.3f} {results.train_negative_accuracies[epoch]:.3f} '
+          f'{results.valid_positive_accuracies[epoch]:.3f} {results.valid_negative_accuracies[epoch]:.3f}')
 
     return model, results
 
@@ -353,8 +363,11 @@ def main_tmp():
     video_sessions_registered = get_video_sessions(should_have_marked_cells=True, should_be_registered=True)
     model, results = train_model_demo(
         patch_size=31,
-        mixed_channel_patches=True,
         temporal_width=0,
+
+        mixed_channel_patches=True,
+        drop_confocal_channel=True,
+
         do_hist_match=False,
         n_negatives_per_positive=1,
         standardize_dataset=True,
@@ -373,8 +386,20 @@ if __name__ == '__main__':
 
     video_sessions = get_video_sessions(should_be_registered=True, should_have_marked_cells=True)
 
+    train_params = collections.OrderedDict(
+        epochs=250,
+        lr=.001,
+
+        weight_decay=0.01,
+        batch_size=512,  # can be a number or None/'all' to train all trainset at once.
+        do_early_stop=True,  # Optional default True
+        early_stop_patience=60,  # How many epochs with no validation accuracy improvement before stopping early
+        learning_rate_scheduler_patience=20,
+        # How many epochs with no validation accuracy improvement before lowering learning rate
+        evaluate_epochs=10,
+        shuffle=True)
+
     model, results = train_model_demo(
-        video_sessions=video_sessions,  # The video sessions the data will be created from
 
         patch_size=27,
         temporal_width=0,
@@ -386,11 +411,11 @@ if __name__ == '__main__':
         standardize_dataset=True,
         apply_data_augmentation_to_dataset=False,
 
-        try_load_data_from_cache=True,
-        # If true attemps to load data from cache. If false just created new (and overwrites old if exist)
+        video_sessions=video_sessions[:1],  # The video sessions the data will be created from
+        try_load_data_from_cache=True,   # If true attemps to load data from cache. If false just created new (and overwrites old if exist)
         try_load_model_from_cache=True,  # Attemps to load model from cache. If false creates new
 
-        train_params=None,  # The training train parameters
+        train_params=train_params,  # The training train parameters
         additional_displays=None,
         v=True, vv=True,
     )

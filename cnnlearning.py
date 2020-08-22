@@ -171,11 +171,17 @@ class TrainingTracker:
         self.run_data = []
 
         # track every loss and performance
-        self.train_losses = []
-        self.valid_losses = []
+        self.train_losses = {}
+        self.valid_losses = {}
 
-        self.train_accuracies = []
-        self.valid_accuracies = []
+        self.train_accuracies = {}
+        self.valid_accuracies = {}
+
+        self.train_positive_accuracies = {}
+        self.valid_positive_accuracies = {}
+
+        self.train_negative_accuracies = {}
+        self.valid_negative_accuracies = {}
 
         # Track training performance metrics
         self.epoch_durations = []
@@ -269,31 +275,39 @@ class TrainingTracker:
     def display_results(self):
         # Write into 'results' (OrderedDict) for all run related data
         results = collections.OrderedDict()
-        results["e"] = self.epoch_count
+        results['e'] = self.epoch_count
         # record epoch loss and accuracy
 
         if self.train_losses:
-            results["train loss"] = self.train_losses[-1]
-        if self.valid_losses:
-            results["valid loss"] = self.valid_losses[-1]
-
+            results['train loss'] = f'{self.train_losses[self.epoch_count]:.1E}'
         if self.train_accuracies:
-            results["train acc"] = self.train_accuracies[-1]
-        if self.valid_accuracies:
-            results["valid acc"] = self.valid_accuracies[-1]
+            results['train acc'] = self.train_accuracies[self.epoch_count]
+        if self.train_positive_accuracies:
+            results['train pos acc'] = self.train_positive_accuracies[self.epoch_count]
+        if self.train_negative_accuracies:
+            results['train neg acc'] = self.train_negative_accuracies[self.epoch_count]
 
-        results["Best loss?"] = self.is_best_valid_loss_recorded
-        results["Best Acc?"] = self.is_best_valid_accuracy_recorded
+        if self.valid_losses:
+            results['valid loss'] = f'{self.valid_losses[self.epoch_count]:.1E}'
+        if self.valid_accuracies:
+            results['valid acc'] = self.valid_accuracies[self.epoch_count]
+        if self.valid_positive_accuracies:
+            results['valid pos acc'] = self.valid_positive_accuracies[self.epoch_count]
+        if self.valid_negative_accuracies:
+            results['valid neg acc'] = self.valid_negative_accuracies[self.epoch_count]
+
+        # results['Best loss?'] = self.is_best_valid_loss_recorded
+        # results['Best Acc?'] = self.is_best_valid_accuracy_recorded
         # results["Model Recorded?"] = self.is_model_recorded
 
         if self.do_early_stop:
-            results["last loss"] = self._times_since_last_best_valid_loss
-            results["last acc"] = self._times_since_last_best_valid_accuracy
+            results['lst bst loss e'] = self._times_since_last_best_valid_loss
+            results['lst bst acc  e'] = self._times_since_last_best_valid_accuracy
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
             run_parameters['lr'] = param_group["lr"]
-            results['lr'] = param_group['lr']
+            results['lr'] = f"{param_group['lr']:.2E}"
             run_parameters['wd'] = param_group["weight_decay"]
 
         # Record hyper-params into 'results'
@@ -309,8 +323,9 @@ class TrainingTracker:
                 run_parameters['Trainset size'] = len(self.run_params[k])
             elif k == 'validset':
                 run_parameters['Validset size '] = len(self.run_params[k])
-            elif k not in ['trainset', 'validset', 'testset', 'optimizer',
-                           'lr', 'weight_decay', 'do_early_stop', 'evaluate_epochs']:
+            elif k not in ['trainset', 'validset', 'testset', 'optimizer', 'n_negatives_per_positive',
+                           'lr', 'weight_decay', 'do_early_stop', 'evaluation_epochs']:
+                # The columns I don't want to see each epoch
                 results[k] = v
 
         self.run_data.append(results)
@@ -320,15 +335,16 @@ class TrainingTracker:
         current_performance_df = pd.DataFrame(
             collections.OrderedDict({
                 'Best train acc': self.best_train_accuracy,
-                'train loss': self.best_train_loss,
+                'loss': f'{self.best_train_loss:.2E}',
                 'Best train epoch': self.best_train_accuracy_epoch,
                 'Best valid acc': self.best_valid_accuracy,
-                'valid loss': self.best_valid_loss,
+                'valid loss': f'{self.best_valid_loss:.2E}',
                 'Best valid epoch': self.best_valid_accuracy_epoch
             }), index=[0])
         # display epoch information and show progress
         with pd.option_context('display.max_rows', 7,
                                'display.max_colwidth', 30,
+                               # 'display.float_format', '{:.2E}'.format,
                                'display.max_columns', None,
                                'display.width', 1000):  # more options can be specified also
             clear_output()
@@ -353,15 +369,11 @@ class TrainingTracker:
         """ Saves the recorded model as {output_name}.pt among other info files.
 
         Makes {output_name}.pt, {output_name}.txt with recorded epoch loss, accuracy and other run parameters
-        and {output_name}_run_parameters.txt with the hyperparameters that the network was ran (learning_rate, patience
+        and {output_name}_run_parameters.txt with the hyper parameters that the network was ran (learning_rate, patience
         e.t.c)
 
-        :param output_name:
-            The prefix for the files (model, run parameters, run data)
-
         Args:
-            model:
-            model:
+            output_directory (string): The output directory name.
         """
         import os.path
         import pathlib
@@ -404,9 +416,12 @@ class TrainingTracker:
     @torch.no_grad()
     def track_loss_and_accuracy(self, train_loss=None, train_accuracy=None):
         if train_loss is None or train_accuracy is None:
-            train_loss, train_accuracy = self._get_loss_and_accuracy(self.train_loader)
-        self.train_losses.append(train_loss)
-        self.train_accuracies.append(train_accuracy)
+            train_loss, train_accuracy, train_positive_accuracy, train_negative_accuracy =\
+                self._get_loss_and_accuracy(self.train_loader)
+        self.train_losses[self.epoch_count] = train_loss
+        self.train_accuracies[self.epoch_count] = train_accuracy
+        self.train_positive_accuracies[self.epoch_count] = train_positive_accuracy
+        self.train_negative_accuracies[self.epoch_count] = train_negative_accuracy
 
         if train_loss < self.best_train_loss:
             self.is_best_train_loss_recorded = True
@@ -425,9 +440,12 @@ class TrainingTracker:
             self.is_best_train_accuracy_recorded = False
             self._times_since_last_best_train_accuracy += 1
 
-        valid_loss, valid_accuracy = self._get_loss_and_accuracy(self.valid_loader)
-        self.valid_losses.append(valid_loss)
-        self.valid_accuracies.append(valid_accuracy)
+        valid_loss, valid_accuracy, valid_positive_accuracy, valid_negative_accuracy\
+            = self._get_loss_and_accuracy(self.valid_loader)
+        self.valid_losses[self.epoch_count] = valid_loss
+        self.valid_accuracies[self.epoch_count] = valid_accuracy
+        self.valid_positive_accuracies[self.epoch_count] = valid_positive_accuracy
+        self.valid_negative_accuracies[self.epoch_count] = valid_negative_accuracy
 
         if valid_loss < self.best_valid_loss:
             self.is_best_valid_loss_recorded = True
@@ -447,10 +465,10 @@ class TrainingTracker:
             self._times_since_last_best_valid_accuracy += 1
 
     def get_last_valid_accuracy(self):
-        return self.valid_accuracies[-1]
+        return self.valid_accuracies[self.epoch_count]
 
     def get_last_valid_loss(self):
-        return self.valid_losses[-1]
+        return self.valid_losses[self.epoch_count]
 
     def record_train_model(self, model=None):
         if model is None:
@@ -460,10 +478,10 @@ class TrainingTracker:
         self.recorded_train_model = copy.deepcopy(model)
         self.recorded_train_model = self.recorded_train_model.eval()
         self.recorded_train_model_epoch = self.epoch_count
-        self.recorded_train_model_train_accuracy = self.train_accuracies[-1]
-        self.recorded_train_model_train_loss = self.train_losses[-1]
-        self.recorded_train_model_valid_accuracy = self.valid_accuracies[-1]
-        self.recorded_train_model_valid_loss = self.valid_losses[-1]
+        self.recorded_train_model_train_accuracy = self.train_accuracies[self.epoch_count]
+        self.recorded_train_model_train_loss = self.train_losses[self.epoch_count]
+        self.recorded_train_model_valid_accuracy = self.valid_accuracies[self.epoch_count]
+        self.recorded_train_model_valid_loss = self.valid_losses[self.epoch_count]
 
         self.is_train_model_recorded = True
 
@@ -476,10 +494,10 @@ class TrainingTracker:
         self.recorded_model = copy.deepcopy(model)
         self.recorded_model = self.recorded_model.eval()
         self.recorded_model_epoch = self.epoch_count
-        self.recorded_model_valid_accuracy = self.valid_accuracies[-1]
-        self.recorded_model_valid_loss = self.valid_losses[-1]
-        self.recorded_model_train_accuracy = self.train_accuracies[-1]
-        self.recorded_model_train_loss = self.train_losses[-1]
+        self.recorded_model_valid_accuracy = self.valid_accuracies[self.epoch_count]
+        self.recorded_model_valid_loss = self.valid_losses[self.epoch_count]
+        self.recorded_model_train_accuracy = self.train_accuracies[self.epoch_count]
+        self.recorded_model_train_loss = self.train_losses[self.epoch_count]
 
         self.is_model_recorded = True
 
@@ -552,6 +570,10 @@ class TrainingTracker:
 
         n_samples = 0
         n_correct = 0
+        n_positive_correct = 0
+        n_positive_samples = 0
+        n_negative_correct = 0
+        n_negative_samples = 0
         for batch in loader:
             images = batch[0].to(self.device)
             targets = batch[1].to(self.device).type(torch.long)
@@ -562,14 +584,26 @@ class TrainingTracker:
             total_loss += loss.item()
 
             predictions = torch.argmax(output, dim=1).type(torch.int)
-            n_correct += torch.sum(predictions == targets).item()
-            n_samples += targets.shape[0]
+            n_correct += (predictions == targets).sum().item()
+
+            positive_indices = torch.where(targets == 1)[0]
+            n_positive_samples += len(positive_indices)
+            n_positive_correct += (predictions[positive_indices] == targets[positive_indices]).sum().item()
+
+            negative_indices = torch.where(targets == 0)[0]
+            n_negative_samples += len(negative_indices)
+            n_negative_correct += (predictions[negative_indices] == targets[negative_indices]).sum().item()
+
+            n_samples += len(targets)
 
         total_loss /= n_samples
         accuracy = n_correct / n_samples
 
+        positive_accuracy = n_positive_correct / n_positive_samples
+        negative_accuracy = n_negative_correct / n_negative_samples
+
         self.model.train()
-        return total_loss, accuracy
+        return total_loss, accuracy, positive_accuracy, negative_accuracy
 
 
 class TrainingInterruptSignalHandler(object):
