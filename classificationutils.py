@@ -13,7 +13,7 @@ POSITIVE_LABEL = 1
 
 
 @torch.no_grad()
-def classify_labeled_dataset(dataset, model, device="cuda"):
+def classify_labeled_dataset(dataset, model, ret_pos_and_neg_acc=False, device="cuda"):
     model = model.eval()
     model = model.to(device)
 
@@ -24,6 +24,12 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
     )
 
     n_correct = 0
+
+    n_positive_correct = 0
+    n_negative_correct = 0
+    n_positive_samples = 0
+    n_negative_samples = 0
+
     c = 0
     predictions = torch.empty(len(dataset), dtype=torch.long).to(device)
     for images, labels in loader:
@@ -36,10 +42,25 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
         predictions[c:c + pred.shape[0]] = pred
 
         n_correct += (pred == labels).sum().item()
+
+        positive_indices = torch.where(labels == 1)[0]
+        n_positive_correct += (pred[positive_indices] == labels[positive_indices]).sum().item()
+        n_positive_samples += len(positive_indices)
+
+        negative_indices = torch.where(labels == 0)[0]
+        n_negative_correct += (pred[negative_indices] == labels[negative_indices]).sum().item()
+        n_negative_samples += len(negative_indices)
+
         c += pred.shape[0]
 
     accuracy = n_correct / len(dataset)
-    return predictions, accuracy
+    positive_accuracy = n_positive_correct / n_positive_samples
+    negative_accuracy = n_negative_correct / n_negative_samples
+
+    if ret_pos_and_neg_acc:
+        return predictions, accuracy, positive_accuracy, negative_accuracy
+    else:
+        return  predictions, accuracy
 
 
 @torch.no_grad()

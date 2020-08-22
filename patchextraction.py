@@ -12,27 +12,40 @@ from sharedvariables import VideoSession
 from nearest_neighbors import get_nearest_neighbor, get_nearest_neighbor_distances
 
 
-def get_random_points_on_circles(points,n_points_per_circle=1, max_radius=None, ret_radii=False):
+def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None, ret_radii=False):
     assert 1 <= n_points_per_circle <= 7, f'Points per circle must be between 1 and 7 not {n_points_per_circle}'
 
-    neighbor_distances, _ = get_nearest_neighbor(points, 2)
-
-    # dist_flat = neighbor_distances.flatten()
-    # dist_flat = np.delete(dist_flat, np.where(dist_flat > (dist_flat.mean() + 0 * dist_flat.std()))[0])
-    # mean_distance = dist_flat.mean()
-
+    neighbor_distances, neighbor_idxs = get_nearest_neighbor(points, 2)
     nnp = n_points_per_circle
     uniform_angle_displacements = np.array([0, np.math.pi, np.math.pi * 0.5, np.math.pi * 3 * 0.5, np.math.pi * 0.25,
                                             3 * np.math.pi * 0.25, 5 * np.math.pi * 0.25,
                                             7 * np.math.pi * 0.25]).squeeze()
     c = 0
-    rxs = np.empty(len(points) * nnp, dtype=np.int32)
-    rys = np.empty(len(points) * nnp, dtype=np.int32)
-    radii = np.empty(len(points))
-    for centre_point_idx, distances in enumerate(neighbor_distances):
+    rxs = np.zeros(len(points) * nnp + 2 * len(points), dtype=np.int32)
+    rys = np.zeros(len(points) * nnp + 2 * len(points), dtype=np.int32)
+    radii = np.zeros(len(points))
+
+    for centre_point_idx, (closest_nbr_distances, closest_nbr_indices) in enumerate(zip(neighbor_distances, neighbor_idxs)):
         centre_point = points[centre_point_idx]
 
-        r = np.ceil(np.min(distances) / 2)
+        prev_vec = None
+        # Add the points halfway between the current point and it's closest neighbor points
+        for i, (nbr_dist, nbr_idx) in enumerate(zip(closest_nbr_distances, closest_nbr_indices)):
+            if nbr_dist / 2 < max_radius:
+                nbr_point = points[nbr_idx]
+                vec = nbr_point - centre_point
+                if i == 1 and prev_vec is not None:
+                    if prev_vec @ vec > 0:
+                        break
+                p = np.int32(centre_point + .5 * vec)
+                if p[0] not in rxs or p[1] not in rys:
+                    rxs[c], rys[c] = p
+                    c += 1
+
+                prev_vec = vec
+
+        # Add random points around a small circle around the point
+        r = np.ceil(np.min(closest_nbr_distances) / 2)
         if r > max_radius:
             r = max_radius
         radii[centre_point_idx] = r
@@ -48,6 +61,13 @@ def get_random_points_on_circles(points,n_points_per_circle=1, max_radius=None, 
         rys[c:c + nnp] = ry
 
         c += nnp
+
+    rxs = rxs[:c]
+    rys = rys[:c]
+
+    # print(len(points))
+    # print(len(rxs))
+    # print()
 
     if ret_radii:
         return rxs, rys, radii
@@ -280,6 +300,7 @@ def extract_patches_at_positions(image,
     patches = np.zeros_like(image, shape=[n_patches_max, patch_height, patch_width, n_channels])
 
     if visualize_patches:
+        from matplotlib import pyplot as plt
         fig, ax = plt.subplots(1, figsize=(20, 10))
 
     if mask is None:
