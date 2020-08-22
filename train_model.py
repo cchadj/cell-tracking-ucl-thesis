@@ -115,6 +115,7 @@ def train_model_demo(
         standardize_dataset=True,
         dataset_to_grayscale=False,
         apply_data_augmentation_to_dataset=False,
+        valid_ratio=0.2,
 
         n_negatives_per_positive=1,
         train_params=None,
@@ -147,6 +148,7 @@ def train_model_demo(
             standardize_dataset=standardize_dataset,
             dataset_to_grayscale=dataset_to_grayscale,
             apply_data_augmentation_to_dataset=apply_data_augmentation_to_dataset,
+            validset_ratio=valid_ratio,
 
             n_negatives_per_positive=n_negatives_per_positive,
 

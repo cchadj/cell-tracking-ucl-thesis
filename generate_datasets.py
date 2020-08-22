@@ -164,6 +164,7 @@ def get_cell_and_no_cell_patches(
         mixed_channel_patches=False,
         drop_confocal_channel=True,
 
+        validset_ratio=0.2,
         n_negatives_per_positive=1,
         negative_patch_search_radius=21,
         do_hist_match=False,
@@ -401,7 +402,7 @@ def get_cell_and_no_cell_patches(
 
         trainset, validset = create_dataset_from_cell_and_no_cell_images(
             cell_images, non_cell_images, standardize=standardize_dataset, to_grayscale=dataset_to_grayscale,
-            data_augmentation_transformations=data_augmentation_transformations, v=v
+            data_augmentation_transformations=data_augmentation_transformations, validset_ratio=validset_ratio, v=v
         )
 
         if v:

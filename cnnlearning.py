@@ -49,7 +49,7 @@ class CNN(nn.Module):
             padding:
         """
         super().__init__()
-        assert model_type in [0, 1]
+        assert model_type in [0, 1, 2]
 
         if dataset_sample:
             batch_sample = dataset_sample[0]
@@ -84,28 +84,6 @@ class CNN(nn.Module):
                 # PrintLayer("12"),
             )
 
-            # determine the input dimensions needed for the dense part of the model.
-            if dataset_sample:
-                # In order for the image sample to work we must append a batch number dimension
-                # HxWxC -> 1xHxWxC
-                image_batch = image_sample[None, ...].cpu()
-                batch_size = 1
-
-                with torch.no_grad():
-                    # output shape is 1 x output C x out H x out W.
-                    # to get the dense input dimensions we get the convolutional output and
-                    # reshape so every dimension other than batch size is multiplied together.
-                    convolutional_output = self.convolutional(image_batch)
-                    dense_input_dims = convolutional_output.reshape(batch_size, -1).shape[-1]
-
-            self.dense = nn.Sequential(
-                nn.Linear(dense_input_dims, 64),
-                nn.BatchNorm1d(64),
-                nn.ReLU(64),
-                nn.Linear(64, 32),
-                nn.BatchNorm1d(32),
-                nn.Linear(32, 2)
-            )
         elif model_type == 1:
             self.convolutional = nn.Sequential(
                 nn.Conv2d(input_dims, 16, kernel_size=3, padding=padding, padding_mode='replicate'),
@@ -128,6 +106,44 @@ class CNN(nn.Module):
                 # Print("nn.AvgPool2d(kernel_size=(3, 3), stride=2"),
             )
 
+        # determine the input dimensions needed for the dense part of the model.
+        if dataset_sample:
+            # In order for the image sample to work we must append a batch number dimension
+            # HxWxC -> 1xHxWxC
+            image_batch = image_sample[None, ...].cpu()
+            batch_size = 1
+
+            with torch.no_grad():
+                # output shape is 1 x output C x out H x out W.
+                # to get the dense input dimensions we get the convolutional output and
+                # reshape so every dimension other than batch size is multiplied together.
+                convolutional_output = self.convolutional(image_batch)
+                dense_input_dims = convolutional_output.reshape(batch_size, -1).shape[-1]
+
+        if model_type == 1:
+            self.dense = nn.Sequential(
+                nn.Linear(dense_input_dims, 64),
+                nn.ReLU(),
+                nn.Dropout(),
+                nn.BatchNorm1d(64),
+
+                nn.Linear(64, 32),
+                nn.ReLU(),
+                nn.Dropout(),
+                nn.BatchNorm1d(32),
+
+                nn.Linear(32, 2)
+            )
+        if model_type == 0:
+            self.dense = nn.Sequential(
+                nn.Linear(dense_input_dims, 64),
+                nn.BatchNorm1d(64),
+                nn.ReLU(64),
+                nn.Linear(64, 32),
+                nn.BatchNorm1d(32),
+                nn.Linear(32, 2)
+            )
+        elif model_type == 2:
             # Fully connected layer
             self.dense = nn.Sequential(
                 nn.Dropout(),
@@ -306,9 +322,9 @@ class TrainingTracker:
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
-            run_parameters['lr'] = param_group["lr"]
-            results['lr'] = f"{param_group['lr']:.2E}"
+            run_parameters['lr'] = f'{param_group["lr"]:.2E}'
             run_parameters['wd'] = param_group["weight_decay"]
+            results['lr'] = f"{param_group['lr']:.2E}"
 
         # Record hyper-params into 'results'
         for k, v in self.run_params.items():
@@ -332,15 +348,28 @@ class TrainingTracker:
         run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
         run_performance_df = pd.DataFrame.from_dict(self.run_data, orient='columns')
 
-        current_performance_df = pd.DataFrame(
+        current_valid_performance_df = pd.DataFrame(
+            collections.OrderedDict({
+                'Best valid acc': self.best_valid_accuracy,
+                'loss': f'{self.best_train_loss:.2E}',
+                'valid pos acc': self.valid_positive_accuracies[self.best_valid_accuracy_epoch],
+                'valid neg acc': self.valid_negative_accuracies[self.best_valid_accuracy_epoch],
+                'train pos acc': self.train_positive_accuracies[self.best_valid_accuracy_epoch],
+                'train neg acc': self.train_negative_accuracies[self.best_valid_accuracy_epoch],
+                'epoch': self.best_train_accuracy_epoch,
+            }), index=[0])
+
+        current_train_performance_df = pd.DataFrame(
             collections.OrderedDict({
                 'Best train acc': self.best_train_accuracy,
                 'loss': f'{self.best_train_loss:.2E}',
-                'Best train epoch': self.best_train_accuracy_epoch,
-                'Best valid acc': self.best_valid_accuracy,
-                'valid loss': f'{self.best_valid_loss:.2E}',
-                'Best valid epoch': self.best_valid_accuracy_epoch
+                'valid pos acc': self.valid_positive_accuracies[self.best_train_accuracy_epoch],
+                'valid neg acc': self.valid_negative_accuracies[self.best_train_accuracy_epoch],
+                'train pos acc': self.train_positive_accuracies[self.best_train_accuracy_epoch],
+                'train neg acc': self.train_negative_accuracies[self.best_train_accuracy_epoch],
+                'epoch': self.best_train_accuracy_epoch,
             }), index=[0])
+
         # display epoch information and show progress
         with pd.option_context('display.max_rows', 7,
                                'display.max_colwidth', 30,
@@ -353,7 +382,10 @@ class TrainingTracker:
                     display(pd.DataFrame(additional_display, index=[0]))
                 else:
                     display(additional_display)
-            display(current_performance_df)
+
+            display(current_valid_performance_df)
+            display(current_train_performance_df)
+
             display(run_parameters_df)
             display(run_performance_df)
 
@@ -416,7 +448,7 @@ class TrainingTracker:
     @torch.no_grad()
     def track_loss_and_accuracy(self, train_loss=None, train_accuracy=None):
         if train_loss is None or train_accuracy is None:
-            train_loss, train_accuracy, train_positive_accuracy, train_negative_accuracy =\
+            train_loss, train_accuracy, train_positive_accuracy, train_negative_accuracy = \
                 self._get_loss_and_accuracy(self.train_loader)
         self.train_losses[self.epoch_count] = train_loss
         self.train_accuracies[self.epoch_count] = train_accuracy
@@ -440,7 +472,7 @@ class TrainingTracker:
             self.is_best_train_accuracy_recorded = False
             self._times_since_last_best_train_accuracy += 1
 
-        valid_loss, valid_accuracy, valid_positive_accuracy, valid_negative_accuracy\
+        valid_loss, valid_accuracy, valid_positive_accuracy, valid_negative_accuracy \
             = self._get_loss_and_accuracy(self.valid_loader)
         self.valid_losses[self.epoch_count] = valid_loss
         self.valid_accuracies[self.epoch_count] = valid_accuracy
