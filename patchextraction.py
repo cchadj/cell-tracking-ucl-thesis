@@ -1049,7 +1049,6 @@ if __name__ == '__main__':
     print([vs.video_file for vs in video_sessions])
     vs = video_sessions[0]
 
-
     patch_extractor = SessionPatchExtractor(vs, patch_size=35, temporal_width=1, n_negatives_per_positive=7)
 
     plt.rcParams['image.cmap'] = 'gray'
