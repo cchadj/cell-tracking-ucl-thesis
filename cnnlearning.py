@@ -77,14 +77,20 @@ class CNN(nn.Module):
             self.convolutional = nn.Sequential(
                 nn.Conv2d(input_dims, 16, padding=2, kernel_size=5),
                 nn.BatchNorm2d(16),
-                nn.MaxPool2d(kernel_size=(3, 3), stride=2),
-                nn.ReLU(),
-                nn.Dropout(),
+                nn.MaxPool2d(kernel_size=3, stride=2),
 
                 nn.Conv2d(16, 32, padding=2, kernel_size=5),
                 nn.BatchNorm2d(32),
+                nn.MaxPool2d(kernel_size=3, stride=2),
+
+                nn.Conv2d(32, 32, padding=2, kernel_size=5),
+                nn.BatchNorm2d(32),
                 nn.ReLU(),
-                nn.Dropout(),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+
+                nn.Conv2d(32, 64, padding=2, kernel_size=5),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
                 nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
             )
         elif model_type == 2:
@@ -149,11 +155,16 @@ class CNN(nn.Module):
                 nn.ReLU(),
                 nn.Dropout(),
 
-                nn.Linear(32, 2)
+                nn.Linear(32, output_classes)
             )
         elif model_type in [1, 2]:
             self.dense = nn.Sequential(
-                nn.Linear(dense_input_dims, 32),
+                nn.Linear(dense_input_dims, 64),
+                nn.BatchNorm1d(64),
+                nn.ReLU(),
+                nn.Dropout(),
+
+                nn.Linear(64, 32),
                 nn.BatchNorm1d(32),
                 nn.ReLU(),
                 nn.Dropout(),
@@ -167,7 +178,7 @@ class CNN(nn.Module):
                 nn.BatchNorm1d(8),
                 nn.ReLU(),
 
-                nn.Linear(8, 2)
+                nn.Linear(8, output_classes)
             )
 
     # define forward function

@@ -207,30 +207,30 @@ def create_dataset_from_cell_and_no_cell_images(
     if v:
         print('Splitting into training set and validation set')
 
+    # positive patches
     cell_images_indices = list(np.arange(len(cell_images)))
-    non_cell_images_indices = list(np.arange(len(non_cell_images)))
-
     random.shuffle(cell_images_indices)
+
+    positive_trainset_size = int(len(cell_images) * (1 - validset_ratio))
+    positive_validset_size = len(cell_images) - positive_trainset_size
+    assert positive_trainset_size + positive_validset_size == len(cell_images)
+    train_cell_images_indices, valid_cell_images_indices = train_test_split(cell_images_indices,
+                                                                            train_size=positive_trainset_size,
+                                                                            test_size=positive_validset_size)
+    train_cell_images = cell_images[train_cell_images_indices]
+    valid_cell_images = cell_images[valid_cell_images_indices]
+
+    # negative patches
+    non_cell_images_indices = list(np.arange(len(non_cell_images)))
     random.shuffle(non_cell_images_indices)
 
-    trainset_size = int(len(cell_images) * (1 - validset_ratio))
-    validset_size = len(cell_images) - trainset_size
-    assert trainset_size + validset_size == len(cell_images)
-    train_cell_images_indices, valid_cell_images_indices = train_test_split(cell_images_indices,
-                                                                            train_size=trainset_size,
-                                                                            test_size=validset_size)
-
-    trainset_size = int(len(non_cell_images) * (1 - validset_ratio))
-    validset_size = len(non_cell_images) - trainset_size
-    assert trainset_size + validset_size == len(non_cell_images)
+    negative_trainset_size = int(len(non_cell_images) * (1 - validset_ratio))
+    negative_validset_size = len(non_cell_images) - negative_trainset_size
+    assert negative_trainset_size + negative_validset_size == len(non_cell_images)
     train_non_cell_images_indices, valid_non_cell_images_indices = train_test_split(non_cell_images_indices,
-                                                                                    train_size=trainset_size,
-                                                                                    test_size=validset_size)
-
-    train_cell_images = cell_images[train_cell_images_indices]
+                                                                                    train_size=negative_trainset_size,
+                                                                                    test_size=negative_validset_size)
     train_non_cell_images = non_cell_images[train_non_cell_images_indices]
-
-    valid_cell_images = cell_images[valid_cell_images_indices]
     valid_non_cell_images = non_cell_images[valid_non_cell_images_indices]
 
     var = ((np.float32(cell_images) / 255).var() + (np.float32(non_cell_images) / 255).var()) / 2
@@ -249,9 +249,10 @@ def create_dataset_from_cell_and_no_cell_images(
             torchvision.transforms.CenterCrop(patch_size)
         ]
 
+    # Trainset
     trainset = LabeledImageDataset(
-        np.concatenate((train_cell_images,     train_non_cell_images), axis=0),
-        np.concatenate((np.ones(len(train_cell_images), dtype=np.int), np.zeros(len(train_non_cell_images_indices), dtype=np.int)), axis=0),
+        np.concatenate((train_cell_images,                             train_non_cell_images), axis=0),
+        np.concatenate((np.ones(len(train_cell_images), dtype=np.int), np.zeros(len(train_non_cell_images), dtype=np.int)), axis=0),
 
         standardize=standardize,
         mean=mean,
@@ -262,13 +263,14 @@ def create_dataset_from_cell_and_no_cell_images(
         data_augmentation_transforms=data_augmentation_transformations
     )
 
+    data_augmentation_transformations = None
     if apply_data_augmentation_transformations:
         # Just center crop on the validation images
         data_augmentation_transformations = [torchvision.transforms.CenterCrop(patch_size)]
 
     validset = LabeledImageDataset(
-        np.concatenate((valid_cell_images,     valid_non_cell_images), axis=0),
-        np.concatenate((np.ones(len(valid_cell_images), dtype=np.int), np.zeros(len(valid_non_cell_images_indices), dtype=np.int)), axis=0),
+        np.concatenate((valid_cell_images,                             valid_non_cell_images), axis=0),
+        np.concatenate((np.ones(len(valid_cell_images), dtype=np.int), np.zeros(len(valid_non_cell_images), dtype=np.int)), axis=0),
 
         standardize=standardize,
         mean=mean,
