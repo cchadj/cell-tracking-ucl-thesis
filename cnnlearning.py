@@ -682,6 +682,30 @@ class TrainingInterruptSignalHandler(object):
         self.signal_raised = True
 
 
+def create_weights_for_balanced_sampling(labeled_dataset):
+    # thanks to Jordi De La Torre
+    # https://discuss.pytorch.org/t/balanced-sampling-between-classes-with-torchvision-dataloader/2703/2
+    loader = data.DataLoader(labeled_dataset, batch_size=len(labeled_dataset))
+
+    for _, labels in loader:
+        n_classes = len(torch.unique(labels))
+
+        class_counts = [0] * n_classes
+        for class_label in range(n_classes):
+            class_counts[class_label] = len(torch.where(labels == class_label)[0])
+
+        weight_per_class = [.0] * n_classes
+        n_samples = sum(class_counts)
+        for i in range(n_classes):
+            weight_per_class[i] = n_samples / float(class_counts[i])
+
+        weights = [0] * len(labeled_dataset)
+        for sample_idx, (_, lbl) in enumerate(labeled_dataset):
+            weights[sample_idx] = weight_per_class[lbl]
+
+        return weights
+
+
 def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.2])),
           device='cuda', additional_displays=None):
     # if params changes, following line of code should reflect the changes too
@@ -695,10 +719,24 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.
         else:
             batch_size = params['batch_size']
 
+    balanced_sampling = True
+    if 'balanced_sampling' in params:
+        balanced_sampling = params['balanced_sampling']
+
+    trainset = params['trainset']
+    if balanced_sampling:
+        # thanks to Jordi De La Torre
+        # https://discuss.pytorch.org/t/balanced-sampling-between-classes-with-torchvision-dataloader/2703/2
+        weights = create_weights_for_balanced_sampling(trainset)
+        weights = torch.tensor(weights, dtype=torch.double)
+        sampler = data.WeightedRandomSampler(weights, len(weights), replacement=True)
+    else:
+        sampler = data.RandomSampler(trainset, replacement=True)
+
     train_loader = torch.utils.data.DataLoader(
-        params['trainset'],
+        trainset,
         batch_size=batch_size,
-        shuffle=True
+        sampler=sampler,
     )
 
     valid_loader = torch.utils.data.DataLoader(
@@ -752,13 +790,16 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.
         total_loss = 0
         n_samples = 0
         n_correct = 0
-        for batch in train_loader:
+        for images, labels in train_loader:
             # https://stackoverflow.com/questions/48001598/why-do-we-need-to-call-zero-grad-in-pytorch
             optimizer.zero_grad()
 
             # as per good practice we cast to device to save on gpu memory
-            images = batch[0].to(device).type(torch.float32)
-            labels = batch[1].to(device).type(torch.long)
+            images = images.to(device).type(torch.float32)
+            labels = labels.to(device).type(torch.long)
+
+            # print(f'N positive {len(torch.where(labels == 1)[0])}')
+            # print(f'N negative {len(torch.where(labels == 0)[0])}')
 
             output = cnn(images).to(device).type(torch.float32)
 
