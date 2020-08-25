@@ -60,74 +60,66 @@ class CNN(nn.Module):
         if model_type == 0:
             self.convolutional = nn.Sequential(
                 nn.Conv2d(input_dims, 32, padding=2, kernel_size=5),
-                # PrintLayer("1"),
                 nn.BatchNorm2d(32),
-                # PrintLayer("2"),
                 nn.MaxPool2d(kernel_size=(3, 3), stride=2),
-                # PrintLayer("3"),
+
+                nn.Conv2d(32, 32, padding=2, kernel_size=5),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+
+                nn.Conv2d(32, 64, padding=2, kernel_size=5),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+            )
+        elif model_type == 1:
+            self.convolutional = nn.Sequential(
+                nn.Conv2d(input_dims, 16, padding=2, kernel_size=5),
+                nn.BatchNorm2d(16),
+                nn.MaxPool2d(kernel_size=(3, 3), stride=2),
+                nn.ReLU(),
+                nn.Dropout(),
+
+                nn.Conv2d(16, 32, padding=2, kernel_size=5),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+                nn.Dropout(),
+                nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
+            )
+        elif model_type == 2:
+            self.convolutional = nn.Sequential(
+                nn.Conv2d(input_dims, 32, padding=2, kernel_size=5),
+                nn.BatchNorm2d(32),
+                nn.MaxPool2d(kernel_size=(3, 3), stride=2),
                 nn.ReLU(),
                 nn.Dropout(),
 
                 nn.Conv2d(32, 64, padding=2, kernel_size=5),
-                # PrintLayer("9"),
                 nn.BatchNorm2d(64),
-                # PrintLayer("11"),
                 nn.ReLU(),
                 nn.Dropout(),
                 nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-                # PrintLayer("12"),
             )
+        elif model_type == 3:
             self.convolutional = nn.Sequential(
                 nn.Conv2d(input_dims, 32, padding=2, kernel_size=5),
-                # PrintLayer("1"),
                 nn.BatchNorm2d(32),
-                # PrintLayer("2"),
                 nn.MaxPool2d(kernel_size=(3, 3), stride=2),
-                # PrintLayer("3"),
                 nn.ReLU(),
                 nn.Dropout(),
 
                 nn.Conv2d(32, 32, padding=2, kernel_size=5),
-                # PrintLayer("4"),
                 nn.BatchNorm2d(32),
-                # PrintLayer("5"),
                 nn.ReLU(),
                 nn.Dropout(),
 
-                # PrintLayer("6"),
                 nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-                # PrintLayer("7"),
-
                 nn.Conv2d(32, 64, padding=2, kernel_size=5),
-                # PrintLayer("9"),
                 nn.BatchNorm2d(64),
-                # PrintLayer("11"),
                 nn.ReLU(),
                 nn.Dropout(),
                 nn.AvgPool2d(kernel_size=3, padding=1, stride=2),
-                # PrintLayer("12"),
-            )
-
-        elif model_type == 1:
-            self.convolutional = nn.Sequential(
-                nn.Conv2d(input_dims, 16, kernel_size=3, padding=padding, padding_mode='replicate'),
-                # Print(),
-                nn.BatchNorm2d(16),
-                nn.MaxPool2d(kernel_size=(3, 3), stride=2),
-                nn.ReLU(),
-                nn.Conv2d(16, 8, kernel_size=3),
-                # Print(),
-                nn.BatchNorm2d(8),
-                nn.ReLU(),
-                nn.AvgPool2d(kernel_size=3, stride=1),
-                # Print(),
-                nn.Conv2d(8, 4, kernel_size=2),
-                # Print("Conv2d 8, 4, kernel_size=2"),
-                nn.BatchNorm2d(4),
-                nn.ReLU(),
-                # Print(),
-                nn.AvgPool2d(kernel_size=(3, 3), stride=1),
-                # Print("nn.AvgPool2d(kernel_size=(3, 3), stride=2"),
             )
 
         # determine the input dimensions needed for the dense part of the model.
@@ -143,6 +135,7 @@ class CNN(nn.Module):
                 # reshape so every dimension other than batch size is multiplied together.
                 convolutional_output = self.convolutional(image_batch)
                 dense_input_dims = convolutional_output.reshape(batch_size, -1).shape[-1]
+        self.dense_input_dims = dense_input_dims
 
         if model_type == 0:
             self.dense = nn.Sequential(
@@ -155,24 +148,27 @@ class CNN(nn.Module):
                 nn.BatchNorm1d(32),
                 nn.ReLU(),
                 nn.Dropout(),
+
                 nn.Linear(32, 2)
             )
-        if model_type == 1:
+        elif model_type in [1, 2]:
             self.dense = nn.Sequential(
-                nn.Dropout(),
-                nn.Linear(dense_input_dims, 64),
-                nn.ReLU(),
-                nn.Dropout(),
-                nn.BatchNorm1d(64),
-
-                nn.Linear(64, 32),
-                nn.ReLU(),
-                nn.Dropout(),
+                nn.Linear(dense_input_dims, 32),
                 nn.BatchNorm1d(32),
+                nn.ReLU(),
+                nn.Dropout(),
 
-                nn.Linear(32, 2)
+                nn.Linear(32, 16),
+                nn.BatchNorm1d(16),
+                nn.ReLU(),
+                nn.Dropout(),
+
+                nn.Linear(16, 8),
+                nn.BatchNorm1d(8),
+                nn.ReLU(),
+
+                nn.Linear(8, 2)
             )
-        self.dense_input_dims = dense_input_dims
 
     # define forward function
     def forward(self, t):
@@ -675,7 +671,8 @@ class TrainingInterruptSignalHandler(object):
         self.signal_raised = True
 
 
-def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', additional_displays=None):
+def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.2])),
+          device='cuda', additional_displays=None):
     # if params changes, following line of code should reflect the changes too
     if additional_displays is None:
         additional_displays = []

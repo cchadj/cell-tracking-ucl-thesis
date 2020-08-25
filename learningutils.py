@@ -9,7 +9,9 @@ from torch.utils.data import Dataset
 class ImageDataset(torch.utils.data.Dataset):
     """ Used to create a DataLoader compliant Dataset for binary classifiers
     """
-    def __init__(self, images, standardize=True, to_grayscale=False, data_augmentation_transforms=None):
+    def __init__(self, images,
+                 standardize=True, mean=.5, variance=.5,
+                 to_grayscale=False, data_augmentation_transforms=None):
         """
         Args:
           data_augmentation_transforms (list): list of torchvision transformation for data augmentation.
@@ -29,6 +31,9 @@ class ImageDataset(torch.utils.data.Dataset):
         self.n_images, self.height, self.width, self.n_channels = images.shape
         self.images = images
 
+        self.mean = mean
+        self.variance = variance
+
         # Handle transforms
         # ToPILImage Takes ndarray input with shape HxWxC
         transforms = [torchvision.transforms.ToPILImage()]
@@ -45,7 +50,8 @@ class ImageDataset(torch.utils.data.Dataset):
         if standardize:
             # Standardization brings values to -1 and 1
             # Normalise takes input a tensor image of shape CxHxW and brings to target mean and standard deviation
-            transforms.append(torchvision.transforms.Normalize(mean=[0.5], std=[0.5]))
+            transforms.append(torchvision.transforms.Normalize((.5,), (.5,)))
+
         self.transform = torchvision.transforms.Compose(transforms)
 
     def __len__(self):
@@ -63,7 +69,9 @@ class ImageDataset(torch.utils.data.Dataset):
 class LabeledImageDataset(ImageDataset):
     """ Used to create a DataLoader compliant Dataset for binary classifiers
     """
-    def __init__(self, images, labels, standardize=True, to_grayscale=False, data_augmentation_transformations=None):
+    def __init__(self, images, labels,
+                 standardize=True, mean=.5, variance=.5,
+                 to_grayscale=False, data_augmentation_transforms=None):
         """
         Args:
           images (ndarray):
@@ -74,7 +82,8 @@ class LabeledImageDataset(ImageDataset):
               The corresponding list of labels.
               Should have the same length as images. (one label for each image)
         """
-        super().__init__(images, standardize, to_grayscale, data_augmentation_transformations)
+        super().__init__(images, standardize=standardize, mean=mean, variance=variance, to_grayscale=to_grayscale,
+                         data_augmentation_transforms=data_augmentation_transforms)
 
         # if labels already ndarray nothing changes, if list makes to a numpy array
         labels = np.array(labels).squeeze()

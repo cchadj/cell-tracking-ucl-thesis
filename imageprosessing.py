@@ -168,51 +168,50 @@ def crop_mask(mask, left_crop=50):
     return new_mask.squeeze()
 
 
-def enhance_motion_contrast(frames, sigma=1, adapt_hist=False, mask_crop_pixels=15, method='j_tam'):
+def enhance_motion_contrast(frames, sigma=1, normalize=False, adapt_hist=False):
     from skimage import exposure
-    idx_to_remove = []
-    for idx, frame in enumerate(frames):
-        if frame.mean() < 20:
-            idx_to_remove.append(idx)
+    from skimage import filters
 
-    frames = np.delete(frames, idx_to_remove, 0)
-    # avoid division with 0
     if frames.dtype == np.uint8:
-        frames = np.float64(frames) / 255
+        frames = frames / 255
+    else:
+        frames = frames.copy()
+
+    if not np.ma.is_masked(frames):
+        masks = np.ones_like(frames, dtype=np.bool8)
+        frames = np.ma.masked_array(frames, ~masks)
+
+    # Keep a copy of the masks for operations that destroy the mask
+    masks = frames.mask.copy()
 
     if sigma >= 0.125:
-        for i, frame in enumerate(frames):
-            frames[i, ...] = mh.gaussian_filter(frame, sigma)
+        for i, (frame, mask) in enumerate(zip(frames, masks)):
+            # make everything outside of mask the mean of the image, to avoid messing the gaussian blur too much
+            frame[mask] = frame.mean()
+            frames[i] = filters.gaussian(frame, sigma)
+        frames = np.ma.masked_array(frames, masks)
 
     # Create division frames by dividing consecutive frames (last frame remains unprocessed)
-    division_frames = np.ma.empty_like(frames)
+    division_frames = frames
     for j in range(len(frames) - 1):
-        division_frames[j] = frames[j] / frames[j + 1]
-        # print(division_frames[j].min(),
-        #       division_frames[j].max(),
-        #       division_frames[j].mean())
+        division_frames[j] /= frames[j + 1]
     division_frames = division_frames[:-1]
-    division_frames[division_frames > 2] = 2
 
     # Create multiframe frames by averaging consecutive division frames (last frame remains unprocessed)
-    multiframe_div_frames = np.ma.empty_like(division_frames)
+    multiframe_div_frames = division_frames
     for j in range(len(division_frames) - 1):
-        multiframe_div_frames[j] = (division_frames[j] + division_frames[j + 1]) / 2
-        # print(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()).min(),
-        #       multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()).max(),
-        #       multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()).mean())
+        multiframe_div_frames[j] += division_frames[j + 1]
+        multiframe_div_frames[j] /= 2
+
         if adapt_hist:
-            try:
-                multiframe_div_frames[j] = exposure.equalize_adapthist(
-                    normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
-            except:
-                return multiframe_div_frames[j], division_frames[j], division_frames[j + 1]
+            multiframe_div_frames[j] = exposure.equalize_adapthist(
+                normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
+            multiframe_div_frames[j].mask = masks[j]
+
+        if normalize:
+            multiframe_div_frames[j] = normalize_data(multiframe_div_frames[j], (0, 1))
+
     final_processed_frames = multiframe_div_frames[:-1]
-
-    final_processed_frames = normalize_data(final_processed_frames, (0, 255))
-    # print(final_processed_frames.min(), final_processed_frames.max(), final_processed_frames.mean())
-    final_processed_frames = np.uint8(final_processed_frames)
-
     return final_processed_frames
 
 
@@ -227,12 +226,15 @@ def center_crop_images(images, patch_size):
       N x patch height x patch width x C ( or Nx patch height x patch width) numpy array
     """
     crop_transform = [torchvision.transforms.CenterCrop(patch_size)]
-    dataset = ImageDataset(images, data_augmentation_transforms=crop_transform)
+    dataset = ImageDataset(images, standardize=False, to_grayscale=False, data_augmentation_transforms=crop_transform)
     loader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset), shuffle=False)
 
     for batch in loader:
         # NxCxHxW -> NxHxWxC
-        return batch.permute(0, 2, 3, 1).cpu().numpy().squeeze().astype(images.dtype)
+        center_cropped_images = batch.permute(0, 2, 3, 1).cpu().numpy().squeeze()
+        if images.dtype == np.uint8:
+            center_cropped_images = np.uint8(center_cropped_images * 255)
+        return center_cropped_images
 
 
 class ImageRegistator(object):
@@ -318,6 +320,17 @@ class ImageRegistator(object):
 
 
 if __name__ == '__main__':
+    from sharedvariables import get_video_sessions
+    from video_session import SessionPreprocessor
+    import numpy as np
+
+    video_sessions = get_video_sessions(should_have_marked_cells=True, should_be_registered=True)
+    vs = video_sessions[0]
+    pr = SessionPreprocessor(vs, [
+        lambda frames: enhance_motion_contrast(frames, adapt_hist=True),
+        lambda frames: np.uint8(frames * 255)
+    ])
+    pr.apply_preprocessing()
     from sharedvariables import get_video_sessions
     from video_session import SessionPreprocessor
 

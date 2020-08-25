@@ -61,7 +61,7 @@ def detect_vessels(im, visualise_intermediate_results=False):
     return errosion
 
 
-def create_vessel_mask_from_vessel_image(
+def binarize_vessel_image(
         vessel_image,
         n_iterations=1,
         normalise_fangi=False,
@@ -132,65 +132,73 @@ def create_vessel_mask_from_vessel_image(
 
         vessel_image = closing
 
-    return vessel_image[padding_size:-padding_size, padding_size:-padding_size]
+    vessel_image = vessel_image[padding_size:-padding_size, padding_size:-padding_size]
+    vessel_image[:, :20] = 0
+    vessel_image[:, -20:] = 0
+
+    return vessel_image
 
 
 def create_vessel_image(frames,
                         masks=None,
-                        method='de_castro',
+                        left_crop=7,
+                        method='j_tam',
                         adapt_hist=True,
                         sigma=0.75):
     # 20. J. Tam, J. A. Martin, and A. Roorda, “Noninvasive visualization and analysis of parafoveal capillaries in humans,”
     # Invest. Ophthalmol. Vis. Sci. 51(3), 1691–1698 (2010).
+    from skimage import exposure, filters
+
     assert method in [None, 'j_tam', 'de_castro']
-    from skimage import exposure
 
-    frames = frames.copy()
     if frames.dtype == np.uint8:
-        frames = np.float32(frames) / 255
+        frames = frames / 255
+    else:
+        frames = frames.copy()
 
-    sigma = 1
+    if not np.ma.is_masked(frames):
+        if masks is None:
+            masks = np.ones_like(frames, np.bool8)
+        else:
+            masks = crop_mask(masks, left_crop)
+
+        frames = np.ma.masked_array(frames, ~masks)
 
     if sigma >= 0.125:
-        for i, frame in enumerate(frames):
-            frames[i, ...] = mh.gaussian_filter(frame, sigma)
+        masks = ~frames.mask
+        for i, (frame, mask) in enumerate(zip(frames, masks)):
+            # make everything outside of mask the mean of the image
+            frame[~mask] = frame.mean()
+            frames[i, ...] = filters.gaussian(frame, sigma)
 
-    if masks is None:
-        masked_frames = frames.copy()
-    else:
-        # crop ~15 pixels from the left part of the mask to avoid vertical streak artifacts.
-        mask_frames = crop_mask(masks, 15)
-        masked_frames = np.ma.masked_array(frames, ~mask_frames)
     if method == 'de_castro':
         # We invert the mask because True values mean that the values are masked and therefor invalid
         # https://numpy.org/doc/stable/reference/maskedarray.generic.html
-        for i, masked_frame in enumerate(masked_frames):
-            masked_frames[i, ...] = masked_frame / np.ma.mean(masked_frame)
+        for i, frame in enumerate(frames):
+            frames[i] /= np.ma.mean(frame)
 
-        m = np.ma.mean(masked_frames, axis=0)
-        for i, masked_frame in enumerate(masked_frames):
-            masked_frames[i, ...] = masked_frame / m
+        m = np.ma.mean(frames, axis=0)
+        for i, frame in enumerate(frames):
+            frames[i] /= m
 
-        final_processed_frames = masked_frames
+        final_processed_frames = frames
     elif method == 'j_tam':
         # Create division frames by dividing consecutive frames (last frame remains unprocessed)
-        division_frames = masked_frames
-        for j in range(len(masked_frames) - 1):
-            division_frames[j] = masked_frames[j] / masked_frames[j + 1]
+        division_frames = frames
+        for j in range(len(frames) - 1):
+            division_frames[j] /= frames[j + 1]
         division_frames = division_frames[:-1]
 
         # Create multiframe frames by averaging consecutive division frames (last frame remains unprocessed)
-        multiframe_div_frames = division_frames.copy()
+        multiframe_div_frames = division_frames
         for j in range(len(division_frames) - 1):
             multiframe_div_frames[j] = (division_frames[j] + division_frames[j + 1]) / 2
             if adapt_hist:
-                try:
-                    multiframe_div_frames[j] = exposure.equalize_adapthist(
-                        normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
-                except:
-                    return multiframe_div_frames[j], division_frames[j], division_frames[j + 1]
+                multiframe_div_frames[j] = exposure.equalize_adapthist(
+                    normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
+
         final_processed_frames = multiframe_div_frames[:-1]
     elif method is None:
-        final_processed_frames = masked_frames
+        final_processed_frames = frames
 
     return skimage.exposure.equalize_adapthist(final_processed_frames.std(0))

@@ -5,11 +5,11 @@ import re
 import numpy as np
 import pandas as pd
 
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from os.path import basename
 
 from videoutils import get_frames_from_video
-from vesseldetection import create_vessel_image, create_vessel_mask_from_vessel_image
+from vesseldetection import create_vessel_image, binarize_vessel_image
 from imageprosessing import ImageRegistator
 
 
@@ -187,14 +187,49 @@ class VideoSession(object):
         self._fully_masked_frames_confocal = None
         self._frames_confocal = new_frames
 
+    @staticmethod
+    def _rectify_mask_frames(masks):
+        """ Rectify masks so that they are square.
+
+        The original mask shape is irregular which can cause some inconveniences and problems.
+        Rectify mask by clipping the irregular borders to straight lines so that the final mask
+        is a rectangle.
+        """
+        import cv2
+        cropped_masks = np.zeros_like(masks)
+
+        for i, mask in enumerate(masks):
+            # add a small border around the mask to detect changes on that are on the border
+            mask_padded = cv2.copyMakeBorder(np.uint8(mask), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 0)
+
+            # Find where pixels go from black to white and from white to black (searching left to right)
+            ys, xs = np.where(np.diff(mask_padded, axis=-1))
+
+            # xs smaller than mean are on the left side and xs bigger than mean are on the right
+            left_xs = xs[xs < xs.mean()]
+            right_xs = xs[xs > xs.mean()]
+
+            # clip mask to make it have straight lines
+            m = np.bool8(mask_padded)
+            m[:, :left_xs.max() + 1] = False
+            m[:, right_xs.min():] = 0
+
+            # remove the borders
+            m = np.bool8(m[1:-1, 1:-1])
+
+            cropped_masks[i, ...] = m
+
+        assert cropped_masks.shape == masks.shape
+        return cropped_masks
+
     @property
     def mask_frames_oa790(self):
         if self._mask_frames_oa790 is None:
             if self.mask_video_oa790_file == '':
-                self._mask_frames_oa790 = np.ones_like(self.frames_oa790, dtype=np.bool8)
-                # raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
+                self.mask_frames_oa790 = np.ones_like(self.frames_oa790, dtype=np.bool8)
             else:
-                self._mask_frames_oa790 = get_frames_from_video(self.mask_video_oa790_file)[..., 0].astype(np.bool8)
+                self.mask_frames_oa790 = get_frames_from_video(self.mask_video_oa790_file)[..., 0].astype(np.bool8)
+
         return self._mask_frames_oa790
 
     @mask_frames_oa790.setter
@@ -203,7 +238,7 @@ class VideoSession(object):
         assert masks.shape == self.frames_oa790.shape, \
             f'The frame masks must have the same shape as the frames. ' \
             f'frames oa790 shape:{self.frames_oa790.shape}, masks given shape:{masks.shape}'
-        self._mask_frames_oa790 = masks
+        self._mask_frames_oa790 = VideoSession._rectify_mask_frames(masks)
         self._masked_frames_oa790 = None
         self._fully_masked_frames_oa790 = None
 
@@ -211,8 +246,10 @@ class VideoSession(object):
     def mask_frames_oa850(self):
         if self._mask_frames_oa850 is None:
             if self.mask_video_oa850_file == '':
-                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
-            self._mask_frames_oa850 = get_frames_from_video(self.mask_video_oa850_file)[..., 0].astype(np.bool8)
+                self.mask_frames_oa850 = np.ones_like(self.frames_oa850, dtype=np.bool8)
+            else:
+                self.mask_frames_oa850 = get_frames_from_video(self.mask_video_oa850_file)[..., 0].astype(np.bool8)
+
         return self._mask_frames_oa850
 
     @mask_frames_oa850.setter
@@ -221,7 +258,7 @@ class VideoSession(object):
         assert masks.shape == self.frames_oa850.shape, \
             f'The frame masks must have the same shape as the frames. ' \
             f'frames oa850 shape:{self.frames_oa850.shape}, masks given shape:{masks.shape}'
-        self._mask_frames_oa850 = masks
+        self._mask_frames_oa850 = VideoSession._rectify_mask_frames(masks)
         self._masked_frames_oa850 = None
         self._fully_masked_frames_oa850 = None
 
@@ -229,8 +266,10 @@ class VideoSession(object):
     def mask_frames_confocal(self):
         if self._mask_frames_confocal is None:
             if self.mask_video_confocal_file == '':
-                raise Exception(f"Video session '{basename(self.video_oa790_file)}' has no mask video.")
-            self._mask_frames_confocal = get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(np.bool8)
+                self.mask_frames_confocal = np.ones_like(self.frames_confocal, dtype=np.bool8)
+            else:
+                self.mask_frames_confocal = get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(np.bool8)
+
         return self._mask_frames_confocal
 
     @mask_frames_confocal.setter
@@ -239,7 +278,7 @@ class VideoSession(object):
         assert masks.shape == self.frames_confocal.shape, \
             f'The frame masks must have the same shape as the frames. ' \
             f'frames confocal shape:{self.frames_confocal.shape}, masks given shape:{masks.shape}'
-        self._mask_frames_confocal = masks
+        self._mask_frames_confocal = VideoSession._rectify_mask_frames(masks)
         self._masked_frames_confocal = None
         self._fully_masked_frames_confocal = None
 
@@ -251,7 +290,7 @@ class VideoSession(object):
             # We invert the mask because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
             self._masked_frames_oa790 = np.ma.masked_array(self.frames_oa790,
-                                                           ~self.mask_frames_oa790[:len(self.frames_oa790)])
+                                                           ~self.mask_frames_oa790)
         return self._masked_frames_oa790
 
     @property
@@ -465,7 +504,7 @@ class VideoSession(object):
             if self.vessel_mask_oa790_file == '':
                 vessel_image = create_vessel_image(
                     self.frames_oa790, self.mask_frames_oa790, sigma=0, method='j_tam', adapt_hist=True)
-                self._vessel_mask_oa790 = create_vessel_mask_from_vessel_image(vessel_image)
+                self._vessel_mask_oa790 = binarize_vessel_image(vessel_image)
             else:
                 self._vessel_mask_oa790 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa790_file)
         return self._vessel_mask_oa790
@@ -569,19 +608,30 @@ class SessionPreprocessor(object):
     def _apply_preprocessing(self, masked_frames):
         for fun in self.preprocess_functions:
             masked_frames = fun(masked_frames)
-        frames = masked_frames.filled(masked_frames.mean(0))
-        return frames
+        return masked_frames
 
     def apply_preprocessing_to_oa790(self):
-        self.session.frames_oa790 = self._apply_preprocessing(self.session.masked_frames_oa790)
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa790)
+        self.session.frames_oa790 = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_oa790 = ~masked_frames.mask
 
     def apply_preprocessing_to_oa850(self):
-        self.session.frames_oa850 = self._apply_preprocessing(self.session.masked_frames_oa850)
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa850)
+        self.session.frames_oa850 = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_oa850 = ~masked_frames.mask
 
     def apply_preprocessing_to_confocal(self):
-        self.session.frames_confocal = self._apply_preprocessing(self.session.masked_frames_confocal)
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_confocal)
+        self.session.frames_confocal = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_confocal = masked_frames.mask
 
     def apply_preprocessing(self):
         self.apply_preprocessing_to_confocal()
         self.apply_preprocessing_to_oa790()
         self.apply_preprocessing_to_oa850()
+
+
+if __name__ == '__main__':
+    from sharedvariables import get_video_sessions
+    vs = get_video_sessions(should_be_registered=True)[0]
+    vs.mask_frames_oa790

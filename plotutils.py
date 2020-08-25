@@ -10,6 +10,8 @@ def cvimshow(window, img, wait_time=0):
     # imshow using cv2 with ability to close with the 'x' button without hanging in the main thread
     import cv2
     cv2.namedWindow(window, cv2.WINDOW_KEEPRATIO)
+    if img.dtype == np.bool8:
+        img = np.uint8(img) * 255
     cv2.imshow(window, img)
     cv2.waitKey()
     while cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) >= 1:
@@ -19,8 +21,9 @@ def cvimshow(window, img, wait_time=0):
             break
 
 
-def no_ticks(axes=None):
+def no_ticks(axes=None, hide_numbers=True):
     if axes is not None:
+        ax: plt.axes
         for ax in axes.flatten():
             ax.tick_params(
                 axis='both',
@@ -31,6 +34,10 @@ def no_ticks(axes=None):
                 bottom=False,
                 top=False,
                 labelbottom=False)
+
+            if hide_numbers:
+                ax.set_yticklabels([])
+                ax.set_xticklabels([])
     else:
         plt.tick_params(
                 axis='both',
@@ -41,6 +48,10 @@ def no_ticks(axes=None):
                 bottom=False,
                 top=False,
                 labelbottom=False)
+        ax = plt.gca()
+        if hide_numbers:
+            ax.set_yticklabels([])
+            ax.set_xticklabels([])
 
 
 def plot_patch_rois_at_positions(positions, patch_size=(21, 21),

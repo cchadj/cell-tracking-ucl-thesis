@@ -231,7 +231,12 @@ def train_model_demo(
             print('Starting training')
         # set the model in training mode
         model.train()
-        results: TrainingTracker = train(model, train_params, criterion=torch.nn.CrossEntropyLoss(),
+        # We want to give a little bias to the positive samples because of the unbalanced dataset.
+        # The positive samples are 1 / n_negatives_per_positive of the negative samples.
+        # We add a 0.1 just to make it a little less biased.
+        positive_samples_ratio = min((1 / n_negatives_per_positive) + 0.1, 1.0)
+        results: TrainingTracker = train(model, train_params,
+                                         criterion=torch.nn.CrossEntropyLoss(torch.tensor([positive_samples_ratio, 1.0]).cuda()),
                                          additional_displays=additional_displays, device=device)
 
         postfix = f'_ps_{patch_size[0]}_tw_{temporal_width}_mc_{str(mixed_channel_patches).lower()}'\

@@ -164,8 +164,8 @@ def get_patch(im, x, y, patch_size):
 
 def extract_patches(img,
                     patch_size=(21, 21),
-                    temporal_width=0,
-                    padding='valid'
+                    padding='valid',
+                    mask=None
                     ):
     """
     Extract patches around every pixel of the image.
@@ -241,7 +241,13 @@ def extract_patches(img,
     # patch = patches[cone_patch_index, ...].cpu().numpy()
     # plt.imshow(patch.squeeze())
 
-    return patches.cpu().numpy()
+    patches = patches.cpu().numpy()
+    if mask is not None:
+        mask_flattened = mask.reshape(-1)
+        vessel_pixel_indices = np.where(mask_flattened)[0]
+        patches = patches[vessel_pixel_indices]
+        print(vessel_pixel_indices)
+    return patches
 
 
 def extract_patches_at_positions(image,
@@ -448,6 +454,8 @@ class SessionPatchExtractor(object):
     def cell_positions(self):
         if len(self._cell_positions) == 0:
             for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+                if frame_idx >= len(self.session.mask_frames_oa790):
+                    break
                 mask = self.session.mask_frames_oa790[frame_idx]
                 frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask)
                 self._cell_positions[frame_idx] = frame_cell_positions
@@ -458,6 +466,8 @@ class SessionPatchExtractor(object):
     def non_cell_positions(self):
         if len(self._non_cell_positions) == 0:
             for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+                if frame_idx >= len(self.session.mask_frames_oa790):
+                    break
                 mask = self.session.mask_frames_oa790[frame_idx]
                 cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
 
@@ -466,6 +476,8 @@ class SessionPatchExtractor(object):
                     rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                              n_points_per_rect=self.n_negatives_per_positive)
                 else:
+                    if len(frame_cell_positions) <= 2:
+                        continue
                     rx, ry, radii = get_random_points_on_circles(frame_cell_positions,
                                                                  n_points_per_circle=self.n_negatives_per_positive,
                                                                  max_radius=self.negative_patch_extraction_radius,
@@ -659,12 +671,6 @@ class SessionPatchExtractor(object):
         if mask is not None and not np.all(mask):
             # remove positions whose patches get outside the mask
             x_min, x_max, y_min, y_max = get_mask_bounds(mask)
-
-            # The maximum difference between the mask maximum and minimum on the side of the mask is about 20px.
-            x_max, y_max = x_max - 20, y_max - 20
-
-            mask_ys, mask_xs = np.where(mask)
-            mask_positions = np.int32(np.array((mask_xs, mask_ys)).T)
 
             positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0],
                                   axis=0)
@@ -1036,14 +1042,37 @@ class SessionPatchExtractor(object):
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
     from plotutils import plot_images_as_grid
+    from matplotlib.colors import NoNorm
 
-    video_sessions = get_video_sessions(should_have_marked_cells=True)
+    video_sessions = get_video_sessions(should_have_marked_cells=True, should_be_registered=False)
+    video_sessions = [vs for vs in video_sessions if 'shared-videos' not in vs.video_file]
+    print([vs.video_file for vs in video_sessions])
     vs = video_sessions[0]
 
-    patch_extractor = SessionPatchExtractor(vs, patch_size=21, temporal_width=1, n_negatives_per_positive=7)
 
-    plot_images_as_grid(patch_extractor.temporal_cell_patches_oa790[:10], title='Temporal cell patches temporal width 1')
-    plot_images_as_grid(patch_extractor.temporal_marked_cell_patches_oa790[:10])
+    patch_extractor = SessionPatchExtractor(vs, patch_size=35, temporal_width=1, n_negatives_per_positive=7)
 
-    plot_images_as_grid(patch_extractor.temporal_non_cell_patches_oa790[:10], title='Temporal non cell patches temporal width 1')
-    plot_images_as_grid(patch_extractor.temporal_marked_non_cell_patches_oa790[:10])
+    plt.rcParams['image.cmap'] = 'gray'
+
+    plt.imshow(patch_extractor.temporal_marked_cell_patches_oa790[1, ..., 0], interpolation='none', norm=NoNorm())
+    plt.show()
+
+    plt.imshow(patch_extractor.temporal_marked_cell_patches_oa790[1, ..., 1], interpolation='none', norm=NoNorm())
+    plt.show()
+
+    plt.imshow(patch_extractor.temporal_marked_cell_patches_oa790[1, ..., 2], interpolation='none', norm=NoNorm())
+    plt.show()
+
+    plt.imshow(patch_extractor.temporal_cell_patches_oa790[1, ..., 0], interpolation='none', norm=NoNorm())
+    plt.show()
+
+    plt.imshow(patch_extractor.temporal_cell_patches_oa790[1, ..., 1], interpolation='none', norm=NoNorm())
+    plt.show()
+
+    plt.imshow(patch_extractor.temporal_cell_patches_oa790[1, ..., 2], interpolation='none', norm=NoNorm())
+    plt.show()
+    # plot_images_as_grid(patch_extractor.temporal_cell_patches_oa790[:10], title='Temporal cell patches temporal width 1')
+    # plot_images_as_grid(patch_extractor.temporal_marked_cell_patches_oa790[:10])
+    #
+    # plot_images_as_grid(patch_extractor.temporal_non_cell_patches_oa790[:10], title='Temporal non cell patches temporal width 1')
+    # plot_images_as_grid(patch_extractor.temporal_marked_non_cell_patches_oa790[:10])

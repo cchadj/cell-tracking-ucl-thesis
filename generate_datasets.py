@@ -32,6 +32,8 @@ def clean_folder(folder):
 def create_cell_and_no_cell_patches(
         video_sessions=None,
         patch_size=(21, 21),
+
+        use_rectangle_for_negative_search=False,
         negative_patch_search_radius=21,
         temporal_width=0,
         mixed_channel_patches=False,
@@ -69,7 +71,7 @@ def create_cell_and_no_cell_patches(
     if v:
         print('Creating cell and no cell images from videos and cell positions csvs...')
 
-    for session in tqdm.tqdm(video_sessions):
+    for i, session in enumerate(tqdm.tqdm(video_sessions)):
         assert session.has_marked_video, 'Something went wrong.' \
                                          ' get_video_sessions() should have ' \
                                          ' returned that have corresponding marked videos.'
@@ -81,6 +83,9 @@ def create_cell_and_no_cell_patches(
         patch_extractor = SessionPatchExtractor(session,
                                                 patch_size=patch_size,
                                                 temporal_width=temporal_width,
+
+                                                random_rect_points=use_rectangle_for_negative_search,
+
                                                 n_negatives_per_positive=n_negatives_per_positive,
                                                 negative_patch_extraction_radius=negative_patch_search_radius)
 
@@ -100,6 +105,11 @@ def create_cell_and_no_cell_patches(
 
         cell_images = np.concatenate((cell_images, cur_session_cell_images), axis=0)
         non_cell_images = np.concatenate((non_cell_images, cur_session_non_cell_images), axis=0)
+
+        if i == 0:
+            patch_extractor.visualize_patch_extraction()
+            from matplotlib import pyplot as plt
+            plt.show()
 
         if vv:
             print('Marked', basename(marked_video_file), '<->')
@@ -124,10 +134,13 @@ def create_cell_and_no_cell_patches(
     return cell_images, non_cell_images, cell_images_marked, non_cell_images_marked
 
 
-def create_dataset_from_cell_and_no_cell_images(
+def create_dataset_from_cell_and_no_cell_images_2(
         cell_images,
         non_cell_images,
-        data_augmentation_transformations=None,
+
+        translation_pixels=4,
+        patch_size=21,
+
         validset_ratio=0.2,
         standardize=True,
         to_grayscale=False,
@@ -137,22 +150,134 @@ def create_dataset_from_cell_and_no_cell_images(
     if v:
         print('Creating dataset from cell and non cell patches')
         print('-----------------------------------------------')
+
+    if v:
+        print('Splitting into training set and validation set')
+    data_augmentation_transformations = None
+    if apply_data_augmentation_transformations:
+        initial_patch_size = cell_images.shape[1]
+        translation_ratio = translation_pixels / initial_patch_size
+        data_augmentation_transformations = [
+            torchvision.transforms.RandomAffine(degrees=(10, -10),
+                                                translate=(translation_ratio,translation_ratio),
+                                                resample=PIL.Image.LINEAR,
+                                                # fillcolor=int(cell_images.mean())
+                                                ),
+            torchvision.transforms.CenterCrop(patch_size)
+        ]
+
     dataset = LabeledImageDataset(
-        np.concatenate((cell_images[:len(cell_images), ...], non_cell_images[:len(non_cell_images), ...]), axis=0),
+        np.concatenate((cell_images[:len(cell_images), ...],     non_cell_images[:len(non_cell_images), ...]), axis=0),
         np.concatenate((np.ones(len(cell_images), dtype=np.int), np.zeros(len(non_cell_images), dtype=np.int)), axis=0),
         standardize=standardize,
         to_grayscale=to_grayscale,
-        data_augmentation_transformations=data_augmentation_transformations
+
+        data_augmentation_transforms=data_augmentation_transformations
     )
+
+    trainset_size = int(len(dataset) * (1 - validset_ratio))
+    validset_size = len(dataset) - trainset_size
+
+    # noinspection PyUnresolvedReferences
+    trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
+
+    return trainset, validset
+
+
+def create_dataset_from_cell_and_no_cell_images(
+        cell_images,
+        non_cell_images,
+
+        apply_data_augmentation_transformations=False,
+        translation_pixels=4,
+        patch_size=21,
+
+        validset_ratio=0.2,
+        standardize=True,
+        to_grayscale=False,
+        v=False):
+    """ The cell images are labeled as 1 and non cell images are labeled as 0.
+    """
+    if v:
+        print('Creating dataset from cell and non cell patches')
+        print('-----------------------------------------------')
+    import random
+    from sklearn.model_selection import train_test_split
 
     if v:
         print('Splitting into training set and validation set')
 
-    trainset_size = int(len(dataset) * (1 - validset_ratio))
-    validset_size = len(dataset) - trainset_size
-    # noinspection PyUnresolvedReferences
-    trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
+    cell_images_indices = list(np.arange(len(cell_images)))
+    non_cell_images_indices = list(np.arange(len(non_cell_images)))
 
+    random.shuffle(cell_images_indices)
+    random.shuffle(non_cell_images_indices)
+
+    trainset_size = int(len(cell_images) * (1 - validset_ratio))
+    validset_size = len(cell_images) - trainset_size
+    assert trainset_size + validset_size == len(cell_images)
+    train_cell_images_indices, valid_cell_images_indices = train_test_split(cell_images_indices,
+                                                                            train_size=trainset_size,
+                                                                            test_size=validset_size)
+
+    trainset_size = int(len(non_cell_images) * (1 - validset_ratio))
+    validset_size = len(non_cell_images) - trainset_size
+    assert trainset_size + validset_size == len(non_cell_images)
+    train_non_cell_images_indices, valid_non_cell_images_indices = train_test_split(non_cell_images_indices,
+                                                                                    train_size=trainset_size,
+                                                                                    test_size=validset_size)
+
+    train_cell_images = cell_images[train_cell_images_indices]
+    train_non_cell_images = non_cell_images[train_non_cell_images_indices]
+
+    valid_cell_images = cell_images[valid_cell_images_indices]
+    valid_non_cell_images = non_cell_images[valid_non_cell_images_indices]
+
+    var = ((np.float32(cell_images) / 255).var() + (np.float32(non_cell_images) / 255).var()) / 2
+    mean = ((np.float32(cell_images) / 255).mean() + (np.float32(non_cell_images) / 255).mean()) / 2
+
+    data_augmentation_transformations = None
+    if apply_data_augmentation_transformations:
+        initial_patch_size = cell_images.shape[1]
+        translation_ratio = translation_pixels / initial_patch_size
+        data_augmentation_transformations = [
+            torchvision.transforms.RandomAffine(degrees=0,
+                                                translate=(translation_ratio, translation_ratio),
+                                                resample=PIL.Image.LINEAR,
+                                                # fillcolor=int(cell_images.mean())
+                                                ),
+            torchvision.transforms.CenterCrop(patch_size)
+        ]
+
+    trainset = LabeledImageDataset(
+        np.concatenate((train_cell_images,     train_non_cell_images), axis=0),
+        np.concatenate((np.ones(len(train_cell_images), dtype=np.int), np.zeros(len(train_non_cell_images_indices), dtype=np.int)), axis=0),
+
+        standardize=standardize,
+        mean=mean,
+        variance=var,
+
+        to_grayscale=to_grayscale,
+
+        data_augmentation_transforms=data_augmentation_transformations
+    )
+
+    if apply_data_augmentation_transformations:
+        # Just center crop on the validation images
+        data_augmentation_transformations = [torchvision.transforms.CenterCrop(patch_size)]
+
+    validset = LabeledImageDataset(
+        np.concatenate((valid_cell_images,     valid_non_cell_images), axis=0),
+        np.concatenate((np.ones(len(valid_cell_images), dtype=np.int), np.zeros(len(valid_non_cell_images_indices), dtype=np.int)), axis=0),
+
+        standardize=standardize,
+        mean=mean,
+        variance=var,
+
+        to_grayscale=to_grayscale,
+
+        data_augmentation_transforms=data_augmentation_transformations,
+    )
     return trainset, validset
 
 
@@ -347,11 +472,8 @@ def get_cell_and_no_cell_patches(
 
         cell_image_creation_patch_size = patch_size[0]
         if apply_data_augmentation_to_dataset:
-            # when doing data augmentation we pick bigger patches, do the transformation, and then crop
-            # the required patch size from the centre of the patch. This is to avoid black pixels after the
-            # transformation
+            # make the patches bigger so that when we crop after the transformation no black pixels appear.
             translation_pixels = 4
-            # make the patch big enough so that when we crop after the transformation no black pixels appear.
             cell_image_creation_patch_size = patch_size[0] + round(patch_size[0] * .5) + translation_pixels
 
         cell_images, non_cell_images, cell_images_marked, non_cell_images_marked = \
@@ -389,20 +511,12 @@ def get_cell_and_no_cell_patches(
 
             non_cell_images = hist_match_images(cell_images, hist_match_template)
 
-        data_augmentation_transformations = None
-        if apply_data_augmentation_to_dataset:
-            translation_ratio = translation_pixels / cell_image_creation_patch_size
-            data_augmentation_transformations = [
-                    torchvision.transforms.RandomAffine(degrees=(90, -90),
-                                                        translate=(translation_ratio, translation_ratio),
-                                                        resample=PIL.Image.BILINEAR,
-                                                        fillcolor=int(cell_images.mean())),
-                    torchvision.transforms.CenterCrop(patch_size)
-                ]
-
         trainset, validset = create_dataset_from_cell_and_no_cell_images(
             cell_images, non_cell_images, standardize=standardize_dataset, to_grayscale=dataset_to_grayscale,
-            data_augmentation_transformations=data_augmentation_transformations, validset_ratio=validset_ratio, v=v
+            validset_ratio=validset_ratio, v=v,
+
+            apply_data_augmentation_transformations=apply_data_augmentation_to_dataset, patch_size=patch_size[0],
+            translation_pixels=4,
         )
 
         if v:
