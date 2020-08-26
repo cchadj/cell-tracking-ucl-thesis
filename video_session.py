@@ -430,10 +430,8 @@ class VideoSession(object):
     @property
     def validation_frame_idx(self):
         if self._validation_frame_idx is None:
-            print('hello')
             max_positions = 0
             max_positions_frame_idx = list(self.cell_positions.keys())[0]
-            print(max_positions_frame_idx)
 
             for frame_idx in self.cell_positions:
                 # find and assign the frame with the most cell positions as a validation frame.
