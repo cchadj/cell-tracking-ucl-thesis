@@ -373,6 +373,10 @@ class SessionPatchExtractor(object):
     _non_cell_positions: Dict[int, np.ndarray]
     _temporal_width: int
 
+    TRAINING_MODE = 0
+    VALIDATION_MODE = 1
+    ALL_MODE = 2
+
     def __init__(self,
                  session,
                  patch_size=21,
@@ -380,6 +384,7 @@ class SessionPatchExtractor(object):
                  n_negatives_per_positive=1,
                  negative_patch_extraction_radius=21,
                  random_rect_points=False,
+                 extraction_mode=ALL_MODE
                  ):
         """
 
@@ -392,6 +397,8 @@ class SessionPatchExtractor(object):
         self._non_cell_positions = {}
 
         assert type(patch_size) is int or type(patch_size) is tuple
+
+        self._extraction_mode = extraction_mode
 
         if type(patch_size) is tuple:
             self._patch_size = patch_size
@@ -451,6 +458,19 @@ class SessionPatchExtractor(object):
         self._reset_patches()
 
     @property
+    def extraction_mode(self):
+        return self._extraction_mode
+
+    @extraction_mode.setter
+    def extraction_mode(self, mode):
+        assert self.extraction_mode in [SessionPatchExtractor.VALIDATION_MODE,
+                                        SessionPatchExtractor.TRAINING_MODE,
+                                        SessionPatchExtractor.ALL_MODE]
+        if mode != self.extraction_mode:
+            self._reset_patches()
+        self._extraction_mode = mode
+
+    @property
     def cell_positions(self):
         if len(self._cell_positions) == 0:
             for frame_idx, frame_cell_positions in self.session.cell_positions.items():
@@ -498,6 +518,8 @@ class SessionPatchExtractor(object):
                                     frame_idx_to_non_cell_patch_dict,
                                     frame_idx=None, ax=None, figsize=(50, 40), linewidth=3, s=60):
         """ Shows the patch extraction on the first marked frame that has cell positions in it's csv.
+
+        If in Validation mode then shows the validation frame and frame_idx is ignored.
         """
         from plotutils import plot_patch_rois_at_positions, plot_images_as_grid
 
@@ -508,6 +530,9 @@ class SessionPatchExtractor(object):
                 if frame_idx in frame_idx_to_cell_patch_dict:
                     break
 
+        if self.extraction_mode == SessionPatchExtractor.VALIDATION_MODE:
+            frame_idx = self.session.validation_frame_idx
+
         frame = session_frames[frame_idx]
 
         cell_positions = self.cell_positions[frame_idx]
@@ -516,10 +541,18 @@ class SessionPatchExtractor(object):
         non_cell_positions = self.non_cell_positions[frame_idx]
         non_cell_patches = frame_idx_to_non_cell_patch_dict[frame_idx]
 
+        mode_str = ''
+        if self.extraction_mode == SessionPatchExtractor.VALIDATION_MODE:
+            mode_str = 'Validation'
+        if self.extraction_mode == SessionPatchExtractor.TRAINING_MODE:
+            mode_str = 'Training'
+        if self.extraction_mode == SessionPatchExtractor.ALL_MODE:
+            mode_str = 'All'
+
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
         ax.imshow(frame, cmap='gray')
-        ax.set_title(f'Frame {frame_idx}', fontsize=20)
+        ax.set_title(f'Frame {frame_idx}. {mode_str} mode ', fontsize=20)
 
         plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax,
                                      edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
@@ -591,6 +624,7 @@ class SessionPatchExtractor(object):
     def _reset_patches(self):
         self._reset_positive_patches()
         self._reset_negative_patches()
+        self._reset_temporal_patches()
 
     def _reset_temporal_patches(self):
         self._temporal_cell_patches_oa790 = None
@@ -703,6 +737,13 @@ class SessionPatchExtractor(object):
         for frame_idx, frame_cell_positions in positions.items():
             if frame_idx >= len(session_frames):
                 break
+
+            if self.extraction_mode == SessionPatchExtractor.VALIDATION_MODE and frame_idx != self.session.validation_frame_idx:
+                continue
+
+            if self.extraction_mode == SessionPatchExtractor.TRAINING_MODE and frame_idx == self.session.validation_frame_idx:
+                continue
+
             frame = session_frames[frame_idx]
             mask = None
             if masks is not None:

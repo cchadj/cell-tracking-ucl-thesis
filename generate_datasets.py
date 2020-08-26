@@ -31,13 +31,17 @@ def clean_folder(folder):
 
 def create_cell_and_no_cell_patches(
         video_sessions=None,
+        extraction_method=SessionPatchExtractor.ALL_MODE,
+
         patch_size=(21, 21),
+        temporal_width=0,
+
+        mixed_channel_patches=False,
 
         use_rectangle_for_negative_search=False,
         negative_patch_search_radius=21,
-        temporal_width=0,
-        mixed_channel_patches=False,
         n_negatives_per_positive=1,
+
         v=False,
         vv=False):
     assert type(patch_size) == int or type(patch_size) == tuple or (type(patch_size) == np.ndarray)
@@ -81,6 +85,8 @@ def create_cell_and_no_cell_patches(
         csv_cell_coord_files = session.cell_position_csv_files
 
         patch_extractor = SessionPatchExtractor(session,
+                                                extraction_mode=extraction_method,
+
                                                 patch_size=patch_size,
                                                 temporal_width=temporal_width,
 
@@ -134,69 +140,58 @@ def create_cell_and_no_cell_patches(
     return cell_images, non_cell_images, cell_images_marked, non_cell_images_marked
 
 
-def create_dataset_from_cell_and_no_cell_images_2(
-        cell_images,
-        non_cell_images,
-
-        translation_pixels=4,
-        patch_size=21,
-
-        validset_ratio=0.2,
-        standardize=True,
-        to_grayscale=False,
-        v=False):
-    """ The cell images are labeled as 1 and non cell images are labeled as 0.
-    """
-    if v:
-        print('Creating dataset from cell and non cell patches')
-        print('-----------------------------------------------')
-
-    if v:
-        print('Splitting into training set and validation set')
-    data_augmentation_transformations = None
-    if apply_data_augmentation_transformations:
-        initial_patch_size = cell_images.shape[1]
-        translation_ratio = translation_pixels / initial_patch_size
-        data_augmentation_transformations = [
-            torchvision.transforms.RandomAffine(degrees=(10, -10),
-                                                translate=(translation_ratio,translation_ratio),
-                                                resample=PIL.Image.LINEAR,
-                                                # fillcolor=int(cell_images.mean())
-                                                ),
-            torchvision.transforms.CenterCrop(patch_size)
-        ]
-
-    dataset = LabeledImageDataset(
-        np.concatenate((cell_images[:len(cell_images), ...],     non_cell_images[:len(non_cell_images), ...]), axis=0),
-        np.concatenate((np.ones(len(cell_images), dtype=np.int), np.zeros(len(non_cell_images), dtype=np.int)), axis=0),
-        standardize=standardize,
-        to_grayscale=to_grayscale,
-
-        data_augmentation_transforms=data_augmentation_transformations
-    )
-
-    trainset_size = int(len(dataset) * (1 - validset_ratio))
-    validset_size = len(dataset) - trainset_size
-
-    # noinspection PyUnresolvedReferences
-    trainset, validset = torch.utils.data.random_split(dataset, (trainset_size, validset_size))
-
-    return trainset, validset
-
-
 def create_dataset_from_cell_and_no_cell_images(
         cell_images,
         non_cell_images,
 
-        apply_data_augmentation_transformations=False,
-        translation_pixels=4,
-        patch_size=21,
+        valid_cell_images=None,
+        valid_non_cell_images=None,
 
-        validset_ratio=0.2,
         standardize=True,
         to_grayscale=False,
+
+        random_translation_pixels=0,
+        random_rotation_degrees=0,
+        center_crop_patch_size=21,
+
+        validset_ratio=0.2,
+
         v=False):
     """ The cell images are labeled as 1 and non cell images are labeled as 0.
+
+    The cell and non cell images are split to training and validation according to the validset ratio.
+
+    If valid_cell_images, and valid_non_cell_images they are appended to the validation set.
+
+    Args:
+        cell_images: Positive samples to create dataset from. Shape N x H x W (x C)
+        non_cell_images: Negative samples to create dataset from. Shape N x H x W (x C)
+
+        validset_ratio: The validation set ration to split cell and non cell images to validation and training set.
+
+        valid_cell_images: valid_non_cell_images: If specified, these images are appended to the positive validation set
+            If specified they must have be of shape N X H x W (x C) and must have the same H x W (x C) as the rest of
+            the images.
+        valid_non_cell_images: If specified, these images are appended to the negative validation set.
+            If specified they must have be of shape N X H x W (x C) and must have the same H x W (x C) as the rest of
+            the images.
+
+        standardize (bool):  Set to true to standardize dataset to 0.5 mean and variance.
+        to_grayscale (bool): Set to true to make patches with more than 2 channels gray.
+
+        random_translation_pixels (int): Data augmentation technique. If > 0 applies a random translation of the number of
+            pixel specified to each sample each time the sample is picked.
+            If 0 no translation.
+            No augmentation on validation set. (Except cropping)
+        random_rotation_degrees (tuple or 0):  Data augmentation technique. If not 0 applies
+            and rotation=(a, b) then applies a random rotation from a to b degrees.
+            No augmentation on validation set. (Expect cropping)
+        center_crop_patch_size:
+            Only used with data augmentation technique.
+            The final patch size to be cropped from the centre of the images.
+            The translation and/or rotation is applied to bigger patches and then their center is cropped to avoid empty pixels.
+            Occurs both to training and validation patches.
+
     """
     if v:
         print('Creating dataset from cell and non cell patches')
@@ -211,6 +206,12 @@ def create_dataset_from_cell_and_no_cell_images(
     cell_images_indices = list(np.arange(len(cell_images)))
     random.shuffle(cell_images_indices)
 
+    if valid_cell_images is None:
+        valid_cell_images = np.empty((0, *cell_images.shape[1:]), dtype=cell_images.dtype)
+
+    if valid_non_cell_images is None:
+        valid_non_cell_images = np.empty((0, *non_cell_images.shape[1:]), dtype=non_cell_images.dtype)
+
     positive_trainset_size = int(len(cell_images) * (1 - validset_ratio))
     positive_validset_size = len(cell_images) - positive_trainset_size
     assert positive_trainset_size + positive_validset_size == len(cell_images)
@@ -218,7 +219,7 @@ def create_dataset_from_cell_and_no_cell_images(
                                                                             train_size=positive_trainset_size,
                                                                             test_size=positive_validset_size)
     train_cell_images = cell_images[train_cell_images_indices]
-    valid_cell_images = cell_images[valid_cell_images_indices]
+    valid_cell_images = np.concatenate((valid_cell_images, cell_images[valid_cell_images_indices]), axis=0)
 
     # negative patches
     non_cell_images_indices = list(np.arange(len(non_cell_images)))
@@ -231,22 +232,20 @@ def create_dataset_from_cell_and_no_cell_images(
                                                                                     train_size=negative_trainset_size,
                                                                                     test_size=negative_validset_size)
     train_non_cell_images = non_cell_images[train_non_cell_images_indices]
-    valid_non_cell_images = non_cell_images[valid_non_cell_images_indices]
+    valid_non_cell_images = np.concatenate((valid_non_cell_images, non_cell_images[valid_cell_images_indices]), axis=0)
 
     var = ((np.float32(cell_images) / 255).var() + (np.float32(non_cell_images) / 255).var()) / 2
     mean = ((np.float32(cell_images) / 255).mean() + (np.float32(non_cell_images) / 255).mean()) / 2
 
     data_augmentation_transformations = None
-    if apply_data_augmentation_transformations:
+    if random_translation_pixels > 0 or random_translation_pixels != 0:
         initial_patch_size = cell_images.shape[1]
-        translation_ratio = translation_pixels / initial_patch_size
+        translation_ratio = random_translation_pixels / initial_patch_size
         data_augmentation_transformations = [
-            torchvision.transforms.RandomAffine(degrees=0,
+            torchvision.transforms.RandomAffine(degrees=random_rotation_degrees,
                                                 translate=(translation_ratio, translation_ratio),
-                                                resample=PIL.Image.LINEAR,
-                                                # fillcolor=int(cell_images.mean())
-                                                ),
-            torchvision.transforms.CenterCrop(patch_size)
+                                                resample=PIL.Image.LINEAR),
+            torchvision.transforms.CenterCrop(center_crop_patch_size)
         ]
 
     # Trainset
@@ -264,9 +263,9 @@ def create_dataset_from_cell_and_no_cell_images(
     )
 
     data_augmentation_transformations = None
-    if apply_data_augmentation_transformations:
+    if random_translation_pixels > 0 or random_translation_pixels != 0:
         # Just center crop on the validation images
-        data_augmentation_transformations = [torchvision.transforms.CenterCrop(patch_size)]
+        data_augmentation_transformations = [torchvision.transforms.CenterCrop(center_crop_patch_size)]
 
     validset = LabeledImageDataset(
         np.concatenate((valid_cell_images,                             valid_non_cell_images), axis=0),
@@ -308,6 +307,7 @@ def get_cell_and_no_cell_patches(
         created and if not then it creates it and saves it in cache.
 
     Args:
+        validset_ratio (float):  A value between 0.001 and 0.99 of the ratio of the validation set to training set.
         negative_patch_search_radius:
             The radius of the window for the negative patches.
         patch_size (int, tuple): The patch size (height, width) or int for square.
@@ -359,6 +359,7 @@ def get_cell_and_no_cell_patches(
         Histogram match template is the template used for histogram matching. If do_hist_match is False then
         None is returned.
     """
+    assert 0.001 <= validset_ratio <= 0.99, f'Validation ratio can not be {validset_ratio}'
     assert type(patch_size) == int or type(patch_size) == tuple
     if type(patch_size) == int:
         height, width = patch_size, patch_size
@@ -517,8 +518,9 @@ def get_cell_and_no_cell_patches(
             cell_images, non_cell_images, standardize=standardize_dataset, to_grayscale=dataset_to_grayscale,
             validset_ratio=validset_ratio, v=v,
 
-            apply_data_augmentation_transformations=apply_data_augmentation_to_dataset, patch_size=patch_size[0],
-            translation_pixels=4,
+            random_translation_pixels=4,
+            random_rotation_degrees=0,
+            center_crop_patch_size=patch_size[0],
         )
 
         if v:

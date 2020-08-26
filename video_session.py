@@ -44,6 +44,8 @@ class VideoSession(object):
             if 'Session' in string:
                 self.session_number = int(re.search(r'\d+', string).group())
 
+        self._validation_frame_idx = None
+
         self.video_file = video_filename
         self.video_oa790_file = find_filename_of_same_source(video_filename, unmarked_video_oa790_filenames)
         self.video_oa850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
@@ -424,6 +426,38 @@ class VideoSession(object):
 
             # warning overwriting coordinates in  frame_idx if already exist
             self._cell_positions[frame_idx] = curr_coordinates
+
+    @property
+    def validation_frame_idx(self):
+        if self._validation_frame_idx is None:
+            print('hello')
+            max_positions = 0
+            max_positions_frame_idx = list(self.cell_positions.keys())[0]
+            print(max_positions_frame_idx)
+
+            for frame_idx in self.cell_positions:
+                # find and assign the frame with the most cell positions as a validation frame.
+
+                # We don't want frame index to be the first frame for the usual case of temporal width 1.
+                # We also  want to have some distance from the last (in case of motion contrast enhanced frames)
+                if frame_idx == 0 or frame_idx >= len(self.frames_oa790) - 3:
+                    continue
+
+                cur_coordinates = self.cell_positions[frame_idx]
+
+                if len(cur_coordinates) > max_positions and frame_idx != 0 and frame_idx != len(self.frames_oa790) - 2:
+                    max_positions = len(cur_coordinates)
+                    max_positions_frame_idx = frame_idx
+
+            self._validation_frame_idx = max_positions_frame_idx
+
+        return self._validation_frame_idx
+
+    @validation_frame_idx.setter
+    def validation_frame_idx(self, idx):
+        assert idx in self.cell_positions, f'Frame index {idx} is not marked. Please assign a marked frame frame idx for validation'
+        self._validation_frame_idx = idx
+
 
     def _remove_cell_positions(self, csv_file):
         """ Warning, assumes that each csv_file has unique indices and removes entries from those indices

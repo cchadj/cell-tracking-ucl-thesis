@@ -174,7 +174,7 @@ def train_model_demo(
         if not try_load_model_from_cache:
             raise FileNotFoundError
 
-        additional_displays.append(f'Attempting to load model and results from cache with patch_size:{patch_size}, '
+        additional_displays.append(f'Attempting to load model and results from cache with center_crop_patch_size:{patch_size}, '
                                    f' histogram_match: {do_hist_match}, n negatives per positive: {n_negatives_per_positive}')
         model_directory = \
             load_model_from_cache(
