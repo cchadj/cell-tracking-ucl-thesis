@@ -177,7 +177,11 @@ def extract_patches(img,
     row, col = rows[i], cols[i]
 
     Arguments:
-        img (array): HxWxC or HxW(grayscale) image.
+        img (np.ndarray): HxWxC or HxW(grayscale) image.
+        mask (ndarray):  HxW mask with the valid pixels.
+            Patches are extracted only for True mask pixels.
+            NO patches are extracted for 0 or False pixels.
+            If None then all pixels are considered valid.
         patch_size (tuple): The patch height, width.
         padding:
             'valid' If you want only patches that are entirely inside the image.
@@ -195,6 +199,9 @@ def extract_patches(img,
         patch_height, patch_width = patch_size, patch_size
     elif isinstance(patch_size, tuple):
         patch_height, patch_width = patch_size
+
+    if mask is None:
+        assert mask.shape == img.shape[:2], f'Height and width of mask {mask.shape} must much image {img.shape[:2]}'
 
     if padding != 'valid':
         padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
@@ -246,7 +253,7 @@ def extract_patches(img,
         mask_flattened = mask.reshape(-1)
         vessel_pixel_indices = np.where(mask_flattened)[0]
         patches = patches[vessel_pixel_indices]
-        print(vessel_pixel_indices)
+
     return patches
 
 
