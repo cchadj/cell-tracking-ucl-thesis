@@ -458,7 +458,6 @@ class VideoSession(object):
         assert idx in self.cell_positions, f'Frame index {idx} is not marked. Please assign a marked frame frame idx for validation'
         self._validation_frame_idx = idx
 
-
     def _remove_cell_positions(self, csv_file):
         """ Warning, assumes that each csv_file has unique indices and removes entries from those indices
         without checking the actual coordinates.
