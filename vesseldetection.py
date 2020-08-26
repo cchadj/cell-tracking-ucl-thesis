@@ -136,7 +136,7 @@ def binarize_vessel_image(
     vessel_image[:, :20] = 0
     vessel_image[:, -20:] = 0
 
-    return vessel_image
+    return np.bool8(vessel_image)
 
 
 def create_vessel_image(frames,

@@ -14,7 +14,7 @@ from imageprosessing import ImageRegistator
 
 
 class VideoSession(object):
-    def __init__(self, video_filename):
+    def __init__(self, video_filename, load_vessel_mask_from_file=True):
         from sharedvariables import find_filename_of_same_source, files_of_same_source
         from sharedvariables import marked_video_oa790_files, marked_video_oa850_files
         from sharedvariables import csv_cell_cords_oa790_filenames
@@ -26,6 +26,7 @@ class VideoSession(object):
 
         self.is_registered = '_reg_' in video_filename
 
+        self.load_vessel_mask_from_file = load_vessel_mask_from_file
         vid_marked_790_filename = find_filename_of_same_source(video_filename, marked_video_oa790_files)
         vid_marked_850_filename = find_filename_of_same_source(video_filename, marked_video_oa850_files)
 
@@ -270,7 +271,8 @@ class VideoSession(object):
             if self.mask_video_confocal_file == '':
                 self.mask_frames_confocal = np.ones_like(self.frames_confocal, dtype=np.bool8)
             else:
-                self.mask_frames_confocal = get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(np.bool8)
+                self.mask_frames_confocal = get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(
+                    np.bool8)
 
         return self._mask_frames_confocal
 
@@ -532,7 +534,7 @@ class VideoSession(object):
     @property
     def vessel_mask_oa790(self):
         if self._vessel_mask_oa790 is None:
-            if self.vessel_mask_oa790_file == '':
+            if self.vessel_mask_oa790_file == '' or not self.load_vessel_mask_from_file:
                 vessel_image = create_vessel_image(
                     self.frames_oa790, self.mask_frames_oa790, sigma=0, method='j_tam', adapt_hist=True)
                 self._vessel_mask_oa790 = binarize_vessel_image(vessel_image)
@@ -547,10 +549,10 @@ class VideoSession(object):
     @property
     def vessel_mask_oa850(self):
         if self._vessel_mask_oa850 is None:
-            if self.vessel_mask_oa850_file == '':
+            if self.vessel_mask_oa850_file == '' or not self.load_vessel_mask_from_file:
                 vessel_image = create_vessel_image(
                     self.frames_oa850, self.mask_frames_oa850, sigma=0, method='j_tam', adapt_hist=True)
-                self._vessel_mask_oa850 = create_vessel_mask_from_vessel_image(vessel_image)
+                self._vessel_mask_oa850 = binarize_vessel_image(vessel_image)
             else:
                 self._vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
         return self._vessel_mask_oa850
@@ -566,11 +568,11 @@ class VideoSession(object):
 
     @property
     def vessel_mask_confocal(self):
-        if self._vessel_mask_confocal is None:
+        if self._vessel_mask_confocal is None or not self.load_vessel_mask_from_file:
             if not self.vessel_mask_confocal_file:
                 vessel_image = create_vessel_image(
-                    self.frames_confocal, self.mask_frames_confocal, sigma=0, method='j_tam', adapt_hist=True)
-                self._vessel_mask_confocal = create_vessel_mask_from_vessel_image(vessel_image)
+                    self.frames_confocal, self.mask_frames_oa850, sigma=0, method='j_tam', adapt_hist=True)
+                self._vessel_mask_confocal = binarize_vessel_image(vessel_image)
             else:
                 self._vessel_mask_confocal = VideoSession._vessel_mask_from_file(self.vessel_mask_confocal_file)
         return self._vessel_mask_confocal
@@ -664,5 +666,6 @@ class SessionPreprocessor(object):
 
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
+
     vs = get_video_sessions(should_be_registered=True)[0]
     vs.mask_frames_oa790

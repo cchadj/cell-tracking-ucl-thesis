@@ -13,19 +13,26 @@ from nearest_neighbors import get_nearest_neighbor, get_nearest_neighbor_distanc
 
 
 def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None, ret_radii=False):
-    assert 1 <= n_points_per_circle <= 7, f'Points per circle must be between 1 and 7 not {n_points_per_circle}'
+    assert 1 <= n_points_per_circle <= 15, f'Points per circle must be between 1 and 15, not {n_points_per_circle}'
 
     neighbor_distances, neighbor_idxs = get_nearest_neighbor(points, 2)
-    nnp = n_points_per_circle
-    uniform_angle_displacements = np.array([0, np.math.pi, np.math.pi * 0.5, np.math.pi * 3 * 0.5, np.math.pi * 0.25,
-                                            3 * np.math.pi * 0.25, 5 * np.math.pi * 0.25,
-                                            7 * np.math.pi * 0.25]).squeeze()
+    npp = n_points_per_circle
+
+    uniform_angle_displacements = np.array([
+        0, np.math.pi,
+        1 * .5 * np.math.pi, 3 * np.math.pi * .5,
+        1 * np.math.pi * .25, 3 * np.math.pi * .25, 5 * np.math.pi * .25, 7 * np.math.pi * .25,
+        1 * .125 * np.math.pi, 3 * .125 * np.math.pi, 5 * .125 * np.math.pi, 7 * .125 * np.math.pi,
+        9 * .125 * np.math.pi, 11 * .125 * np.math.pi, 13 * .125 * np.math.pi
+    ]).squeeze()
+
     c = 0
-    rxs = np.zeros(len(points) * nnp + 2 * len(points), dtype=np.int32)
-    rys = np.zeros(len(points) * nnp + 2 * len(points), dtype=np.int32)
+    rxs = np.zeros(len(points) * npp + 2 * len(points), dtype=np.int32)
+    rys = np.zeros(len(points) * npp + 2 * len(points), dtype=np.int32)
     radii = np.zeros(len(points))
 
-    for centre_point_idx, (closest_nbr_distances, closest_nbr_indices) in enumerate(zip(neighbor_distances, neighbor_idxs)):
+    for centre_point_idx, (closest_nbr_distances, closest_nbr_indices) in enumerate(
+            zip(neighbor_distances, neighbor_idxs)):
         centre_point = points[centre_point_idx]
 
         prev_vec = None
@@ -52,15 +59,16 @@ def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None,
         cx, cy = centre_point
 
         angle = np.random.rand() * np.math.pi * 2
+        random_radius_epsilon = 3 * (np.random.rand(len(uniform_angle_displacements)) - 0.5)
         random_angles = np.array(angle + uniform_angle_displacements).squeeze()
 
-        rx = np.array([cx + np.cos(random_angles[:nnp]) * r], dtype=np.int32).squeeze()
-        ry = np.array([cy + np.sin(random_angles[:nnp]) * r], dtype=np.int32).squeeze()
+        rx = np.array([cx + np.cos(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32)
+        ry = np.array([cy + np.sin(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32)
 
-        rxs[c:c + nnp] = rx
-        rys[c:c + nnp] = ry
+        rxs[c:c + npp] = rx
+        rys[c:c + npp] = ry
 
-        c += nnp
+        c += npp
 
     rxs = rxs[:c]
     rys = rys[:c]
@@ -576,7 +584,8 @@ class SessionPatchExtractor(object):
 
             for pos, r in zip(cell_positions, self.frame_negative_search_radii[frame_idx]):
                 cx, cy = pos
-                ax.add_artist(matplotlib.patches.Circle((cx, cy), r, fill=False, edgecolor='r', linewidth=linewidth, linestyle='--'))
+                ax.add_artist(matplotlib.patches.Circle((cx, cy), r, fill=False, edgecolor='r', linewidth=linewidth,
+                                                        linestyle='--'))
 
         plot_images_as_grid(cell_patches, title='Cell patches')
         plot_images_as_grid(non_cell_patches, title='Non cell patches')
@@ -833,15 +842,14 @@ class SessionPatchExtractor(object):
         tmp = self.marked_non_cell_patches_oa790
         return self._marked_non_cell_patches_oa790_at_frame
 
-    @property
-    def all_patches_oa790(self):
-        if self._all_patches_oa790 is None:
-            self._all_patches_oa790 = np.zeros((0, *self._patch_size), dtype=self.session.frames_oa790.dtype)
-            for frame in self.session.frames_oa790:
-                cur_frame_patches = extract_patches(frame, patch_size=self._patch_size)
-                self._all_patches_oa790 = np.concatenate((self._all_patches_oa790, cur_frame_patches), axis=0)
-
-        return self._all_patches_oa790
+    def all_patches_oa790(self, frame_idx, mask=None, patch_size=None, padding=cv2.BORDER_REPLICATE, value=0):
+        if patch_size is None:
+            patch_size = self.patch_size
+        patches = extract_patches(self.session.frames_oa790[frame_idx],
+                                  patch_size=patch_size,
+                                  padding=padding,
+                                  mask=mask)
+        return patches
 
     def _extract_temporal_patches(self,
                                   session_frames,
@@ -947,9 +955,7 @@ class SessionPatchExtractor(object):
         tmp = self.temporal_marked_non_cell_patches_oa790
         return self._temporal_marked_non_cell_patches_oa790_at_frame
 
-    @property
-    def all_temporal_patches_oa790(self):
-        # TODO: extract all temporal patches, from 2nd frame to the penultimate frame.
+    def all_temporal_patches_oa790(self, frame_idx):
         raise NotImplemented
 
     def _extract_mixed_channel_cell_patches(self,
@@ -1085,6 +1091,26 @@ class SessionPatchExtractor(object):
     def mixed_channel_marked_non_cell_patches_at_frame(self):
         tmp = self.mixed_channel_marked_non_cell_patches
         return self._mixed_channel_marked_non_cell_patches_at_frame
+
+    def all_mixed_channel_patches(self, frame_idx, mask=None, patch_size=None, padding=cv2.BORDER_REPLICATE, value=0):
+        if patch_size is None:
+            patch_size = self.patch_size
+
+        if mask is None:
+            mask = np.bool8(self.session.mask_frames_confocal[frame_idx]).copy()
+            mask |= np.bool8(self.session.mask_frames_oa790[frame_idx])
+            mask &= np.bool8(self.session.registered_mask_frames_oa850[frame_idx].copy())
+
+        patches_oa790 = extract_patches(self.session.frames_oa790[frame_idx],
+                                        patch_size=patch_size,
+                                        padding=padding,
+                                        mask=mask)
+        patches_oa850 = extract_patches(self.session.registered_frames_oa850[frame_idx],
+                                        patch_size=patch_size,
+                                        mask=mask,
+                                        padding=padding)
+        patches = np.concatenate((patches_oa790, patches_oa850), axis=0)
+        return patches
 
 
 if __name__ == '__main__':

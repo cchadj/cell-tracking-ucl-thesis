@@ -116,22 +116,25 @@ def find_filename_of_same_source(target_filename, filenames):
 
 
 def get_video_sessions(should_have_marked_cells=False,
-                       should_be_registered=False):
+                       should_be_registered=False,
+                       load_vessel_mask_from_file=True,
+                       ):
     """ Get all video sessions
 
     Returns:
         List[VideoSession] List of video sessions
     """
     video_sessions: List[VideoSession] = []
-    for video_filename in unmarked_video_oa790_filenames:
 
-        vid_session = VideoSession(video_filename)
+    for video_filename in unmarked_video_oa790_filenames:
+        vid_session = VideoSession(video_filename, load_vessel_mask_from_file=load_vessel_mask_from_file)
+
         if should_have_marked_cells and len(vid_session.cell_position_csv_files) == 0:
             continue
         elif should_be_registered and not vid_session.is_registered:
             continue
-        else:
-            video_sessions.append(vid_session)
+
+        video_sessions.append(vid_session)
 
     return video_sessions
 
