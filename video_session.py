@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from os.path import basename
 
 from videoutils import get_frames_from_video
-from vesseldetection import create_vessel_image, binarize_vessel_image
+from vesseldetection import binarize_vessel_image
 from imageprosessing import ImageRegistator
 
 
@@ -103,6 +103,32 @@ class VideoSession(object):
         self._vessel_mask_oa790 = None
         self._vessel_mask_oa850 = None
         self._vessel_mask_confocal = None
+
+    @staticmethod
+    def _write_video(frames, filename, fps=24):
+        import os
+        import pathlib
+        import cv2
+        directory, _ = os.path.split(filename)
+        pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
+        height, width = frames.shape[1:3]
+        vid_writer = cv2.VideoWriter(filename, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), fps, (width, height))
+
+        for frame in frames:
+            frame = frame[..., np.newaxis]
+            frame = np.concatenate((frame, frame, frame), axis=-1)
+
+            vid_writer.write(frame)
+        vid_writer.release()
+
+    def write_video_oa790(self, filename, fps=24):
+        VideoSession._write_video(self.frames_oa790, filename, fps)
+
+    def write_video_oa850(self, filename, fps=24):
+        VideoSession._write_video(self.frames_oa850, filename, fps)
+
+    def write_video_confocal(self, filename, fps=24):
+        VideoSession._write_video(self.frames_confocal, filename, fps)
 
     @staticmethod
     def _assert_frame_assignment(old_frames, new_frames):
@@ -214,7 +240,7 @@ class VideoSession(object):
 
             # clip mask to make it have straight lines
             m = np.bool8(mask_padded)
-            m[:, :left_xs.max() + 1] = False
+            m[:, :left_xs.max() + 15] = False
             m[:, right_xs.min():] = 0
 
             # remove the borders

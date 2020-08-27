@@ -168,51 +168,131 @@ def crop_mask(mask, left_crop=50):
     return new_mask.squeeze()
 
 
-def enhance_motion_contrast(frames, sigma=1, normalize=False, adapt_hist=False):
-    from skimage import exposure
-    from skimage import filters
-
-    if frames.dtype == np.uint8:
-        frames = frames / 255
-    else:
-        frames = frames.copy()
-
+def stack_to_masked_array(frames, masks=None):
     if not np.ma.is_masked(frames):
-        masks = np.ones_like(frames, dtype=np.bool8)
+        if masks is None:
+            masks = np.ones_like(frames, dtype=np.bool8)
         frames = np.ma.masked_array(frames, ~masks)
 
-    # Keep a copy of the masks for operations that destroy the mask
-    masks = frames.mask.copy()
+    return frames
 
-    if sigma >= 0.125:
+
+def gaussian_blur_stack(frames, masks=None, sigma=1):
+    """
+
+    Args:
+        frames (np.ma.masked_array):
+            Assumes masked array. Must be N x H x W (x C) of uint8 type
+        sigma:
+
+    Returns:
+
+    """
+    from skimage import filters
+    frames = frames.copy()
+    frames = stack_to_masked_array(frames, masks)
+    if sigma <= 0:
+        return frames
+
+    frames = np.float64(frames.copy() / 255)
+    masks = ~frames.mask
+
+    with np.errstate(divide='ignore', invalid='ignore'):
         for i, (frame, mask) in enumerate(zip(frames, masks)):
-            # make everything outside of mask the mean of the image, to avoid messing the gaussian blur too much
-            frame[mask] = frame.mean()
-            frames[i] = filters.gaussian(frame, sigma)
-        frames = np.ma.masked_array(frames, masks)
+            frames[i] = filters.gaussian(frame.filled(0) * mask, sigma=sigma)
+            weights = filters.gaussian(mask, sigma=sigma)
+            frames[i] /= weights
 
-    # Create division frames by dividing consecutive frames (last frame remains unprocessed)
-    division_frames = frames
+    return np.uint8(frames * 255)
+
+
+def enhance_motion_contrast_de_castro(frames, masks=None, sigma=1):
+    frames = stack_to_masked_array(frames, masks)
+
+    frames = gaussian_blur_stack(frames, sigma=sigma)
+    frames = frames / 255
+
+    for i, frame in enumerate(frames):
+        frames[i] /= frame.mean()
+
+    mean_frame = frames.mean(0)
+    for i in range(len(frames)):
+        frames[i] /= mean_frame
+
+    return frames
+
+
+def enhance_motion_contrast_mine(frames, masks=None, sigma=1):
+    frames = stack_to_masked_array(frames, masks)
+
+    frames = gaussian_blur_stack(frames, sigma=sigma)
+    frames /= 255
+
+    for i, frame in enumerate(frames):
+        frames[i] /= frame.mean()
+
+    mean_frame = frames.mean(0)
+    for i in range(len(frames)):
+        frames[i] /= mean_frame
+
+    penultimate_frame = frames[-2].copy()
     for j in range(len(frames) - 1):
-        division_frames[j] /= frames[j + 1]
-    division_frames = division_frames[:-1]
+        frames[j] /= frames[j + 1]
+    frames[-1] /= penultimate_frame
 
-    # Create multiframe frames by averaging consecutive division frames (last frame remains unprocessed)
-    multiframe_div_frames = division_frames
-    for j in range(len(division_frames) - 1):
-        multiframe_div_frames[j] += division_frames[j + 1]
-        multiframe_div_frames[j] /= 2
+    penultimate_frame = frames[-2].copy()
+    frames = frames
+    for j in range(len(frames) - 1):
+        frames[j] += frames[j + 1]
+        frames[j] /= 2
 
+    frames[-1] += penultimate_frame
+    frames[-1] /= 2
+
+    return frames
+
+
+def enhance_motion_contrast_j_tam(frames, masks=None, sigma=1, adapt_hist=False):
+    from skimage import exposure
+    frames = stack_to_masked_array(frames, masks)
+
+    frames = gaussian_blur_stack(frames, sigma=sigma)
+    frames = frames / 255
+
+    # division frames
+    penultimate_frame = frames[-3].copy()
+    for j in range(len(frames)):
+        if j == len(frames) - 1:
+            frame = penultimate_frame
+        else:
+            frame = frames[j + 1]
+        frames[j] /= frame
+
+    # multi-frame division frames
+    masks = frames.mask.copy()
+    penultimate_frame = frames[-2].copy()
+    for j in range(len(frames)):
+        if j == len(frames) - 1:
+            frame = penultimate_frame
+        else:
+            frame = frames[j + 1]
+        frames[j] += frame
+        frames[j] /= 2
         if adapt_hist:
-            multiframe_div_frames[j] = exposure.equalize_adapthist(
-                normalize_data(multiframe_div_frames[j].filled(multiframe_div_frames[j].mean()), (0, 1)))
-            multiframe_div_frames[j].mask = masks[j]
+            frame = normalize_data(frames[j].filled(frames[j].mean()))
+            frames[j] = exposure.equalize_adapthist(frame)
+            frames[j].mask = masks[j]
 
-        if normalize:
-            multiframe_div_frames[j] = normalize_data(multiframe_div_frames[j], (0, 1))
+    return frames
 
-    final_processed_frames = multiframe_div_frames[:-1]
-    return final_processed_frames
+
+def enhance_motion_contrast(frames, masks=None, method='j_tam', sigma=1, adapt_hist=False):
+    if method == 'de_castro':
+        return enhance_motion_contrast_de_castro(frames, masks=masks, sigma=sigma)
+    elif method == 'j_tam':
+        return enhance_motion_contrast_j_tam(frames, masks=masks, sigma=sigma, adapt_hist=adapt_hist)
+    else:
+        raise NotImplementedError(f'Method {method} not implemented')
 
 
 def center_crop_images(images, patch_size):
@@ -325,6 +405,9 @@ if __name__ == '__main__':
     import numpy as np
 
     video_sessions = get_video_sessions(should_have_marked_cells=True, should_be_registered=True)
+    vs = video_sessions[7]
+    j_tam = enhance_motion_contrast_j_tam(vs.masked_frames_oa790, sigma=0, adapt_hist=True)
+
     vs = video_sessions[0]
     pr = SessionPreprocessor(vs, [
         lambda frames: enhance_motion_contrast(frames, adapt_hist=True),

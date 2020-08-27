@@ -73,10 +73,6 @@ def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None,
     rxs = rxs[:c]
     rys = rys[:c]
 
-    # print(len(points))
-    # print(len(rxs))
-    # print()
-
     if ret_radii:
         return rxs, rys, radii
     else:
