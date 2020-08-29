@@ -82,7 +82,7 @@ def binarize_vessel_image(
             axes[0].set_title('Vessel image', fontsize=60)
             axes[1].imshow(vessel_image_blurred[padding_size:-padding_size, padding_size:-padding_size], cmap='gray')
             axes[1].set_title('Blurred image', fontsize=60)
-            axes[2].imshow(frangi_image[padding_size:-padding_size, padding_size:-padding_size])
+            axes[2].imshow(frangi_image[padding_size:-padding_size, padding_size:-padding_size], cmap='hot')
             axes[2].set_title('Frangi image', fontsize=60)
             axes[3].imshow(BW[padding_size:-padding_size, padding_size:-padding_size])
             axes[3].set_title('Binary image', fontsize=60)
@@ -101,7 +101,7 @@ def binarize_vessel_image(
 
 
 def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True,
-                                   equalize_frangi_hist=True):
+                                   equalize_frangi_hist=True, visualize_intermediate_steps=False):
     from imageprosessing import enhance_motion_contrast_j_tam, enhance_motion_contrast_de_castro, stack_to_masked_array, \
         gaussian_blur_stack
     frames = stack_to_masked_array(frames, masks)
@@ -115,7 +115,7 @@ def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, 
     std_img = frames.std(0)
     std_img = std_img.filled(std_img.mean())
     std_img = skimage.exposure.equalize_adapthist(std_img)
-    mask = binarize_vessel_image(std_img, equalize_frangi_hist=True,
+    mask = binarize_vessel_image(std_img, equalize_frangi_hist=equalize_frangi_hist,
                                  opening_kernel_size=5, closing_kernel_size=8,
-                                 visualise_intermediate_steps=True)
+                                 visualise_intermediate_steps=visualize_intermediate_steps)
     return mask

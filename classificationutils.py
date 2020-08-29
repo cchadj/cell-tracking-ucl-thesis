@@ -7,7 +7,6 @@ import mahotas as mh
 import torch
 from learningutils import ImageDataset
 
-
 NEGATIVE_LABEL = 0
 POSITIVE_LABEL = 1
 
@@ -86,14 +85,20 @@ def predict_probability_single_patch(patch, model, device='cuda'):
     return prediction.item()
 
 
-def get_cell_positions_from_probability_map(probability_map,
-                                            gauss_sigma,
-                                            extended_maxima_H,
-                                            visualise_intermediate_results=False):
-    pm_blurred = mh.gaussian_filter(probability_map, gauss_sigma)
-    pm_extended_max_bw = imextendedmax(pm_blurred, extended_maxima_H)
+def get_cell_positions_from_probability_map(
+        probability_map,
+        extended_maxima_h,
+        sigma=1,
+        visualise_intermediate_results=False):
+    assert 0.1 <= extended_maxima_h <= 0.9, f'Extended maxima h must be between .1 and .9 not {extended_maxima_h}'
+    from skimage.filters import gaussian
+    from skimage import measure
+    from scipy.ndimage import center_of_mass
 
-    labeled, nr_objects = mh.label(pm_extended_max_bw)
+    pm_blurred = gaussian(probability_map, sigma)
+    pm_extended_max_bw = imextendedmax(pm_blurred, extended_maxima_h)
+
+    labeled_img, nr_objects = measure.label(pm_extended_max_bw, return_num=True)
 
     # print(np.where(pm_extended_max_bw)[0])
     pm_extended_max = probability_map.copy()
@@ -101,7 +106,13 @@ def get_cell_positions_from_probability_map(probability_map,
 
     # print(pm_extended_max)
     # Notice, the positions from the csv is x,y. The result from the probability is y,x so we swap.
-    predicted_cell_positions = mh.center_of_mass(pm_extended_max_bw, labeled)[:, [1, 0]]
+    region_props = measure.regionprops(labeled_img, intensity_image=pm_blurred)
+    estimated_cell_positions = np.empty((len(region_props), 2))
+
+    for i, region in enumerate(region_props):
+        y, x = region.weighted_centroid
+        estimated_cell_positions[i] = x, y
+
     if visualise_intermediate_results:
         fig, axes = plt.subplots(1, 3)
         fig_size = fig.get_size_inches()
@@ -112,15 +123,14 @@ def get_cell_positions_from_probability_map(probability_map,
         axes[0].set_title('Unprocessed probability map')
 
         axes[1].imshow(pm_blurred)
-        axes[1].set_title(f'Gaussian Blurring with sigma={gauss_sigma}')
+        axes[1].set_title(f'Gaussian Blurring with sigma={sigma}')
 
         axes[2].imshow(pm_extended_max_bw)
-        axes[2].set_title(f'Extended maximum, H={extended_maxima_H}')
+        axes[2].set_title(f'Extended maximum, H={extended_maxima_h}')
+        axes[2].scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=4, label='estimated locations')
+        axes[2].legend()
 
-        axes[2].scatter(predicted_cell_positions[:, 0], predicted_cell_positions[:, 1], s=4)
-        # axes[2].scatter(predicted_cell_positions[:, 0], predicted_cell_positions[:, 1], s=9)
-
-    return predicted_cell_positions[1:, ...]
+    return estimated_cell_positions[1:, ...]
 
 
 @torch.no_grad()
