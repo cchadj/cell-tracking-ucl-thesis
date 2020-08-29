@@ -306,7 +306,7 @@ def extract_patches_at_positions(image,
                                    padding_width,
                                    padding_width,
                                    padding)
-    assert positions[:, 1].max() < image.shape[0] and positions[:, 0].max() < image.shape[1], \
+        assert positions[:, 1].max() < image.shape[0] and positions[:, 0].max() < image.shape[1], \
         'Position coordinates must not go outside of image boundaries.'
     if len(image.shape) == 2:
         n_channels = 1
@@ -384,6 +384,9 @@ class SessionPatchExtractor(object):
     _non_cell_positions: Dict[int, np.ndarray]
     _temporal_width: int
 
+    RECTANGLE = 0
+    CIRCLE = 1
+
     TRAINING_MODE = 0
     VALIDATION_MODE = 1
     ALL_MODE = 2
@@ -394,7 +397,7 @@ class SessionPatchExtractor(object):
                  temporal_width=1,
                  n_negatives_per_positive=1,
                  negative_patch_extraction_radius=21,
-                 random_rect_points=False,
+                 negative_extraction_mode=CIRCLE,
                  extraction_mode=ALL_MODE
                  ):
         """
@@ -402,14 +405,16 @@ class SessionPatchExtractor(object):
         Args:
             session (VideoSession):  The video session to extract patches from
         """
+        assert negative_extraction_mode in [SessionPatchExtractor.RECTANGLE, SessionPatchExtractor.CIRCLE]
+        assert extraction_mode in [SessionPatchExtractor.ALL_MODE, SessionPatchExtractor.VALIDATION_MODE, SessionPatchExtractor.TRAINING_MODE]
         self.session = session
+        self._extraction_mode = extraction_mode
+        self._negative_extraction_mode = negative_extraction_mode
 
         self._cell_positions = {}
         self._non_cell_positions = {}
 
         assert type(patch_size) is int or type(patch_size) is tuple
-
-        self._extraction_mode = extraction_mode
 
         if type(patch_size) is tuple:
             self._patch_size = patch_size
@@ -418,14 +423,11 @@ class SessionPatchExtractor(object):
 
         self.temporal_width = temporal_width
 
-        self.random_rect_points = random_rect_points
         self.frame_negative_search_radii = {}
 
         self._negative_patch_extraction_radius = negative_patch_extraction_radius
 
         self._n_negatives_per_positive = n_negatives_per_positive
-        self._all_patches_oa790 = None
-        self._all_patches_oa850 = None
 
         self._cell_patches_oa790 = None
         self._cell_patches_oa850 = None
@@ -503,10 +505,11 @@ class SessionPatchExtractor(object):
                 cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
 
                 frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask=mask)
-                if self.random_rect_points:
+                if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
+                    print('Why')
                     rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                              n_points_per_rect=self.n_negatives_per_positive)
-                else:
+                elif self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
                     if len(frame_cell_positions) <= 2:
                         continue
                     rx, ry, radii = get_random_points_on_circles(frame_cell_positions,
@@ -560,10 +563,16 @@ class SessionPatchExtractor(object):
         if self.extraction_mode == SessionPatchExtractor.ALL_MODE:
             mode_str = 'All'
 
+        shape_mode_str = ''
+        if self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
+            shape_mode_str = 'Circle negative search'
+        elif self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
+            shape_mode_str = 'Rectangle negative search'
+
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
         ax.imshow(frame, cmap='gray')
-        ax.set_title(f'Frame {frame_idx}. {mode_str} mode ', fontsize=20)
+        ax.set_title(f'Frame {frame_idx}. {mode_str} mode. {shape_mode_str} ', fontsize=20)
 
         plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax,
                                      edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
@@ -571,11 +580,11 @@ class SessionPatchExtractor(object):
         plot_patch_rois_at_positions(non_cell_positions, self.patch_size, ax=ax, label='Non cell patches',
                                      edgecolor=(1, 0, 0, .35), pointcolor='r', linewidth=linewidth * 0.75)
 
-        if self.random_rect_points:
+        if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
             plot_patch_rois_at_positions(cell_positions, self.negative_patch_extraction_radius, ax=ax,
                                          label='Negative patch extraction radius',
                                          edgecolor='y', pointcolor='gray', linewidth=linewidth)
-        else:
+        elif self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
             ax.scatter(non_cell_positions[..., 0], non_cell_positions[..., 1], c='r', s=s)
 
             for pos, r in zip(cell_positions, self.frame_negative_search_radii[frame_idx]):
@@ -838,9 +847,23 @@ class SessionPatchExtractor(object):
         tmp = self.marked_non_cell_patches_oa790
         return self._marked_non_cell_patches_oa790_at_frame
 
-    def all_patches_oa790(self, frame_idx, mask=None, patch_size=None, padding=cv2.BORDER_REPLICATE, value=0):
+    def all_patches_oa790(self, frame_idx,
+                          use_frame_mask=False,
+                          use_vessel_mask=False,
+                          mask=None, patch_size=None, padding=cv2.BORDER_REPLICATE, value=0):
         if patch_size is None:
             patch_size = self.patch_size
+
+        if mask is None:
+            mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
+
+        if use_vessel_mask:
+            mask &= self.session.vessel_mask_oa790
+
+        if use_frame_mask:
+            mask &= self.session.mask_frames_oa790[frame_idx]
+        plt.imshow(mask)
+
         patches = extract_patches(self.session.frames_oa790[frame_idx],
                                   patch_size=patch_size,
                                   padding=padding,
@@ -1088,14 +1111,24 @@ class SessionPatchExtractor(object):
         tmp = self.mixed_channel_marked_non_cell_patches
         return self._mixed_channel_marked_non_cell_patches_at_frame
 
-    def all_mixed_channel_patches(self, frame_idx, mask=None, patch_size=None, padding=cv2.BORDER_REPLICATE, value=0):
+    def all_mixed_channel_patches(self, frame_idx, use_frame_mask=True, use_vessel_mask=False, patch_size=21,
+                                  mask=None, padding=cv2.BORDER_REPLICATE, value=0):
         if patch_size is None:
             patch_size = self.patch_size
 
         if mask is None:
-            mask = np.bool8(self.session.mask_frames_confocal[frame_idx]).copy()
-            mask |= np.bool8(self.session.mask_frames_oa790[frame_idx])
-            mask &= np.bool8(self.session.registered_mask_frames_oa850[frame_idx].copy())
+            mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
+        else:
+            mask = mask.copy()
+
+        if use_vessel_mask:
+            mask &= self.session.vessel_mask_oa790
+
+        if use_frame_mask:
+            mask &= self.session.mask_frames_oa790[frame_idx]
+
+        plt.imshow(mask)
+        plt.show()
 
         patches_oa790 = extract_patches(self.session.frames_oa790[frame_idx],
                                         patch_size=patch_size,
@@ -1103,9 +1136,9 @@ class SessionPatchExtractor(object):
                                         mask=mask)
         patches_oa850 = extract_patches(self.session.registered_frames_oa850[frame_idx],
                                         patch_size=patch_size,
-                                        mask=mask,
-                                        padding=padding)
-        patches = np.concatenate((patches_oa790, patches_oa850), axis=0)
+                                        padding=padding,
+                                        mask=mask)
+        patches = np.concatenate((patches_oa790, patches_oa850), axis=-1)
         return patches
 
 
@@ -1114,7 +1147,7 @@ if __name__ == '__main__':
     from plotutils import plot_images_as_grid
     from matplotlib.colors import NoNorm
 
-    video_sessions = get_video_sessions(should_have_marked_cells=True, should_be_registered=False)
+    video_sessions = get_video_sessions(marked=True, registered=False)
     video_sessions = [vs for vs in video_sessions if 'shared-videos' not in vs.video_file]
     print([vs.video_file for vs in video_sessions])
     vs = video_sessions[0]

@@ -41,8 +41,8 @@ def evaluate_results(ground_truth_positions,
             over the image.
 
     Returns:
-        (float, float, float):
-        Dice's coefficient, true positive rate, false discovery rate.
+        (EvaluationResults):
+        Dice's coefficient, true positive rate, false discovery rate and other results.
     """
     assert len(ground_truth_positions) > 0
     assert len(estimated_positions) > 0
@@ -240,6 +240,7 @@ class EvaluationResults:
                  false_positive_dists, true_positive_points,
                  false_positive_points, estimated_positions):
         self.image = image
+        self.probability_map = None
         self.dice = dice
         self.mask = mask
         self.distance_for_true_positive = distance_for_true_positive

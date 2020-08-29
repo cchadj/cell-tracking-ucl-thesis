@@ -38,7 +38,8 @@ def create_cell_and_no_cell_patches(
 
         mixed_channel_patches=False,
 
-        use_rectangle_for_negative_search=False,
+        negative_extraction_mode=SessionPatchExtractor.CIRCLE,
+
         negative_patch_search_radius=21,
         n_negatives_per_positive=1,
 
@@ -69,7 +70,7 @@ def create_cell_and_no_cell_patches(
     non_cell_images_marked = np.zeros_like(cell_images)
 
     if video_sessions is None:
-        video_sessions = get_video_sessions(should_have_marked_cells=True)
+        video_sessions = get_video_sessions(marked=True)
     assert all([vs.has_marked_cells for vs in video_sessions]), 'Not all video sessions have marked cells.'
 
     if v:
@@ -90,7 +91,7 @@ def create_cell_and_no_cell_patches(
                                                 patch_size=patch_size,
                                                 temporal_width=temporal_width,
 
-                                                random_rect_points=use_rectangle_for_negative_search,
+                                                negative_extraction_mode=negative_extraction_mode,
 
                                                 n_negatives_per_positive=n_negatives_per_positive,
                                                 negative_patch_extraction_radius=negative_patch_search_radius)

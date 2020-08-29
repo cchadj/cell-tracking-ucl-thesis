@@ -11,9 +11,8 @@ from copy import deepcopy
 import numpy as np
 from cnnlearning import CNN, train, TrainingTracker
 from generate_datasets import get_cell_and_no_cell_patches
-from classificationutils import classify_images, classify_labeled_dataset
+from classificationutils import classify_labeled_dataset
 from sharedvariables import CACHED_MODELS_FOLDER
-from learningutils import LabeledImageDataset
 
 
 def extract_value_from_string(string, value_prefix, delimiter='_'):
@@ -367,7 +366,7 @@ def main_tmp():
 
         shuffle=True)
 
-    video_sessions_registered = get_video_sessions(should_have_marked_cells=True, should_be_registered=True)
+    video_sessions_registered = get_video_sessions(marked=True, registered=True)
     model, results = train_model_demo(
         patch_size=31,
         temporal_width=0,
@@ -391,7 +390,7 @@ if __name__ == '__main__':
     import sys
     from sharedvariables import get_video_sessions
 
-    video_sessions = get_video_sessions(should_be_registered=True, should_have_marked_cells=True)
+    video_sessions = get_video_sessions(registered=True, marked=True)
 
     train_params = collections.OrderedDict(
         epochs=250,

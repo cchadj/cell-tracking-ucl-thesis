@@ -404,7 +404,7 @@ if __name__ == '__main__':
     from video_session import SessionPreprocessor
     import numpy as np
 
-    video_sessions = get_video_sessions(should_have_marked_cells=True, should_be_registered=True)
+    video_sessions = get_video_sessions(marked=True, registered=True)
     vs = video_sessions[7]
     j_tam = enhance_motion_contrast_j_tam(vs.masked_frames_oa790, sigma=0, adapt_hist=True)
 
@@ -417,7 +417,7 @@ if __name__ == '__main__':
     from sharedvariables import get_video_sessions
     from video_session import SessionPreprocessor
 
-    video_sessions = get_video_sessions(should_have_marked_cells=True)
+    video_sessions = get_video_sessions(marked=True)
     vs = video_sessions[0]
 
     preprocessor = SessionPreprocessor(vs, [

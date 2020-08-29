@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from os.path import basename
 
 from videoutils import get_frames_from_video
-from vesseldetection import binarize_vessel_image
+from vesseldetection import binarize_vessel_image, create_vessel_mask_from_frames
 from imageprosessing import ImageRegistator
 
 
@@ -23,8 +23,10 @@ class VideoSession(object):
         from sharedvariables import mask_video_oa850_files, mask_video_confocal_files
         from sharedvariables import vessel_mask_confocal_files, vessel_mask_oa790_files, vessel_mask_oa850_files
         from sharedvariables import std_image_confocal_files, std_image_oa790_files, std_image_oa850_files
+        import pathlib
 
         self.is_registered = '_reg_' in video_filename
+        self.is_validation = 'validation' in pathlib.PurePath(video_filename).parts
 
         self.load_vessel_mask_from_file = load_vessel_mask_from_file
         vid_marked_790_filename = find_filename_of_same_source(video_filename, marked_video_oa790_files)
@@ -35,7 +37,8 @@ class VideoSession(object):
                                          if files_of_same_source(csv_file, video_filename)]
 
         self.has_marked_video = vid_marked_790_filename != '' or vid_marked_850_filename != ''
-        self.has_marked_cells = len(self._cell_position_csv_files) > 0
+        self.has_marked_cells = len(self.cell_position_csv_files) > 0
+        self.is_marked = len(self.cell_position_csv_files) > 0
 
         self.subject_number = -1
         self.session_number = -1
@@ -561,9 +564,7 @@ class VideoSession(object):
     def vessel_mask_oa790(self):
         if self._vessel_mask_oa790 is None:
             if self.vessel_mask_oa790_file == '' or not self.load_vessel_mask_from_file:
-                vessel_image = create_vessel_image(
-                    self.frames_oa790, self.mask_frames_oa790, sigma=0, method='j_tam', adapt_hist=True)
-                self._vessel_mask_oa790 = binarize_vessel_image(vessel_image)
+                self._vessel_mask_oa790 = create_vessel_mask_from_frames(self.masked_frames_oa790)
             else:
                 self._vessel_mask_oa790 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa790_file)
         return self._vessel_mask_oa790
@@ -571,14 +572,17 @@ class VideoSession(object):
     @vessel_mask_oa790.setter
     def vessel_mask_oa790(self, val):
         self._vessel_mask_oa790 = val
+        self._vessel_masked_frames_oa790 = None
+        self._fully_masked_frames_oa790 = None
+
+        self._registered_mask_frames_oa850 = None
+        self._registered_vessel_mask_oa850 = None
 
     @property
     def vessel_mask_oa850(self):
         if self._vessel_mask_oa850 is None:
             if self.vessel_mask_oa850_file == '' or not self.load_vessel_mask_from_file:
-                vessel_image = create_vessel_image(
-                    self.frames_oa850, self.mask_frames_oa850, sigma=0, method='j_tam', adapt_hist=True)
-                self._vessel_mask_oa850 = binarize_vessel_image(vessel_image)
+                self._vessel_mask_oa850 = create_vessel_mask_from_frames(self.masked_frames_oa850)
             else:
                 self._vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
         return self._vessel_mask_oa850
@@ -596,9 +600,7 @@ class VideoSession(object):
     def vessel_mask_confocal(self):
         if self._vessel_mask_confocal is None or not self.load_vessel_mask_from_file:
             if not self.vessel_mask_confocal_file:
-                vessel_image = create_vessel_image(
-                    self.frames_confocal, self.mask_frames_oa850, sigma=0, method='j_tam', adapt_hist=True)
-                self._vessel_mask_confocal = binarize_vessel_image(vessel_image)
+                self._vessel_mask_confocal = create_vessel_mask_from_frames(self.masked_frames_confocal)
             else:
                 self._vessel_mask_confocal = VideoSession._vessel_mask_from_file(self.vessel_mask_confocal_file)
         return self._vessel_mask_confocal
@@ -608,6 +610,7 @@ class VideoSession(object):
         self._vessel_mask_confocal = val
         self._vessel_masked_frames_confocal = None
         self._fully_masked_frames_confocal = None
+
         self._registered_mask_frames_oa850 = None
         self._registered_mask_frames_oa850 = None
 
@@ -693,5 +696,5 @@ class SessionPreprocessor(object):
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
 
-    vs = get_video_sessions(should_be_registered=True)[0]
+    vs = get_video_sessions(registered=True)[0]
     vs.mask_frames_oa790

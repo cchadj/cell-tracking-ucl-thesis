@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List, Any, Dict
 
 import torch
 import tqdm
@@ -9,6 +9,8 @@ import time
 import collections
 from torch import nn
 import copy
+
+from classificationutils import ClassificationResults
 from learningutils import ImageDataset, LabeledImageDataset
 from IPython.display import clear_output
 from IPython.display import display
@@ -193,7 +195,11 @@ class CNN(nn.Module):
 # Helper class, help track loss, accuracy, epoch time, run time,
 # hyper-parameters etc.
 class TrainingTracker:
-    additional_displays: List[pd.DataFrame]
+    train_classification_results: Dict[int, ClassificationResults]
+    valid_classification_results: Dict[int, ClassificationResults]
+    best_train_accuracy_classification_results: ClassificationResults
+    best_valid_accuracy_classification_results: ClassificationResults
+    additional_displays: List[object]
 
     def __init__(self, device, additional_displays=None):
         if additional_displays is None:
@@ -222,6 +228,9 @@ class TrainingTracker:
         self.train_negative_accuracies = {}
         self.valid_negative_accuracies = {}
 
+        self.train_classification_results = {}
+        self.valid_classification_results = {}
+
         # Track training performance metrics
         self.epoch_durations = []
 
@@ -235,6 +244,7 @@ class TrainingTracker:
 
         self._times_since_last_best_train_loss = 0
         self._times_since_last_best_train_accuracy = 0
+        self.best_train_accuracy_classification_results = None
 
         # validation dataset
         self.best_valid_loss = np.inf
@@ -243,6 +253,7 @@ class TrainingTracker:
         self.best_valid_accuracy = 0
         self.best_valid_accuracy_epoch = 0
         self.is_best_valid_accuracy_recorded = False
+        self.best_valid_accuracy_classification_results = None
 
         self._times_since_last_best_valid_loss = 0
         self._times_since_last_best_valid_accuracy = 0
@@ -275,6 +286,8 @@ class TrainingTracker:
         self.is_model_recorded = False
 
         # Loaders and loss criterion used for this run
+        self.trainset = None
+        self.validset = None
         self.train_loader = None
         self.valid_loader = None
         self.criterion = None
@@ -282,9 +295,8 @@ class TrainingTracker:
         # 'cpu' or 'cuda'
         self.device = device
 
-    def start_run(self, model, params, train_loader, valid_loader, criterion):
+    def start_run(self, model, params, train_loader, valid_loader, criterion, trainset=None, validset=None):
         self.run_start_time = time.time()
-
         if 'do_early_stop' in params:
             self.do_early_stop = params['do_early_stop']
         if 'early_stop_patience' in params:
@@ -292,8 +304,13 @@ class TrainingTracker:
 
         self.run_params = params
         self.model = model
+
         self.train_loader = train_loader
         self.valid_loader = valid_loader
+
+        self.trainset = trainset
+        self.validset = validset
+
         self.criterion = criterion
 
     def end_run(self):
@@ -460,10 +477,9 @@ class TrainingTracker:
         with open(os.path.join(output_directory, 'run_parameters.txt'), 'w') as output_file:
             output_file.write(run_parameters_df.__repr__())
 
-        with open(os.path.join(output_directory, 'results_file.pkl'), 'wb') as output_file:
+        with open(os.path.join(output_directory, 'results.pkl'), 'wb') as output_file:
             self.model = copy.deepcopy(self.model)
             pickle.dump(self, output_file, pickle.HIGHEST_PROTOCOL)
-
 
     @classmethod
     def from_file(cls, file):
@@ -473,49 +489,53 @@ class TrainingTracker:
     # noinspection DuplicatedCode
     @torch.no_grad()
     def track_performance(self):
-        train_loss, train_accuracy, train_positive_accuracy, train_negative_accuracy = \
+        classification_results = \
             self._get_loss_and_accuracy(self.train_loader)
-        self.train_losses[self.epoch_count] = train_loss
-        self.train_accuracies[self.epoch_count] = train_accuracy
-        self.train_positive_accuracies[self.epoch_count] = train_positive_accuracy
-        self.train_negative_accuracies[self.epoch_count] = train_negative_accuracy
+        self.train_losses[self.epoch_count] = classification_results.loss
+        self.train_accuracies[self.epoch_count] = classification_results.accuracy
+        self.train_positive_accuracies[self.epoch_count] = classification_results.positive_accuracy
+        self.train_negative_accuracies[self.epoch_count] = classification_results.negative_accuracy
+        self.train_classification_results[self.epoch_count] = copy.deepcopy(classification_results)
+        self.valid_classification_results[self.epoch_count] = copy.deepcopy(classification_results)
 
-        if train_loss < self.best_train_loss:
+        if classification_results.loss < self.best_train_loss:
             self.is_best_train_loss_recorded = True
-            self.best_train_loss = train_loss
+            self.best_train_loss = classification_results.loss
             self._times_since_last_best_train_loss = 0
         else:
             self.is_best_train_loss_recorded = False
             self._times_since_last_best_train_loss += 1
 
-        if train_accuracy > self.best_train_accuracy:
+        if classification_results.accuracy > self.best_train_accuracy:
             self.is_best_train_accuracy_recorded = True
-            self.best_train_accuracy = train_accuracy
+            self.best_train_accuracy = classification_results.accuracy
             self.best_train_accuracy_epoch = self.epoch_count
+            self.best_train_accuracy_classification_results = copy.deepcopy(classification_results)
             self._times_since_last_best_train_accuracy = 0
         else:
             self.is_best_train_accuracy_recorded = False
             self._times_since_last_best_train_accuracy += 1
 
-        valid_loss, valid_accuracy, valid_positive_accuracy, valid_negative_accuracy \
-            = self._get_loss_and_accuracy(self.valid_loader)
-        self.valid_losses[self.epoch_count] = valid_loss
-        self.valid_accuracies[self.epoch_count] = valid_accuracy
-        self.valid_positive_accuracies[self.epoch_count] = valid_positive_accuracy
-        self.valid_negative_accuracies[self.epoch_count] = valid_negative_accuracy
+        classification_results = self._get_loss_and_accuracy(self.valid_loader)
+        self.valid_losses[self.epoch_count] = classification_results.loss
+        self.valid_accuracies[self.epoch_count] = classification_results.accuracy
+        self.valid_positive_accuracies[self.epoch_count] = classification_results.positive_accuracy
+        self.valid_negative_accuracies[self.epoch_count] = classification_results.negative_accuracy
+        self.valid_classification_results[self.epoch_count] = copy.deepcopy(classification_results)
 
-        if valid_loss < self.best_valid_loss:
+        if classification_results.loss < self.best_valid_loss:
             self.is_best_valid_loss_recorded = True
-            self.best_valid_loss = valid_loss
+            self.best_valid_loss = classification_results.loss
             self._times_since_last_best_valid_loss = 0
         else:
             self.is_best_valid_loss_recorded = False
             self._times_since_last_best_valid_loss += 1
 
-        if valid_accuracy > self.best_valid_accuracy:
+        if classification_results.accuracy > self.best_valid_accuracy:
             self.is_best_valid_accuracy_recorded = True
-            self.best_valid_accuracy = valid_accuracy
+            self.best_valid_accuracy = classification_results.accuracy
             self.best_valid_accuracy_epoch = self.epoch_count
+            self.best_valid_accuracy_classification_results = copy.deepcopy(classification_results)
             self._times_since_last_best_valid_accuracy = 0
         else:
             self.is_best_valid_accuracy_recorded = False
@@ -623,6 +643,7 @@ class TrainingTracker:
     @torch.no_grad()
     def _get_loss_and_accuracy(self, loader):
         self.model = self.model.eval()
+        from classificationutils import classify_labeled_dataset
 
         total_loss = 0
 
@@ -661,7 +682,16 @@ class TrainingTracker:
         negative_accuracy = n_negative_correct / n_negative_samples
 
         self.model = self.model.train()
-        return total_loss, accuracy, positive_accuracy, negative_accuracy
+        classification_results = ClassificationResults(
+            loss=total_loss,
+            positive_accuracy=positive_accuracy,
+            negative_accuracy=negative_accuracy,
+            accuracy=accuracy,
+            n_positive=n_positive_samples,
+            n_negative=n_negative_samples,
+        )
+
+        return classification_results
 
 
 class TrainingInterruptSignalHandler(object):
@@ -739,8 +769,9 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.
         sampler=sampler,
     )
 
+    validset = params['validset']
     valid_loader = torch.utils.data.DataLoader(
-        params['validset'],
+        validset,
         batch_size=batch_size,
         shuffle=False
     )
@@ -774,7 +805,7 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.
 
     # Tracker tracks the process and helps with early stopping
     tracker = TrainingTracker(device, additional_displays)
-    tracker.start_run(cnn, params, train_loader, valid_loader, criterion)
+    tracker.start_run(cnn, params, train_loader, valid_loader, criterion, trainset=trainset, validset=validset)
 
     interrupt_handler = TrainingInterruptSignalHandler(tracker)
     signal.signal(signal.SIGINT, interrupt_handler.handle)
