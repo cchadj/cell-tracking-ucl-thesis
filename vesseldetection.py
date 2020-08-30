@@ -31,6 +31,8 @@ def binarize_vessel_image(
         normalise_fangi=False,
         equalize_frangi_hist=False,
 
+        threshold_sensitivity=0.5,
+
         opening_kernel_size=5,
         closing_kernel_size=13,
         padding=cv2.BORDER_REPLICATE,
@@ -48,16 +50,21 @@ def binarize_vessel_image(
                                       value=padding_value)
     # opening_kernel = morphology.disk(opening_kernel_size)
     # closing_kernel = morphology.disk(closing_kernel_size)
-    print('helo')
     opening_kernel = morphology.square(opening_kernel_size)
     closing_kernel = morphology.square(closing_kernel_size)
 
     for it in range(n_iterations):
-        sigma = 2
+        sigma = 1
         if sigma > 0:
             vessel_image_blurred = skimage.filters.gaussian(vessel_image, sigma=sigma)
         else:
             vessel_image_blurred = vessel_image
+        vessel_image_blurred = skimage.exposure.equalize_adapthist(vessel_image_blurred)
+
+        if sigma > 0:
+            vessel_image_blurred = skimage.filters.gaussian(vessel_image_blurred, sigma=sigma)
+        vessel_image_blurred = skimage.exposure.equalize_adapthist(vessel_image_blurred)
+
         frangi_image = skimage.filters.frangi(vessel_image_blurred, alpha=.5, beta=.5, black_ridges=False)
 
         if normalise_fangi:
@@ -68,7 +75,7 @@ def binarize_vessel_image(
 
         binary_threshold = skimage.filters.threshold_otsu(frangi_image, nbins=256)
         BW = np.zeros_like(frangi_image)
-        BW[frangi_image > binary_threshold * 0.5] = 1
+        BW[frangi_image > binary_threshold * threshold_sensitivity] = 1
         BW = np.uint8(BW)
 
         # Opening get's rid of small specles
@@ -100,7 +107,7 @@ def binarize_vessel_image(
     return np.bool8(vessel_image)
 
 
-def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True,
+def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True, threshold_sensitivity=.5,
                                    equalize_frangi_hist=True, visualize_intermediate_steps=False):
     from imageprosessing import enhance_motion_contrast_j_tam, enhance_motion_contrast_de_castro, stack_to_masked_array, \
         gaussian_blur_stack
@@ -116,6 +123,6 @@ def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, 
     std_img = std_img.filled(std_img.mean())
     std_img = skimage.exposure.equalize_adapthist(std_img)
     mask = binarize_vessel_image(std_img, equalize_frangi_hist=equalize_frangi_hist,
-                                 opening_kernel_size=5, closing_kernel_size=8,
+                                 opening_kernel_size=5, closing_kernel_size=8, threshold_sensitivity=threshold_sensitivity,
                                  visualise_intermediate_steps=visualize_intermediate_steps)
     return mask

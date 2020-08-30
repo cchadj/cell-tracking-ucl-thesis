@@ -399,9 +399,46 @@ class ImageRegistator(object):
         return translated_source, dy
 
 
+class SessionPreprocessor(object):
+    from video_session import VideoSession
+    preprocess_functions: List[Any]
+    session: VideoSession
+
+    def __init__(self, session, preprocess_functions=None):
+        if preprocess_functions is None:
+            preprocess_functions = []
+
+        self.preprocess_functions = preprocess_functions
+        self.session = session
+
+    def _apply_preprocessing(self, masked_frames):
+        for fun in self.preprocess_functions:
+            masked_frames = fun(masked_frames)
+        return masked_frames
+
+    def apply_preprocessing_to_oa790(self):
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa790)
+        self.session.frames_oa790 = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_oa790 = ~masked_frames.mask
+
+    def apply_preprocessing_to_oa850(self):
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa850)
+        self.session.frames_oa850 = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_oa850 = ~masked_frames.mask
+
+    def apply_preprocessing_to_confocal(self):
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_confocal)
+        self.session.frames_confocal = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_confocal = masked_frames.mask
+
+    def apply_preprocessing(self):
+        self.apply_preprocessing_to_confocal()
+        self.apply_preprocessing_to_oa790()
+        self.apply_preprocessing_to_oa850()
+
+
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
-    from video_session import SessionPreprocessor
     import numpy as np
 
     video_sessions = get_video_sessions(marked=True, registered=True)
@@ -415,7 +452,6 @@ if __name__ == '__main__':
     ])
     pr.apply_preprocessing()
     from sharedvariables import get_video_sessions
-    from video_session import SessionPreprocessor
 
     video_sessions = get_video_sessions(marked=True)
     vs = video_sessions[0]

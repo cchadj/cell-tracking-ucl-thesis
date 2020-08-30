@@ -195,6 +195,7 @@ class CNN(nn.Module):
 # Helper class, help track loss, accuracy, epoch time, run time,
 # hyper-parameters etc.
 class TrainingTracker:
+    recorded_models: Dict[int, collections.OrderedDict]
     train_classification_results: Dict[int, ClassificationResults]
     valid_classification_results: Dict[int, ClassificationResults]
     best_train_accuracy_classification_results: ClassificationResults
@@ -202,6 +203,7 @@ class TrainingTracker:
     additional_displays: List[object]
 
     def __init__(self, device, additional_displays=None):
+        self.recorded_models = {}
         if additional_displays is None:
             additional_displays = []
         self.manually_stopped = False
@@ -265,16 +267,6 @@ class TrainingTracker:
         # Model is updated each epoch
         self.model = None
 
-        # Recorded model train is updated each time record_train_model() is called
-        self.recorded_train_model = None
-        self.recorded_train_model_weights = None
-        self.recorded_train_model_epoch = None
-        self.recorded_train_model_valid_accuracy = None
-        self.recorded_train_model_valid_loss = None
-        self.recorded_train_model_train_accuracy = None
-        self.recorded_train_model_train_loss = None
-        self.is_train_model_recorded = False
-
         # Recorded model is updated each time record_model() is called
         self.recorded_model = None
         self.recorded_model_weights = None
@@ -284,6 +276,9 @@ class TrainingTracker:
         self.recorded_model_train_accuracy = None
         self.recorded_model_train_loss = None
         self.is_model_recorded = False
+
+        self.recorded_model_train_classification_results = None
+        self.recorded_model_valid_classification_results = None
 
         # Loaders and loss criterion used for this run
         self.trainset = None
@@ -496,7 +491,6 @@ class TrainingTracker:
         self.train_positive_accuracies[self.epoch_count] = classification_results.positive_accuracy
         self.train_negative_accuracies[self.epoch_count] = classification_results.negative_accuracy
         self.train_classification_results[self.epoch_count] = copy.deepcopy(classification_results)
-        self.valid_classification_results[self.epoch_count] = copy.deepcopy(classification_results)
 
         if classification_results.loss < self.best_train_loss:
             self.is_best_train_loss_recorded = True
@@ -548,55 +542,41 @@ class TrainingTracker:
         return self.valid_losses[self.epoch_count]
 
     # noinspection DuplicatedCode
-    def record_train_model(self):
-        model = self.model.eval()
-
-        self.recorded_train_model_weights = copy.deepcopy(model.state_dict())
-        self.recorded_train_model = copy.deepcopy(model)
-        self.recorded_train_model = self.recorded_train_model.eval()
-        self.recorded_train_model_epoch = self.epoch_count
-        self.recorded_train_model_train_accuracy = self.train_accuracies[self.epoch_count]
-        self.recorded_train_model_train_loss = self.train_losses[self.epoch_count]
-        self.recorded_train_model_valid_accuracy = self.valid_accuracies[self.epoch_count]
-        self.recorded_train_model_valid_loss = self.valid_losses[self.epoch_count]
-
-        self.is_train_model_recorded = True
-        self.model = self.model.train()
-
-    # noinspection DuplicatedCode
-    def record_model(self):
+    def record_model(self, model_name='recorded_model'):
         model = self.model.eval()
 
         self.recorded_model_weights = copy.deepcopy(model.state_dict())
         self.recorded_model = copy.deepcopy(model)
         self.recorded_model = self.recorded_model.eval()
+
         self.recorded_model_epoch = self.epoch_count
+
         self.recorded_model_valid_accuracy = self.valid_accuracies[self.epoch_count]
         self.recorded_model_valid_loss = self.valid_losses[self.epoch_count]
+
         self.recorded_model_train_accuracy = self.train_accuracies[self.epoch_count]
         self.recorded_model_train_loss = self.train_losses[self.epoch_count]
 
+        self.recorded_model_train_classification_results = self.train_classification_results[self.epoch_count]
+        self.recorded_model_valid_classification_results = self.valid_classification_results[self.epoch_count]
+
+        self.recorded_models[model_name] = collections.OrderedDict(
+            weights=self.recorded_model_weights,
+            model=copy.deepcopy(self.recorded_model),
+            epoch=self.recorded_model_epoch,
+
+            train_classification_results=copy.deepcopy(self.recorded_model_train_classification_results),
+            valid_classification_results=copy.deepcopy(self.recorded_model_valid_classification_results),
+
+            valid_accuracy=self.recorded_model_valid_accuracy,
+            train_accuracy=self.recorded_model_train_accuracy,
+
+            valid_loss=self.recorded_model_valid_loss,
+            train_loss=self.recorded_model_train_loss,
+        )
+
         self.is_model_recorded = True
         self.model = self.model.train()
-
-    @torch.no_grad()
-    # accumulate loss of batch into entire epoch loss
-    def track_loss(self, train_loss=None):
-        if train_loss is None:
-            train_loss = self._get_loss(self.train_loader)
-        self.train_losses.append(train_loss)
-
-        valid_loss = self._get_loss(self.valid_loader)
-        self.valid_losses.append(valid_loss)
-
-    @torch.no_grad()
-    def track_accuracy(self, train_accuracy=None):
-        if train_accuracy is None:
-            train_accuracy = self._get_accuracy(self.train_loader)
-        self.train_accuracies.append(train_accuracy)
-
-        valid_accuracy = self._get_accuracy(self.train_accuracies)
-        self.valid_accuracies.append(valid_accuracy)
 
     def should_early_stop(self):
         return self.do_early_stop and self._times_since_last_best_valid_loss >= self.early_stop_patience
@@ -684,9 +664,12 @@ class TrainingTracker:
         self.model = self.model.train()
         classification_results = ClassificationResults(
             loss=total_loss,
+
+            accuracy=accuracy,
             positive_accuracy=positive_accuracy,
             negative_accuracy=negative_accuracy,
-            accuracy=accuracy,
+            balanced_accuracy=(positive_accuracy + negative_accuracy) / 2,
+
             n_positive=n_positive_samples,
             n_negative=n_negative_samples,
         )
@@ -736,8 +719,7 @@ def create_weights_for_balanced_sampling(labeled_dataset):
         return weights
 
 
-def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.2])),
-          device='cuda', additional_displays=None):
+def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', additional_displays=None):
     # if params changes, following line of code should reflect the changes too
     if additional_displays is None:
         additional_displays = []
@@ -853,11 +835,41 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(torch.tensor([1.0, 0.
             # tracker.track_loss_and_accuracy(train_loss=total_loss, train_accuracy=accuracy)
             tracker.track_performance()
 
-            if tracker.is_best_valid_accuracy_recorded:
-                tracker.record_model()
-
             if tracker.is_best_train_accuracy_recorded:
-                tracker.record_train_model()
+                tracker.record_model('best_train_accuracy')
+
+            if tracker.is_best_valid_accuracy_recorded:
+                tracker.record_model('best_valid_accuracy')
+
+            prev_valid_balanced_accuracies = [res.balanced_accuracy for res in list(tracker.valid_classification_results.values())[:-1]]
+            cur_valid_balanced_accuracy = list(tracker.valid_classification_results.values())[-1].balanced_accuracy
+            if len(prev_valid_balanced_accuracies) == 0 or cur_valid_balanced_accuracy > max(prev_valid_balanced_accuracies):
+                tracker.record_model('best_valid_balanced_accuracy')
+
+            prev_train_balanced_accuracies = [res.balanced_accuracy for res in list(tracker.train_classification_results.values())[:-1]]
+            cur_train_balanced_accuracy = list(tracker.train_classification_results.values())[-1].balanced_accuracy
+            if len(prev_train_balanced_accuracies) == 0 or cur_train_balanced_accuracy > max(prev_train_balanced_accuracies):
+                tracker.record_model('best_train_balanced_accuracy')
+
+            prev_valid_positive_accuracies = [res.positive_accuracy for res in list(tracker.valid_classification_results.values())[:-1]]
+            cur_valid_positive_accuracy = list(tracker.valid_classification_results.values())[-1].positive_accuracy
+            if len(prev_valid_positive_accuracies) == 0 or cur_valid_positive_accuracy > max(prev_valid_positive_accuracies):
+                tracker.record_model('best_valid_positive_accuracy')
+
+            prev_train_positive_accuracies = [res.positive_accuracy for res in list(tracker.train_classification_results.values())[:-1]]
+            cur_train_positive_accuracy = list(tracker.train_classification_results.values())[-1].positive_accuracy
+            if len(prev_train_positive_accuracies) == 0 or cur_train_positive_accuracy > max(prev_train_positive_accuracies):
+                tracker.record_model('best_train_positive_accuracy')
+
+            prev_valid_negative_accuracies = [res.negative_accuracy for res in list(tracker.valid_classification_results.values())[:-1]]
+            cur_valid_negative_accuracy = list(tracker.valid_classification_results.values())[-1].negative_accuracy
+            if len(prev_valid_negative_accuracies) == 0 or cur_valid_negative_accuracy > max(prev_valid_negative_accuracies):
+                tracker.record_model('best_valid_negative_accuracy')
+
+            prev_train_negative_accuracies = [res.negative_accuracy for res in list(tracker.train_classification_results.values())[:-1]]
+            cur_train_negative_accuracy = list(tracker.train_classification_results.values())[-1].negative_accuracy
+            if len(prev_train_negative_accuracies) == 0 or cur_train_negative_accuracy > max(prev_train_negative_accuracies):
+                tracker.record_model('best_train_negative_accuracy')
 
             tracker.display_results()
 

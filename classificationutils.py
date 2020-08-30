@@ -19,26 +19,31 @@ POSITIVE_LABEL = 1
 
 class ClassificationResults:
     def __init__(self,
-                 positive_accuracy, negative_accuracy, accuracy, n_positive, n_negative,
-                 loss=None, predictions=None, output_probabilities=None, dataset=None, model=None):
+                 positive_accuracy, negative_accuracy, accuracy, n_positive, n_negative, balanced_accuracy=None,
+                 loss=None, ground_truth=None, predictions=None, output_probabilities=None, dataset=None, model=None):
         self.model = model
         self.dataset = dataset
 
         self.loss = loss
 
+        self.ground_truth = ground_truth
         self.predictions = predictions
         self.output_probabilities = output_probabilities
 
         self.accuracy = accuracy
+        self.balanced_accuracy = balanced_accuracy
 
         self.positive_accuracy = positive_accuracy
         self.negative_accuracy = negative_accuracy
+
         self.n_positive = n_positive
         self.n_negative = n_negative
 
 
 @torch.no_grad()
 def classify_labeled_dataset(dataset, model, device="cuda"):
+    from sklearn.metrics import balanced_accuracy_score
+
     model = model.eval()
     model = model.to(device)
 
@@ -48,19 +53,14 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
         shuffle=False,
     )
 
-    n_correct = 0
-
-    n_positive_correct = 0
-    n_negative_correct = 0
-    n_positive_samples = 0
-    n_negative_samples = 0
-
     c = 0
+    ground_truth = torch.empty(len(dataset), dtype=torch.long).to(device)
     predictions = torch.empty(len(dataset), dtype=torch.long).to(device)
     output_probabilities = torch.empty((len(dataset), 2), dtype=torch.float32).to(device)
     for images, labels in loader:
         images = images.to(device)
         labels = labels.to(device)
+        ground_truth[c:c + len(labels)] = labels
 
         pred = model(images)
         pred = torch.nn.functional.softmax(pred, dim=1)
@@ -69,58 +69,39 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
         pred = torch.argmax(pred, dim=1)
         predictions[c:c + len(pred)] = pred
 
-        n_correct += (pred == labels).sum().item()
+        c += len(pred)
 
-        positive_indices = torch.where(labels == 1)[0]
-        n_positive_correct += (pred[positive_indices] == labels[positive_indices]).sum().item()
-        n_positive_samples += len(positive_indices)
+    n_positive_samples = (ground_truth == 1).sum().item()
+    n_negative_samples = (ground_truth == 0).sum().item()
+    assert n_positive_samples + n_negative_samples == len(dataset)
 
-        negative_indices = torch.where(labels == 0)[0]
-        n_negative_correct += (pred[negative_indices] == labels[negative_indices]).sum().item()
-        n_negative_samples += len(negative_indices)
-
-        c += pred.shape[0]
+    n_correct = (ground_truth == predictions).sum().item()
+    n_positive_correct = (ground_truth[ground_truth == 1] == predictions[ground_truth == 1]).sum().item()
+    n_negative_correct = (ground_truth[ground_truth == 0] == predictions[ground_truth == 0]).sum().item()
+    assert n_correct == n_positive_correct + n_negative_correct
 
     accuracy = n_correct / len(dataset)
     positive_accuracy = n_positive_correct / n_positive_samples
     negative_accuracy = n_negative_correct / n_negative_samples
+    balanced_accuracy = (positive_accuracy + negative_accuracy) / 2
+    assert np.isclose(balanced_accuracy_score(ground_truth.cpu(), predictions.cpu()), balanced_accuracy)
 
     return ClassificationResults(
         model=model,
         dataset=dataset,
-        n_positive=n_positive_samples,
-        n_negative=n_negative_samples,
 
+        ground_truth=ground_truth,
         predictions=predictions,
         output_probabilities=output_probabilities,
 
+        n_positive=n_positive_samples,
+        n_negative=n_negative_samples,
+
+        accuracy=accuracy,
         positive_accuracy=positive_accuracy,
         negative_accuracy=negative_accuracy,
-        accuracy=accuracy,
+        balanced_accuracy=balanced_accuracy
     )
-
-
-@torch.no_grad()
-def predict_probability_single_patch(patch, model, device='cuda'):
-    """ Makes a prediction on a single patch
-    """
-
-    if patch.dtype == np.uint8:
-        patch = np.float32(patch) / 255
-
-    patch = np.squeeze(patch)
-    patch = patch[np.newaxis, :, :, np.newaxis]
-
-    dataset = ImageDataset(patch)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1)
-
-    for batch in dataloader:
-        batch = batch.to(device)
-        output = model(batch)
-
-        prediction = torch.nn.functional.softmax(output, dim=1)[:, 1]
-
-    return prediction.item()
 
 
 def get_cell_positions_from_probability_map(
@@ -279,9 +260,10 @@ class SessionClassifier:
     evaluation_results: Dict[int, EvaluationResults]
 
     def __init__(self, video_session, model,
-                 mixed_channels=False,
                  patch_size=21,
                  temporal_width=0,
+                 mixed_channels=False,
+
                  standardise=True,
                  to_grayscale=False,
 
