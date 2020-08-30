@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from os.path import basename
 
 from videoutils import get_frames_from_video
-from vesseldetection import binarize_vessel_image, create_vessel_mask_from_frames
+from vesseldetection import create_vessel_mask_from_frames
 from imageprosessing import ImageRegistator
 
 
