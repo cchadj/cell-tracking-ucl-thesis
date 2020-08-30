@@ -450,8 +450,8 @@ class TrainingTracker:
         # save recorded model (usually best validation accuracy)
         torch.save(self.recorded_model.state_dict(), os.path.join(output_directory, 'valid_model.pt'))
 
-        # save secondary recorded model (usually for best training) accuracy
-        torch.save(self.recorded_train_model.state_dict(), os.path.join(output_directory, 'train_model.pt'))
+        for props_name, props in self.recorded_models.items():
+            torch.save(props['model'].state_dict(), os.path.join(output_directory), props_name)
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
