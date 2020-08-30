@@ -432,7 +432,7 @@ class TrainingTracker:
         model.eval()
 
     @torch.no_grad()
-    def save(self, output_directory):
+    def save(self, output_directory, v=False):
         """ Saves the recorded model as {output_name}.pt among other info files.
 
         Makes {output_name}.pt, {output_name}.txt with recorded epoch loss, accuracy and other run parameters
@@ -446,13 +446,15 @@ class TrainingTracker:
         import pathlib
         pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
 
-        # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
-        # save recorded model (usually best validation accuracy)
-        torch.save(self.recorded_model.state_dict(), os.path.join(output_directory, 'valid_model.pt'))
+        if v:
+            print(f'Saving to {output_directory}')
 
+        # https: // pytorch.org / tutorials / beginner / saving_loading_models.html  # save-load-state-dict-recommended
         for props_name, props in self.recorded_models.items():
             output_file = os.path.join(output_directory, f'{props_name}_model.pt')
             torch.save(props['model'].state_dict(), output_file)
+            if v:
+                print(f'Saved {output_file}')
 
         run_parameters = collections.OrderedDict()
         for param_group in self.run_params['optimizer'].param_groups:
@@ -464,18 +466,24 @@ class TrainingTracker:
                      'learning_rate_scheduler_patience', 'epochs', 'shuffle']:
                 run_parameters[k] = v
 
-        run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
+        output_file = os.path.join(output_directory, 'run_data.txt')
         run_data_df = pd.DataFrame.from_dict(self.run_data, orient='columns')
+        run_data_df.to_csv(output_file)
+        if v:
+            print(f'Saved {output_file}')
 
-        with open(os.path.join(output_directory, 'run_data.txt'), 'w') as output_file:
-            output_file.write(run_data_df.__repr__())
+        output_file = os.path.join(output_directory, 'run_params.txt')
+        run_parameters_df = pd.DataFrame.from_dict([run_parameters], orient='columns')
+        run_parameters_df.to_csv(output_file)
+        if v:
+            print(f'Saved {output_file}')
 
-        with open(os.path.join(output_directory, 'run_parameters.txt'), 'w') as output_file:
-            output_file.write(run_parameters_df.__repr__())
-
-        with open(os.path.join(output_directory, 'results.pkl'), 'wb') as output_file:
+        output_file = os.path.join(output_directory, 'results.pkl')
+        with open(output_file, 'wb') as output_file:
             self.model = copy.deepcopy(self.model)
             pickle.dump(self, output_file, pickle.HIGHEST_PROTOCOL)
+            if v:
+                print(f'Saved {output_file}')
 
     @classmethod
     def from_file(cls, file):
