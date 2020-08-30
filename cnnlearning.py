@@ -451,7 +451,7 @@ class TrainingTracker:
         torch.save(self.recorded_model.state_dict(), os.path.join(output_directory, 'valid_model.pt'))
 
         for props_name, props in self.recorded_models.items():
-            output_file = os.path.join(output_directory, f'{props_name}.pt')
+            output_file = os.path.join(output_directory, f'{props_name}_model.pt')
             print(output_file)
             torch.save(props['model'].state_dict(), output_file)
 
