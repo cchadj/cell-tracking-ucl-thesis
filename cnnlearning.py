@@ -479,9 +479,9 @@ class TrainingTracker:
             print(f'Saved {output_file}')
 
         output_file = os.path.join(output_directory, 'results.pkl')
-        with open(output_file, 'wb') as output_file:
+        with open(output_file, 'wb') as f:
             self.model = copy.deepcopy(self.model)
-            pickle.dump(self, output_file, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
             if v:
                 print(f'Saved {output_file}')
 
