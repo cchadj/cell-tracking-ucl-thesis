@@ -412,22 +412,29 @@ class SessionPreprocessor(object):
         self.session = session
 
     def _apply_preprocessing(self, masked_frames):
+        masked_frames = masked_frames.copy()
         for fun in self.preprocess_functions:
             masked_frames = fun(masked_frames)
         return masked_frames
 
     def apply_preprocessing_to_oa790(self):
         masked_frames = self._apply_preprocessing(self.session.masked_frames_oa790)
+        if not np.ma.is_masked(masked_frames):
+            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa790.mask)
         self.session.frames_oa790 = masked_frames.filled(masked_frames.mean())
         self.session.mask_frames_oa790 = ~masked_frames.mask
 
     def apply_preprocessing_to_oa850(self):
         masked_frames = self._apply_preprocessing(self.session.masked_frames_oa850)
+        if not np.ma.is_masked(masked_frames):
+            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa850.mask)
         self.session.frames_oa850 = masked_frames.filled(masked_frames.mean())
         self.session.mask_frames_oa850 = ~masked_frames.mask
 
     def apply_preprocessing_to_confocal(self):
         masked_frames = self._apply_preprocessing(self.session.masked_frames_confocal)
+        if not np.ma.is_masked(masked_frames):
+            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_confocal.mask)
         self.session.frames_confocal = masked_frames.filled(masked_frames.mean())
         self.session.mask_frames_confocal = masked_frames.mask
 

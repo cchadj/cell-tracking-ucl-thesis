@@ -34,6 +34,8 @@ def binarize_vessel_image(
 
         threshold_sensitivity=0.5,
 
+        dilation_iterations=2,
+
         opening_kernel_size=7,
         closing_kernel_size=13,
         padding=cv2.BORDER_REPLICATE,
@@ -79,12 +81,14 @@ def binarize_vessel_image(
         BW[frangi_image > binary_threshold * threshold_sensitivity] = 1
         BW = np.uint8(BW)
 
-        # Opening get's rid of small specles
+        # Opening get's rid of small speckles or noisy vessel offshoots with small width.
         opening = cv2.morphologyEx(BW, cv2.MORPH_OPEN, opening_kernel)
-        # Closing connects components
+
+        # Closing connects components connects unconnected components and fills small holes.
         closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, closing_kernel)
 
         vessel_mask = closing[padding_size:-padding_size, padding_size:-padding_size]
+        # Borders are usually problematic so we remove an amount of pixels
         vessel_mask[:, :20] = 0
         vessel_mask[:, -20:] = 0
 
@@ -101,6 +105,11 @@ def binarize_vessel_image(
     region_areas = np.flip(np.sort(region_areas))[:min(len(region_areas), 3)]
     area_mean = region_areas.mean()
     final_vessel_mask = morphology.remove_small_objects(vessel_mask, area_mean)
+
+    # The vessel mask at this stage is not thick enough to account for all blood cells that pass through, so
+    # we dilate the final mask.
+    for _ in range(dilation_iterations):
+        final_vessel_mask = skimage.morphology.dilation(final_vessel_mask)
 
     if visualise_intermediate_steps:
         fig, axes = plt.subplots(7, 1, figsize=(60, 60))
@@ -141,12 +150,13 @@ def create_vessel_image_from_frames(frames, masks=None, de_castro=True, sigma=1,
 
 
 def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True,
-                                   threshold_sensitivity=.5, equalize_frangi_hist=True, visualize_intermediate_steps=False):
+                                   threshold_sensitivity=.5, equalize_frangi_hist=True,
+                                   visualize_intermediate_steps=False, dilation_iterations=2):
 
-    std_img = create_vessel_mask_from_frames(frames, masks, de_castro=de_castro, sigma=sigma, adapt_hist=adapt_hist)
+    vessel_img = create_vessel_image_from_frames(frames, masks, de_castro=de_castro, sigma=sigma, adapt_hist=adapt_hist)
 
-    mask = binarize_vessel_image(std_img, equalize_frangi_hist=equalize_frangi_hist,
-                                 opening_kernel_size=5, closing_kernel_size=8,
+    mask = binarize_vessel_image(vessel_img, equalize_frangi_hist=equalize_frangi_hist,
+                                 opening_kernel_size=5, closing_kernel_size=8, dilation_iterations=dilation_iterations,
                                  threshold_sensitivity=threshold_sensitivity,
                                  visualise_intermediate_steps=visualize_intermediate_steps)
     return mask
