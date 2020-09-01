@@ -10,13 +10,14 @@ import numbers
 
 from sharedvariables import VideoSession
 from nearest_neighbors import get_nearest_neighbor, get_nearest_neighbor_distances
+from plotutils import no_ticks
 
 
 def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None, ret_radii=False):
     assert 1 <= n_points_per_circle <= 15, f'Points per circle must be between 1 and 15, not {n_points_per_circle}'
 
     neighbor_distances, neighbor_idxs = get_nearest_neighbor(points, 2)
-    npp = n_points_per_circle
+    npp = n_points_per_circle - 1
 
     uniform_angle_displacements = np.array([
         0, np.math.pi,
@@ -62,8 +63,8 @@ def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None,
         random_radius_epsilon = 3 * (np.random.rand(len(uniform_angle_displacements)) - 0.5)
         random_angles = np.array(angle + uniform_angle_displacements).squeeze()
 
-        rx = np.array([cx + np.cos(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32)
-        ry = np.array([cy + np.sin(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32)
+        rx = np.array([cx + np.cos(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32).squeeze()
+        ry = np.array([cy + np.sin(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32).squeeze()
 
         rxs[c:c + npp] = rx
         rys[c:c + npp] = ry
@@ -182,8 +183,8 @@ def extract_patches(img,
 
     Arguments:
         img (np.ndarray): HxWxC or HxW(grayscale) image.
-        mask (ndarray):  HxW mask with the valid pixels.
-            Patches are extracted only for True mask pixels.
+        mask (ndarray):  HxW masks with the valid pixels.
+            Patches are extracted only for True masks pixels.
             NO patches are extracted for 0 or False pixels.
             If None then all pixels are considered valid.
         patch_size (tuple): The patch height, width.
@@ -205,7 +206,7 @@ def extract_patches(img,
         patch_height, patch_width = patch_size
 
     if mask is None:
-        assert mask.shape == img.shape[:2], f'Height and width of mask {mask.shape} must much image {img.shape[:2]}'
+        assert mask.shape == img.shape[:2], f'Height and width of masks {mask.shape} must much image {img.shape[:2]}'
 
     if padding != 'valid':
         padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
@@ -271,8 +272,8 @@ def extract_patches_at_positions(image,
 
     Arguments:
         image: HxW or HxWxC image
-        mask: A boolean mask HxW (same height and width as image).
-            Only patches inside the mask are extracted.
+        mask: A boolean masks HxW (same height and width as image).
+            Only patches inside the masks are extracted.
         positions: shape:(2,) list of (x, y) positions. x left to right, y top to bottom
         patch_size (tuple):  Size of each patch.
         padding:
@@ -362,21 +363,22 @@ def extract_patches_at_positions(image,
 
 
 def get_mask_bounds(mask):
-    if np.any(mask[:, 0]):
-        # edge case where there's a line at the first column in which case we say that the mean edge
-        # pixel is the at the first column
-        x_min = 0
+    # Add a border in case mask is on border, so np.diff detects when the flip happens
+    bordersize = 1
+    mask_padded = cv2.copyMakeBorder(
+        np.uint8(mask),
+        top=bordersize,
+        bottom=bordersize,
+        left=bordersize + 1, # The flip is detected one pixel earlier from left to right
+        right=bordersize,
+        borderType=cv2.BORDER_CONSTANT,
+        value=0,
+    ).astype(np.bool8)
 
-        ys, xs = np.where(np.diff(mask))
-        try:
-            x_max = xs.max()
-        except:
-            print('hello')
-    else:
-        ys, xs = np.where(np.diff(mask))
-        x_min, x_max = xs.min(), xs.max()
+    ys, xs = np.where(np.diff(mask_padded))
+    x_min, x_max = xs.min() - bordersize, xs.max()
+    y_min, y_max = ys.min() - bordersize, ys.max()
 
-    y_min, y_max = ys.min(), ys.max()
     return x_min, x_max, y_min, y_max
 
 
@@ -427,7 +429,7 @@ class SessionPatchExtractor(object):
 
         self._negative_patch_extraction_radius = negative_patch_extraction_radius
 
-        self._n_negatives_per_positive = n_negatives_per_positive
+        self.n_negatives_per_positive = n_negatives_per_positive
 
         self._cell_patches_oa790 = None
         self._cell_patches_oa850 = None
@@ -529,8 +531,8 @@ class SessionPatchExtractor(object):
     def _visualize_patch_extraction(self,
                                     session_frames,
                                     frame_idx_to_cell_patch_dict,
-                                    frame_idx_to_non_cell_patch_dict,
-                                    frame_idx=None, ax=None, figsize=(50, 40), linewidth=3, s=60):
+                                    frame_idx_to_non_cell_patch_dict, masks=None,
+                                    frame_idx=None, ax=None, figsize=(50, 40), linewidth=3, s=60, annotate=False):
         """ Shows the patch extraction on the first marked frame that has cell positions in it's csv.
 
         If in Validation mode then shows the validation frame and frame_idx is ignored.
@@ -549,11 +551,17 @@ class SessionPatchExtractor(object):
 
         frame = session_frames[frame_idx]
 
+        mask = None
+        if masks is not None:
+            mask = masks[frame_idx]
+
         cell_positions = self.cell_positions[frame_idx]
+        cell_positions = self._delete_invalid_positions(cell_positions, mask=mask)
         cell_patches = frame_idx_to_cell_patch_dict[frame_idx]
 
         non_cell_positions = self.non_cell_positions[frame_idx]
         non_cell_patches = frame_idx_to_non_cell_patch_dict[frame_idx]
+        non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask=mask)
 
         mode_str = ''
         if self.extraction_mode == SessionPatchExtractor.VALIDATION_MODE:
@@ -571,19 +579,23 @@ class SessionPatchExtractor(object):
 
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
-        ax.imshow(frame, cmap='gray')
+
+        if mask is None:
+            mask = np.ones_like(frame, dtype=np.bool8)
+        no_ticks(ax)
+        ax.imshow(frame * mask, cmap='gray', vmin=0, vmax=255)
         ax.set_title(f'Frame {frame_idx}. {mode_str} mode. {shape_mode_str} ', fontsize=20)
 
-        plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax,
+        plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax, annotate=annotate,
                                      edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
 
         plot_patch_rois_at_positions(non_cell_positions, self.patch_size, ax=ax, label='Non cell patches',
-                                     edgecolor=(1, 0, 0, .35), pointcolor='r', linewidth=linewidth * 0.75)
+                                     annotate=annotate, edgecolor=(1, 0, 0, .35), pointcolor='firebrick', linewidth=linewidth * 0.75)
 
         if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
             plot_patch_rois_at_positions(cell_positions, self.negative_patch_extraction_radius, ax=ax,
-                                         label='Negative patch extraction radius',
-                                         edgecolor='y', pointcolor='gray', linewidth=linewidth)
+                                         label='Negative patch extraction radius', linestyle='--',
+                                         edgecolor='r', pointcolor='gray', linewidth=linewidth)
         elif self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
             ax.scatter(non_cell_positions[..., 0], non_cell_positions[..., 1], c='r', s=s)
 
@@ -592,27 +604,46 @@ class SessionPatchExtractor(object):
                 ax.add_artist(matplotlib.patches.Circle((cx, cy), r, fill=False, edgecolor='r', linewidth=linewidth,
                                                         linestyle='--'))
 
-        plot_images_as_grid(cell_patches, title='Cell patches')
-        plot_images_as_grid(non_cell_patches, title='Non cell patches')
+        # plot_images_as_grid(cell_patches, title='Cell patches')
+        # plot_images_as_grid(non_cell_patches, title='Non cell patches')
         ax.legend()
+        return ax
 
-    def visualize_patch_extraction(self, **kwargs):
-        self._visualize_patch_extraction(self.session.marked_frames_oa790,
+    def visualize_patch_extraction(self, marked=True, **kwargs):
+        if marked:
+            frames = self.session.marked_frames_oa790
+        # else:
+            frames = self.session.frames_oa790
+        self._visualize_patch_extraction(frames,
                                          self.marked_cell_patches_oa790_at_frame,
                                          self.marked_non_cell_patches_oa790_at_frame,
                                          **kwargs)
 
-    def visualize_temporal_patch_extraction(self, **kwargs):
+    def visualize_temporal_patch_extraction(self, marked, **kwargs):
         assert self.temporal_width == 1, 'Visualising temporal patches only works when temporal width is 1'
+        if marked:
+            frames = self.session.marked_frames_oa790
+        else:
+            frames = self.session.frames_oa790
         self._visualize_patch_extraction(self.session.marked_frames_oa790,
                                          self.temporal_marked_cell_patches_oa790_at_frame,
                                          self.temporal_marked_non_cell_patches_oa790_at_frame,
                                          **kwargs)
 
-    def visualize_mixed_channel_patch_extraction(self, **kwargs):
-        self._visualize_patch_extraction(self.session.marked_frames_oa790,
+    def visualize_mixed_channel_patch_extraction(self, channel=1, **kwargs):
+        assert channel in [0, 1, 2], f'Channel must be 0 for confocal, 1 for oa850 or 2 for oa790, not{channel}.'
+        if channel == 0:
+            frames = self.session.frames_confocal
+        elif channel == 1:
+            frames = self.session.frames_oa790
+        elif channel == 2:
+            frames = self.session.registered_frames_oa850
+
+        masks = self.session.registered_mask_frames_oa850
+        self._visualize_patch_extraction(frames,
                                          self.mixed_channel_marked_cell_patches_at_frame,
                                          self.mixed_channel_marked_non_cell_patches_at_frame,
+                                         masks=masks,
                                          **kwargs)
 
     def _reset_positive_patches(self):
@@ -724,7 +755,7 @@ class SessionPatchExtractor(object):
                               axis=0)
 
         if mask is not None and not np.all(mask):
-            # remove positions whose patches get outside the mask
+            # remove positions whose patches get outside the masks
             x_min, x_max, y_min, y_max = get_mask_bounds(mask)
 
             positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0],
@@ -748,7 +779,7 @@ class SessionPatchExtractor(object):
                 A dictionary to get the patches from that frame.
                 Pass an empty dictionary to fill.
             masks:
-                The mask of each frame. If position + patch size goes outside the mask the position is discarded.
+                The masks of each frame. If position + patch size goes outside the masks the position is discarded.
 
         Returns:
             Nx patch height x patch width (x C) patches
@@ -769,8 +800,7 @@ class SessionPatchExtractor(object):
             mask = None
             if masks is not None:
                 mask = masks[frame_idx]
-
-            frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask)
+                frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask)
 
             cur_frame_cell_patches = extract_patches_at_positions(frame, frame_cell_positions, mask=mask,
                                                                   patch_size=self._patch_size)
@@ -982,40 +1012,30 @@ class SessionPatchExtractor(object):
                                             positions,
                                             frame_idx_to_patch_dict=None
                                             ):
-        from measure_velocity import ImageRegistator
-        frames_oa850 = self.session.frames_oa850
-        frames_confocal = self.session.frames_confocal
-        masks_oa850 = self.session.mask_frames_oa850
-        ir = ImageRegistator(source=self.session.vessel_mask_oa850, target=self.session.vessel_mask_confocal)
-        ir.register_vertically()
-
-        # Register all oa850 frames
-        registered_frames_oa850 = np.empty_like(frames_oa850)
-        registered_mask_frames_oa850 = np.empty_like(masks_oa850)
-        for i, (frame, mask) in enumerate(zip(frames_oa850, masks_oa850)):
-            registered_frames_oa850[i] = ir.apply_registration(frame)
-            registered_mask_frames_oa850[i] = ir.apply_registration(mask)
-
         frame_idx_to_confocal_patches = {}
         frame_idx_to_oa790_patches = {}
         frame_idx_to_oa850_patches = {}
         cell_patches_confocal = self._extract_patches_at_positions(
-            frames_confocal,
+            self.session.frames_confocal,
             positions,
             frame_idx_to_patch_dict=frame_idx_to_confocal_patches,
-            masks=registered_mask_frames_oa850
+            masks=self.session.registered_mask_frames_oa850
         )
         cell_patches_oa790 = self._extract_patches_at_positions(
             frames_oa790,
             positions,
             frame_idx_to_patch_dict=frame_idx_to_oa790_patches,
-            masks=registered_mask_frames_oa850
+            masks=self.session.registered_mask_frames_oa850
         )
+        # from skimage.exposure import equalize_adapthist
+        # for i, frame in enumerate(self.session.registered_frames_oa850):
+        #     self.session.registered_frames_oa850[i] = np.uint8(equalize_adapthist(frame) * 255)
+
         cell_patches_oa850 = self._extract_patches_at_positions(
-            registered_frames_oa850,
+            self.session.registered_frames_oa850,
             positions,
             frame_idx_to_patch_dict=frame_idx_to_oa850_patches,
-            masks=registered_mask_frames_oa850
+            masks=self.session.registered_mask_frames_oa850
         )
         assert len(cell_patches_oa790) == len(cell_patches_oa850), 'Not the same of patches extracted'
 
@@ -1144,7 +1164,6 @@ class SessionPatchExtractor(object):
 
 if __name__ == '__main__':
     from sharedvariables import get_video_sessions
-    from plotutils import plot_images_as_grid
     from matplotlib.colors import NoNorm
 
     video_sessions = get_video_sessions(marked=True, registered=False)

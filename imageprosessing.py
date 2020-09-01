@@ -21,6 +21,23 @@ def imhmaxima(I, H):
     return skimage.morphology.reconstruction((I - H), I).astype(dtype_orig)
 
 
+def equalize_adapt_hist_stack(frames, masks=None):
+    from patchextraction import get_mask_bounds
+    from skimage.exposure import equalize_adapthist
+
+    frames = stack_to_masked_array(frames, masks)
+    masks = ~frames.mask
+
+    processed_frames = np.ma.empty_like(frames, dtype=np.float64)
+    for i, (frame, mask) in enumerate(zip(frames, masks)):
+        x_min, x_max, y_min, y_max = get_mask_bounds(mask)
+        cropped_img = frame[y_min:y_max, x_min:x_max]
+        cropped_img = equalize_adapthist(cropped_img)
+        processed_frames[i, y_min:y_max, x_min:x_max] = cropped_img
+
+    return np.uint8(processed_frames * 255)
+
+
 def imextendedmax(I, H, conn=8):
     if conn == 4:
         structuring_element = np.array([[0, 1, 0],
@@ -139,14 +156,14 @@ def frame_differencing(frames, sigma=0):
 
 
 def crop_mask(mask, left_crop=50):
-    """ Crop mask or stack of masks by amount of pixels.
+    """ Crop masks or stack of masks by amount of pixels.
 
-    Can provide a single mask HxW or stack of masks NxHxW
+    Can provide a single masks HxW or stack of masks NxHxW
     """
 
     new_mask = mask.copy()
     if len(new_mask.shape) == 2:
-        # If single mask HxW -> 1xHxW
+        # If single masks HxW -> 1xHxW
         new_mask = new_mask[np.newaxis, ...]
 
     for mask_count, m in enumerate(new_mask):
@@ -191,10 +208,10 @@ def gaussian_blur_stack(frames, masks=None, sigma=1):
     from skimage import filters
     frames = frames.copy()
     frames = stack_to_masked_array(frames, masks)
-    if sigma <= 0:
+    if sigma <= 0.1:
         return frames
 
-    frames = np.float64(frames.copy() / 255)
+    frames = frames / 255
     masks = ~frames.mask
 
     with np.errstate(divide='ignore', invalid='ignore'):
@@ -206,7 +223,7 @@ def gaussian_blur_stack(frames, masks=None, sigma=1):
     return np.uint8(frames * 255)
 
 
-def enhance_motion_contrast_de_castro(frames, masks=None, sigma=1):
+def enhance_motion_contrast_de_castro(frames, masks=None, sigma=0):
     frames = stack_to_masked_array(frames, masks)
 
     frames = gaussian_blur_stack(frames, sigma=sigma)
@@ -218,7 +235,7 @@ def enhance_motion_contrast_de_castro(frames, masks=None, sigma=1):
     mean_frame = frames.mean(0)
     for i in range(len(frames)):
         frames[i] /= mean_frame
-
+    frames -= frames.min()
     return frames
 
 
@@ -252,11 +269,13 @@ def enhance_motion_contrast_mine(frames, masks=None, sigma=1):
     return frames
 
 
-def enhance_motion_contrast_j_tam(frames, masks=None, sigma=1, adapt_hist=False):
+def enhance_motion_contrast_j_tam(frames, masks=None, sigma=0, adapt_hist=False):
     from skimage import exposure
+
     frames = stack_to_masked_array(frames, masks)
 
     frames = gaussian_blur_stack(frames, sigma=sigma)
+
     frames = frames / 255
 
     # division frames
@@ -449,27 +468,5 @@ if __name__ == '__main__':
     import numpy as np
 
     video_sessions = get_video_sessions(marked=True, registered=True)
-    vs = video_sessions[7]
-    j_tam = enhance_motion_contrast_j_tam(vs.masked_frames_oa790, sigma=0, adapt_hist=True)
-
     vs = video_sessions[0]
-    pr = SessionPreprocessor(vs, [
-        lambda frames: enhance_motion_contrast(frames, adapt_hist=True),
-        lambda frames: np.uint8(frames * 255)
-    ])
-    pr.apply_preprocessing()
-    from sharedvariables import get_video_sessions
-
-    video_sessions = get_video_sessions(marked=True)
-    vs = video_sessions[0]
-
-    preprocessor = SessionPreprocessor(vs, [
-        lambda frames: frame_differencing(frames, sigma=1.2),
-        lambda frames: np.uint8(normalize_data(frames, (0, 255))),
-        lambda frames: enhance_motion_contrast(frames, sigma=1.2)
-    ])
-    preprocessor.apply_preprocessing_to_oa790()
-
-    # plt.subplot(121)
-    cvimshow('', vs.frames_oa790[0])
-
+    new_masked_frames = equalize_adapt_hist_stack(vs.masked_frames_oa790)

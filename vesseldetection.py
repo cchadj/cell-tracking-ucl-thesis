@@ -4,10 +4,7 @@ import skimage.exposure
 from matplotlib import pylab as plt
 import numpy as np
 import cv2
-
 from skimage import morphology, measure
-from imageprosessing import enhance_motion_contrast_j_tam, enhance_motion_contrast_de_castro
-from imageprosessing import stack_to_masked_array, gaussian_blur_stack
 
 
 def create_average_and_stdev_image(frames, masks=None):
@@ -36,8 +33,8 @@ def binarize_vessel_image(
 
         dilation_iterations=2,
 
-        opening_kernel_size=7,
-        closing_kernel_size=13,
+        opening_kernel_size=5,
+        closing_kernel_size=5,
         padding=cv2.BORDER_REPLICATE,
         padding_size=30,
         padding_value=None,
@@ -102,12 +99,12 @@ def binarize_vessel_image(
         not_enough_vessel_regions_found = len(region_areas) <= 1
         exposure_iterations += 1
 
-    region_areas = np.flip(np.sort(region_areas))[:min(len(region_areas), 3)]
+    region_areas = np.flip(np.sort(region_areas))[:min(len(region_areas), 5)]
     area_mean = region_areas.mean()
     final_vessel_mask = morphology.remove_small_objects(vessel_mask, area_mean)
 
-    # The vessel mask at this stage is not thick enough to account for all blood cells that pass through, so
-    # we dilate the final mask.
+    # The vessel masks at this stage is not thick enough to account for all blood cells that pass through, so
+    # we dilate the final masks.
     for _ in range(dilation_iterations):
         final_vessel_mask = skimage.morphology.dilation(final_vessel_mask)
 
@@ -135,6 +132,8 @@ def binarize_vessel_image(
 
 
 def create_vessel_image_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True):
+    from imageprosessing import enhance_motion_contrast_j_tam, enhance_motion_contrast_de_castro
+    from imageprosessing import stack_to_masked_array, gaussian_blur_stack
     frames = stack_to_masked_array(frames, masks)
 
     frames = gaussian_blur_stack(frames, sigma=sigma)
@@ -150,15 +149,10 @@ def create_vessel_image_from_frames(frames, masks=None, de_castro=True, sigma=1,
 
 
 def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True,
-                                   threshold_sensitivity=.5, equalize_frangi_hist=True,
-                                   visualize_intermediate_steps=False, dilation_iterations=2):
-
+                                   **binarization_kwargs):
     vessel_img = create_vessel_image_from_frames(frames, masks, de_castro=de_castro, sigma=sigma, adapt_hist=adapt_hist)
 
-    mask = binarize_vessel_image(vessel_img, equalize_frangi_hist=equalize_frangi_hist,
-                                 opening_kernel_size=5, closing_kernel_size=8, dilation_iterations=dilation_iterations,
-                                 threshold_sensitivity=threshold_sensitivity,
-                                 visualise_intermediate_steps=visualize_intermediate_steps)
+    mask = binarize_vessel_image(vessel_img, binarization_kwargs)
     return mask
 
 
@@ -182,13 +176,13 @@ if __name__ == '__main__':
     no_ticks(axes)
 
     axes[0].imshow(vessel_mask_oa790)
-    axes[0].set_title('Vessel mask oa790')
+    axes[0].set_title('Vessel masks oa790')
 
     axes[1].imshow(vessel_mask_oa850)
-    axes[1].set_title('Vessel mask oa850')
+    axes[1].set_title('Vessel masks oa850')
 
     axes[2].imshow(im_registrator.register_vertically())
-    axes[2].set_title('Registered vessel mask oa850')
+    axes[2].set_title('Registered vessel masks oa850')
 
     fig.canvas.draw()
     transFigure = fig.transFigure.inverted()

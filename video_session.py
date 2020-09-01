@@ -1,5 +1,4 @@
 import warnings
-from typing import Any, List
 
 import re
 import numpy as np
@@ -9,8 +8,6 @@ import matplotlib.pyplot as plt
 from os.path import basename
 
 from videoutils import get_frames_from_video
-from vesseldetection import create_vessel_mask_from_frames
-from imageprosessing import ImageRegistator
 
 
 class VideoSession(object):
@@ -179,8 +176,9 @@ class VideoSession(object):
 
     @property
     def registered_frames_oa850(self):
+        from imageprosessing import ImageRegistator
         if self._registered_frames_oa850 is None:
-            ir = ImageRegistator(source=self.vessel_mask_oa850, target=self.vessel_mask_confocal)
+            ir = ImageRegistator(source=self.vessel_mask_oa850, target=self.vessel_mask_oa790)
             ir.register_vertically()
 
             self._registered_frames_oa850 = np.empty_like(self.frames_oa850)
@@ -223,15 +221,15 @@ class VideoSession(object):
     def _rectify_mask_frames(masks):
         """ Rectify masks so that they are square.
 
-        The original mask shape is irregular which can cause some inconveniences and problems.
-        Rectify mask by clipping the irregular borders to straight lines so that the final mask
+        The original masks shape is irregular which can cause some inconveniences and problems.
+        Rectify masks by clipping the irregular borders to straight lines so that the final masks
         is a rectangle.
         """
         import cv2
         cropped_masks = np.zeros_like(masks)
 
         for i, mask in enumerate(masks):
-            # add a small border around the mask to detect changes on that are on the border
+            # add a small border around the masks to detect changes on that are on the border
             mask_padded = cv2.copyMakeBorder(np.uint8(mask), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 0)
 
             # Find where pixels go from black to white and from white to black (searching left to right)
@@ -241,7 +239,7 @@ class VideoSession(object):
             left_xs = xs[xs < xs.mean()]
             right_xs = xs[xs > xs.mean()]
 
-            # clip mask to make it have straight lines
+            # clip masks to make it have straight lines
             m = np.bool8(mask_padded)
             m[:, :left_xs.max() + 15] = False
             m[:, right_xs.min():] = 0
@@ -266,7 +264,7 @@ class VideoSession(object):
 
     @mask_frames_oa790.setter
     def mask_frames_oa790(self, masks):
-        assert masks.dtype == np.bool8, f'The mask type must be {np.bool8}'
+        assert masks.dtype == np.bool8, f'The masks type must be {np.bool8}'
         assert masks.shape == self.frames_oa790.shape, \
             f'The frame masks must have the same shape as the frames. ' \
             f'frames oa790 shape:{self.frames_oa790.shape}, masks given shape:{masks.shape}'
@@ -286,7 +284,7 @@ class VideoSession(object):
 
     @mask_frames_oa850.setter
     def mask_frames_oa850(self, masks):
-        assert masks.dtype == np.bool8, f'The mask type must be {np.bool8}'
+        assert masks.dtype == np.bool8, f'The masks type must be {np.bool8}'
         assert masks.shape == self.frames_oa850.shape, \
             f'The frame masks must have the same shape as the frames. ' \
             f'frames oa850 shape:{self.frames_oa850.shape}, masks given shape:{masks.shape}'
@@ -307,7 +305,7 @@ class VideoSession(object):
 
     @mask_frames_confocal.setter
     def mask_frames_confocal(self, masks):
-        assert masks.dtype == np.bool8, f'The mask type must be {np.bool8}'
+        assert masks.dtype == np.bool8, f'The masks type must be {np.bool8}'
         assert masks.shape == self.frames_confocal.shape, \
             f'The frame masks must have the same shape as the frames. ' \
             f'frames confocal shape:{self.frames_confocal.shape}, masks given shape:{masks.shape}'
@@ -320,7 +318,7 @@ class VideoSession(object):
         """ The frames from the oa790nm channel masked with the corresponding frames of the masked video.
         """
         if self._masked_frames_oa790 is None:
-            # We invert the mask because True values mean that the values are masked and therefor invalid.
+            # We invert the masks because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
             self._masked_frames_oa790 = np.ma.masked_array(self.frames_oa790,
                                                            ~self.mask_frames_oa790)
@@ -331,7 +329,7 @@ class VideoSession(object):
         """ The frames from the oa850nm channel masked with the corresponding frames of the masked video.
         """
         if self._masked_frames_oa850 is None:
-            # We invert the mask because True values mean that the values are masked and therefor invalid.
+            # We invert the masks because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
             self._masked_frames_oa850 = np.ma.masked_array(self.frames_oa850,
                                                            ~self.mask_frames_oa850[:len(self.frames_oa850)])
@@ -342,7 +340,7 @@ class VideoSession(object):
         """ The frames from the confocal channel masked with the corresponding frames of the masked video.
         """
         if self._masked_frames_confocal is None:
-            # We invert the mask because True values mean that the values are masked and therefor invalid.
+            # We invert the masks because True values mean that the values are masked and therefor invalid.
             # see: https://numpy.org/doc/stable/reference/maskedarray.generic.html
             self._masked_frames_confocal = np.ma.masked_array(self.frames_confocal,
                                                               ~self.mask_frames_confocal[:len(self.frames_oa850)])
@@ -350,7 +348,7 @@ class VideoSession(object):
 
     @property
     def vessel_masked_frames_oa790(self):
-        """ The frames from the oa790nm channel masked with the vessel mask image.
+        """ The frames from the oa790nm channel masked with the vessel masks image.
         """
         if self._vessel_masked_frames_oa790 is None:
             self._vessel_masked_frames_oa790 = np.ma.empty_like(self.frames_oa790)
@@ -360,7 +358,7 @@ class VideoSession(object):
 
     @property
     def vessel_masked_frames_oa850(self):
-        """ The frames from the oa850nm channel masked with the vessel mask image.
+        """ The frames from the oa850nm channel masked with the vessel masks image.
         """
         if self._vessel_masked_frames_oa850 is None:
             self._vessel_masked_frames_oa850 = np.ma.empty_like(self.frames_oa850)
@@ -370,7 +368,7 @@ class VideoSession(object):
 
     @property
     def vessel_masked_frames_confocal(self):
-        """ The frames from the confocal channel masked with the vessel mask image.
+        """ The frames from the confocal channel masked with the vessel masks image.
         """
         if self._vessel_masked_frames_confocal is None:
             self._vessel_masked_frames_confocal = np.ma.empty_like(self.frames_confocal)
@@ -380,7 +378,7 @@ class VideoSession(object):
 
     @property
     def fully_masked_frames_oa790(self):
-        """ The frames from the oa790nm channel masked with the vessel mask image and the mask frames from the mask video.
+        """ The frames from the oa790nm channel masked with the vessel masks image and the masks frames from the masks video.
         """
         if self._fully_masked_frames_oa790 is None:
             self._fully_masked_frames_oa790 = np.ma.empty_like(self.frames_oa790)
@@ -391,7 +389,7 @@ class VideoSession(object):
 
     @property
     def fully_masked_frames_oa850(self):
-        """ The frames from the oa850nm channel masked with the vessel mask image and the mask frames from the mask video.
+        """ The frames from the oa850nm channel masked with the vessel masks image and the masks frames from the masks video.
         """
         if self._fully_masked_frames_oa850 is None:
             self._fully_masked_frames_oa850 = np.ma.empty_like(self.frames_oa850)
@@ -402,7 +400,7 @@ class VideoSession(object):
 
     @property
     def fully_masked_frames_confocal(self):
-        """ The frames from the confocalnm channel masked with the vessel mask image and the mask frames from the mask video.
+        """ The frames from the confocalnm channel masked with the vessel masks image and the masks frames from the masks video.
         """
         if self._fully_masked_frames_confocal is None:
             self._fully_masked_frames_confocal = np.ma.empty_like(self.frames_confocal)
@@ -562,8 +560,9 @@ class VideoSession(object):
 
     @property
     def vessel_mask_oa790(self):
+        from vesseldetection import create_vessel_mask_from_frames
         if self._vessel_mask_oa790 is None:
-            if self.vessel_mask_oa790_file == '' or not self.load_vessel_mask_from_file:
+            if not self.vessel_mask_oa790_file or not self.load_vessel_mask_from_file:
                 self._vessel_mask_oa790 = create_vessel_mask_from_frames(self.masked_frames_oa790)
             else:
                 self._vessel_mask_oa790 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa790_file)
@@ -580,8 +579,9 @@ class VideoSession(object):
 
     @property
     def vessel_mask_oa850(self):
+        from vesseldetection import create_vessel_mask_from_frames
         if self._vessel_mask_oa850 is None:
-            if self.vessel_mask_oa850_file == '' or not self.load_vessel_mask_from_file:
+            if not self.vessel_mask_oa850_file or not self.load_vessel_mask_from_file:
                 self._vessel_mask_oa850 = create_vessel_mask_from_frames(self.masked_frames_oa850)
             else:
                 self._vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
@@ -598,8 +598,9 @@ class VideoSession(object):
 
     @property
     def vessel_mask_confocal(self):
-        if self._vessel_mask_confocal is None or not self.load_vessel_mask_from_file:
-            if not self.vessel_mask_confocal_file:
+        from vesseldetection import create_vessel_mask_from_frames
+        if self._vessel_mask_confocal is None:
+            if not self.vessel_mask_confocal_file or not self.load_vessel_mask_from_file:
                 self._vessel_mask_confocal = create_vessel_mask_from_frames(self.masked_frames_confocal)
             else:
                 self._vessel_mask_confocal = VideoSession._vessel_mask_from_file(self.vessel_mask_confocal_file)
