@@ -235,7 +235,6 @@ def enhance_motion_contrast_de_castro(frames, masks=None, sigma=0):
     mean_frame = frames.mean(0)
     for i in range(len(frames)):
         frames[i] /= mean_frame
-    frames -= frames.min()
     return frames
 
 

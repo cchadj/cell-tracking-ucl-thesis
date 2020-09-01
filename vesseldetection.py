@@ -5,6 +5,7 @@ from matplotlib import pylab as plt
 import numpy as np
 import cv2
 from skimage import morphology, measure
+from plotutils import no_ticks
 
 
 def create_average_and_stdev_image(frames, masks=None):
@@ -139,7 +140,7 @@ def create_vessel_image_from_frames(frames, masks=None, de_castro=True, sigma=1,
     frames = gaussian_blur_stack(frames, sigma=sigma)
 
     if de_castro:
-        frames = enhance_motion_contrast_de_castro(frames, masks, sigma=0)
+        frames = enhance_motion_contrast_de_castro(frames, sigma=0)
     frames = enhance_motion_contrast_j_tam(frames, sigma=0, adapt_hist=adapt_hist)
 
     std_img = frames.std(0)
@@ -148,11 +149,12 @@ def create_vessel_image_from_frames(frames, masks=None, de_castro=True, sigma=1,
     return std_img
 
 
-def create_vessel_mask_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True,
+def create_vessel_mask_from_frames(frames, masks=None, vessel_img=None, de_castro=True, sigma=1, adapt_hist=True,
                                    **binarization_kwargs):
-    vessel_img = create_vessel_image_from_frames(frames, masks, de_castro=de_castro, sigma=sigma, adapt_hist=adapt_hist)
+    if vessel_img is None:
+        vessel_img = create_vessel_image_from_frames(frames, masks, de_castro=de_castro, sigma=sigma, adapt_hist=adapt_hist)
 
-    mask = binarize_vessel_image(vessel_img, binarization_kwargs)
+    mask = binarize_vessel_image(vessel_img, **binarization_kwargs)
     return mask
 
 

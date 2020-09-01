@@ -107,6 +107,7 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
 def get_cell_positions_from_probability_map(
         probability_map,
         extended_maxima_h,
+        maximum_value_threshold=.75,
         sigma=1,
         visualise_intermediate_results=False):
     assert 0.1 <= extended_maxima_h <= 0.9, f'Extended maxima h must be between .1 and .9 not {extended_maxima_h}'
@@ -129,6 +130,8 @@ def get_cell_positions_from_probability_map(
     estimated_cell_positions = np.empty((len(region_props), 2))
 
     for i, region in enumerate(region_props):
+        if region.max_intensity <= maximum_value_threshold:
+            continue
         y, x = region.weighted_centroid
         estimated_cell_positions[i] = x, y
 
@@ -332,7 +335,10 @@ class SessionClassifier:
         )
         return classify_labeled_dataset(dataset, model=self.model)
 
-    def estimate_locations(self, frame_idx, use_frame_mask=True, use_vessel_mask=True, mask=None,
+    def estimate_locations(self, frame_idx,
+                           use_frame_mask=True,
+                           use_vessel_mask=True,
+                           mask=None,
                            extended_maxima_h=0.5, sigma=1.2):
         if mask is None:
             mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
@@ -355,7 +361,7 @@ class SessionClassifier:
                                                                       extended_maxima_h=extended_maxima_h,
                                                                       sigma=sigma)
 
-        if self.session.is_marked and frame_idx in self.session.cell_positions:
+        if False and self.session.is_marked and frame_idx in self.session.cell_positions:
             sigmas = np.arange(0.2, 2, step=.1)
             extended_maxima_hs = np.arange(0.1, 0.8, step=.1)
 
