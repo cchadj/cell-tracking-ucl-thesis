@@ -6,7 +6,7 @@ import numpy as np
 
 
 # thanks to: https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
-def cvimshow(window, img, wait_time=0):
+def cvimshow(img, window='', wait_time=0):
     # imshow using cv2 with ability to close with the 'x' button without hanging in the main thread
     import cv2
     cv2.namedWindow(window, cv2.WINDOW_KEEPRATIO)
@@ -23,6 +23,7 @@ def cvimshow(window, img, wait_time=0):
 
 def no_ticks(axes=None, hide_numbers=True):
     if axes is not None:
+        axes = np.array(axes)
         ax: plt.axes
         for ax in axes.flatten():
             ax.tick_params(
@@ -54,8 +55,9 @@ def no_ticks(axes=None, hide_numbers=True):
             ax.set_xticklabels([])
 
 
-def plot_patch_rois_at_positions(positions, patch_size=(21, 21),
+def plot_patch_rois_at_positions(positions, patch_size=(21, 21), annotate=False,
                                  edgecolor='r', pointcolor='b', label=None,
+                                 linestyle=None,
                                  ax=None, image=None, linewidth=2):
     assert type(patch_size) is int or type(patch_size) is tuple
     if type(patch_size) is int:
@@ -72,11 +74,12 @@ def plot_patch_rois_at_positions(positions, patch_size=(21, 21),
     for patch_count, (x, y) in enumerate(positions.astype(np.int32)):
         rect = Rectangle((x - patch_width / 2,
                           y - patch_height / 2),
-                         patch_width, patch_height,
+                         patch_width, patch_height, linestyle=linestyle,
                          linewidth=linewidth, edgecolor=edgecolor, facecolor='none')
 
         ax.add_patch(rect)
-        ax.annotate(patch_count - 1, (x, y))
+        if annotate:
+            ax.annotate(patch_count, (x, y))
 
 
 def plot_dataset_as_grid(dataset, title=None):

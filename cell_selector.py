@@ -186,7 +186,7 @@ class MplFrameSelector(object):
         Returns:
 
         """
-        # Get frame at index and mask at that frame.
+        # Get frame at index and masks at that frame.
         self.cur_frame = self.frames[self.frame_idx]
 
         if self.frame_idx in self.cell_cords_dict:
@@ -204,12 +204,12 @@ class MplFrameSelector(object):
         else:
             self.cur_point_selector = None
 
-        # apply mask from the frame mask video.
+        # apply masks from the frame masks video.
         if self.frame_masks is not None:
             self.cur_mask = self.frame_masks[self.frame_idx]
             self.cur_frame[~self.cur_mask] = 0
 
-        # apply mask from the vessel mask
+        # apply masks from the vessel masks
         if self.vessel_mask is not None:
             self.cur_frame[~self.vessel_mask] = 0
 
@@ -267,11 +267,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--video', type=argparse.FileType('r'), required=False, nargs=1,
                         help='The video that the estimated locations belong to.')
-    parser.add_argument('-m', '--mask-video', type=argparse.FileType('r'), required=False, nargs='*',
+    parser.add_argument('-m', '--masks-video', type=argparse.FileType('r'), required=False, nargs='*',
                         help='The video with the corresponding rectangle masks.'
                              ' Must be of same length as the retinal video. Can be omitted.'
                              ' If set but no argument given then file picker window is opened.')
-    parser.add_argument('--vessel-mask', type=argparse.FileType('r'), required=False, nargs='*',
+    parser.add_argument('--vessel-masks', type=argparse.FileType('r'), required=False, nargs='*',
                         help='Mask that highlights the vessels. '
                              'Must be the same size as the frames. Can be omitted.'
                              'If set but no argument given then a file picker window is opened.')
@@ -324,13 +324,13 @@ def parse_arguments():
         except:
             root = tk.Tk()
             root.withdraw()
-            # --mask-video set but no argument given. Open file picker window.
+            # --masks-video set but no argument given. Open file picker window.
             print('Select masks video.')
-            masks_video_filename = tk.filedialog.askopenfilename(title='Select video mask',
+            masks_video_filename = tk.filedialog.askopenfilename(title='Select video masks',
                                                                  filetypes=[('Video files', ['*.avi', '*.flv', '*.mov', '*.mp4',
                                                                                              '*.wmv', '*.qt', '*.mkv'])])
 
-    # Optional image with the vessel mask to isolate capillaries.
+    # Optional image with the vessel masks to isolate capillaries.
     vessel_mask = None
     if 'vessel_mask' in args:
         try:
@@ -338,8 +338,8 @@ def parse_arguments():
         except:
             root = tk.Tk()
             root.withdraw()
-            # --vessel-mask set but no argument given. Open file picker window.
-            vessel_mask_filename = tk.filedialog.askopenfilename(title='Select vessel mask.',
+            # --vessel-masks set but no argument given. Open file picker window.
+            vessel_mask_filename = tk.filedialog.askopenfilename(title='Select vessel masks.',
                                                                  filetypes=[('Image',  ['*.jpg', '*.tif', '*.png', '.bmp'
                                                                                         '*.jpeg', '*.tiff'])])
 

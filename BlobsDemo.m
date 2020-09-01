@@ -239,7 +239,7 @@ for k = 1 : numberOfBlobs           % Loop through all keeper blobs.
 end
 
 
-% Now use the keeper blobs as a mask on the original image.
+% Now use the keeper blobs as a masks on the original image.
 % This will let us display the original image in the regions of the keeper blobs.
 maskedImageDime = originalImage; % Simply a copy at first.
 maskedImageDime(~keeperBlobsImage) = 0;  % Set all non-keeper pixels to zero.

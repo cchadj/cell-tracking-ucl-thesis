@@ -196,7 +196,7 @@ def create_probability_map(patches, model, im_shape, mask=None, standardize=True
         mask = np.ones(im_shape, dtype=np.bool8)
 
     mask_indices = np.where(mask.flatten())[0]
-    assert len(mask_indices) == len(patches), 'Number of patches must match the number of pixles in mask'
+    assert len(mask_indices) == len(patches), 'Number of patches must match the number of pixles in masks'
 
     model = model.to(device)
     model = model.eval()
