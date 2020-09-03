@@ -31,7 +31,7 @@ def clean_folder(folder):
 
 def create_cell_and_no_cell_patches(
         video_sessions=None,
-        extraction_method=SessionPatchExtractor.ALL_MODE,
+        extraction_mode=SessionPatchExtractor.ALL_MODE,
 
         use_vessel_mask=False,
         patch_size=(21, 21),
@@ -87,7 +87,7 @@ def create_cell_and_no_cell_patches(
         csv_cell_coord_files = session.cell_position_csv_files
 
         patch_extractor = SessionPatchExtractor(session,
-                                                extraction_mode=extraction_method,
+                                                extraction_mode=extraction_mode,
 
                                                 patch_size=patch_size,
                                                 temporal_width=temporal_width,
