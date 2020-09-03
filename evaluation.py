@@ -1,4 +1,7 @@
-from typing import Any, Tuple
+import os
+import pickle
+import copy
+import pathlib
 
 import numpy as np
 from nearest_neighbors import get_nearest_neighbor_distances
@@ -311,6 +314,20 @@ class EvaluationResults:
                      f'True positive Rate {self.true_positive_rate:3f}.\n'
                      f'False positive Rate {self.false_discovery_rate:3f}.\n')
         ax.legend()
+
+    def save(self, filename, v=False):
+        output_file = os.path.join(filename)
+        pathlib.Path(pathlib.Path(filename).parent).mkdir(exist_ok=True, parents=True)
+
+        with open(output_file, 'wb') as f:
+            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+            if v:
+                print(f'Saved {output_file}')
+
+    @classmethod
+    def from_file(cls, file):
+        with open(file, 'rb') as input_file:
+            return pickle.load(input_file)
 
 
 def dice(mask1, mask2):
