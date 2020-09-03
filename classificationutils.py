@@ -1,4 +1,7 @@
 from typing import Tuple, Dict, Any
+import os
+import pathlib
+import pickle
 
 import numpy as np
 from torch.utils.data import Dataset
@@ -470,6 +473,20 @@ class SessionClassifier:
                 'Mixed channel extraction can not work with temporal width greater than 0.'
                 'Set temporal width to 0 first.')
         self._mixed_channels = mixed_channel_extraction
+
+    def save(self, filename, v=False):
+        output_file = os.path.join(filename)
+        pathlib.Path(pathlib.Path(filename).parent).mkdir(exist_ok=True, parents=True)
+
+        with open(output_file, 'wb') as f:
+            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+            if v:
+                print(f'Saved {output_file}')
+
+    @classmethod
+    def from_file(cls, file):
+        with open(file, 'rb') as input_file:
+            return pickle.load(input_file)
 
 
 if __name__ == '__main__':
