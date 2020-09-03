@@ -268,6 +268,7 @@ class EvaluationResults:
         self.all_sigmas = None
         self.all_extended_maxima_hs = None
         self.all_dice_coefficients = None
+        self.region_max_thresholds = None
 
     def visualize(self, show_probability_map=False):
         import matplotlib.pyplot as plt
