@@ -265,6 +265,10 @@ class EvaluationResults:
         self.true_positive_dists = true_positive_dists
         self.false_positive_dists = false_positive_dists
 
+        self.all_sigmas = None
+        self.all_extended_maxima_hs = None
+        self.all_dice_coefficients = None
+
     def visualize(self, show_probability_map=False):
         import matplotlib.pyplot as plt
         from matplotlib.patches import Circle, ConnectionPatch

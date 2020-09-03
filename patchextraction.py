@@ -756,9 +756,11 @@ class SessionPatchExtractor(object):
         self._reset_negative_patches()
 
     def all_mixed_channel_patches(self, frame_idx,
-                                  mask=None, ret_mask=False, use_frame_mask=True,
+                                  use_frame_mask=True,
                                   use_vessel_mask=True,
                                   patch_size=None,
+                                  mask=None,
+                                  ret_mask=False,
                                   padding=cv2.BORDER_REPLICATE,
                                   padding_value=None):
         """ Extracts a mixed channel patch for every pixel for the frame at frame
@@ -991,10 +993,11 @@ class SessionPatchExtractor(object):
         return self._marked_non_cell_patches_oa790_at_frame
 
     def all_patches_oa790(self, frame_idx,
-                          mask=None, use_frame_mask=True,
+                          mask=None,
+                          use_frame_mask=True,
                           use_vessel_mask=True,
-                          ret_mask=False,
                           patch_size=None,
+                          ret_mask=False,
                           padding=cv2.BORDER_REPLICATE,
                           padding_value=None):
         """ Extracts a patch for every pixel for the frame at frame index from the oa790nm channel frames.
@@ -1014,6 +1017,7 @@ class SessionPatchExtractor(object):
             padding_value:
              The padding value in case cv2.BORDER_CONSTANT is used.
              If None then uses the mean of the frame.
+            ret_mask (bool): If True returns the mask used
 
         Returns:
             Nx patch_size x patch_size (x C) Array of the patches extracted.

@@ -376,7 +376,7 @@ class SessionClassifier:
                 ' is marked.'
 
         if self.mixed_channels:
-            patches = self.patch_extractor.all_mixed_channel_patches(frame_idx, ret_mask=True, **patch_extraction_kwargs)
+            patches, mask = self.patch_extractor.all_mixed_channel_patches(frame_idx, ret_mask=True, **patch_extraction_kwargs)
         else:
             patches, mask = self.patch_extractor.all_patches_oa790(frame_idx, ret_mask=True, **patch_extraction_kwargs)
 
@@ -406,7 +406,7 @@ class SessionClassifier:
                                 image=self.session.frames_oa790[frame_idx],
                                 mask=mask,
                                 patch_size=self.patch_size)
-                            dice_coefficients[i, j] = evaluation_results.dice
+                            dice_coefficients[i, j, k] = evaluation_results.dice
 
             max_dice_idx = np.argmax(dice_coefficients)
             s_idx, h_idx, t_idx = np.unravel_index(max_dice_idx, dice_coefficients.shape)
@@ -421,17 +421,23 @@ class SessionClassifier:
             extended_maxima_h=extended_maxima_h,
             region_max_threshold=region_max_threshold)
 
-        self.result_evalutations[frame_idx] = evaluate_results(
+        result_evaluation = evaluate_results(
             self.session.cell_positions[frame_idx],
             estimated_positions=estimated_positions,
             image=self.session.frames_oa790[
                 self.session.validation_frame_idx],
             mask=mask,
             patch_size=21)
-        self.result_evalutations[frame_idx].probability_map = probability_map
-        self.result_evalutations[frame_idx].sigma = sigma
-        self.result_evalutations[frame_idx].extended_maxima_h = extended_maxima_h
-        self.result_evalutations[frame_idx].region_max_threshold = region_max_threshold
+
+        result_evaluation.all_sigmas = sigmas
+        result_evaluation.all_extended_maxima_hs = extended_maxima_hs
+        result_evaluation.all_dice_coefficients = dice_coefficients
+
+        result_evaluation.probability_map = probability_map
+        result_evaluation.sigma = sigma
+        result_evaluation.extended_maxima_h = extended_maxima_h
+        result_evaluation.region_max_threshold = region_max_threshold
+        self.result_evalutations[frame_idx] = result_evaluation
 
         self.estimated_locations[frame_idx] = estimated_positions
         self.probability_maps[frame_idx] = probability_map

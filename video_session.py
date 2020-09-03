@@ -438,7 +438,7 @@ class VideoSession(object):
             self._fully_masked_frames_oa790 = np.ma.empty_like(self.frames_oa790)
             for i, frame in enumerate(self.frames_oa790):
                 self._fully_masked_frames_oa790[i] = np.ma.masked_array(frame, ~(
-                        self.vessel_mask_confocal * self.mask_frames_oa790[i]))
+                        self.vessel_mask_oa790 * self.mask_frames_oa790[i]))
         return self._fully_masked_frames_oa790
 
     @property
