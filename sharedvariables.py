@@ -4,7 +4,6 @@ from os.path import basename
 import re
 import glob
 from typing import List
-from video_session import VideoSession
 
 
 def files_of_same_source(f1, f2):
@@ -118,13 +117,14 @@ def find_filename_of_same_source(target_filename, filenames):
 def get_video_sessions(marked=False,
                        registered=False,
                        validation=False,
-                       load_vessel_mask_from_file=True,
+                       load_vessel_mask_from_file=False,
                        ):
     """ Get all video sessions
 
     Returns:
         List[VideoSession] List of video sessions
     """
+    from video_session import VideoSession
     video_sessions: List[VideoSession] = []
 
     for video_filename in unmarked_video_oa790_filenames:

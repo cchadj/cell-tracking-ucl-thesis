@@ -5,7 +5,6 @@ from matplotlib import pylab as plt
 import numpy as np
 import cv2
 from skimage import morphology, measure
-from plotutils import no_ticks
 
 
 def create_average_and_stdev_image(frames, masks=None):
@@ -32,7 +31,8 @@ def binarize_vessel_image(
 
         threshold_sensitivity=0.5,
 
-        dilation_iterations=2,
+        dilation_iterations=0,
+        erosion_iterations=0,
 
         opening_kernel_size=5,
         closing_kernel_size=5,
@@ -100,14 +100,15 @@ def binarize_vessel_image(
         not_enough_vessel_regions_found = len(region_areas) <= 1
         exposure_iterations += 1
 
-    region_areas = np.flip(np.sort(region_areas))[:min(len(region_areas), 5)]
-    area_mean = region_areas.mean()
-    final_vessel_mask = morphology.remove_small_objects(vessel_mask, area_mean)
+    final_vessel_mask = morphology.remove_small_objects(vessel_mask, 700)
 
     # The vessel masks at this stage is not thick enough to account for all blood cells that pass through, so
     # we dilate the final masks.
     for _ in range(dilation_iterations):
-        final_vessel_mask = skimage.morphology.dilation(final_vessel_mask)
+        final_vessel_mask = skimage.morphology.binary_dilation(final_vessel_mask)
+
+    for _ in range(erosion_iterations):
+        final_vessel_mask = skimage.morphology.binary_erosion(final_vessel_mask)
 
     if visualise_intermediate_steps:
         fig, axes = plt.subplots(7, 1, figsize=(60, 60))
@@ -160,17 +161,17 @@ def create_vessel_mask_from_frames(frames, masks=None, vessel_img=None, de_castr
 
 if __name__ == '__main__':
     from plotutils import no_ticks
-    from imageprosessing import ImageRegistator
+    from imageprosessing import ImageRegistrator
     from sharedvariables import get_video_sessions
     import matplotlib.pyplot as plt
-    import matplotlib
+    import matplotlib.lines
 
     video_sessions = get_video_sessions(registered=True, marked=True)
     vs = video_sessions[2]
 
     vessel_mask_oa790 = create_vessel_mask_from_frames(vs.masked_frames_oa790, visualize_intermediate_steps=True)
     vessel_mask_oa850 = create_vessel_mask_from_frames(vs.masked_frames_oa850, visualize_intermediate_steps=True)
-    im_registrator = ImageRegistator(source=vessel_mask_oa850, target=vessel_mask_oa790)
+    im_registrator = ImageRegistrator(source=vessel_mask_oa850, target=vessel_mask_oa790)
 
     plt.rcParams['axes.titlesize'] = 15
 

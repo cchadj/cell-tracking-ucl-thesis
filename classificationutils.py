@@ -2,6 +2,7 @@ from typing import Tuple, Dict, Any
 
 import numpy as np
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from evaluation import evaluate_results, EvaluationResults
 from imageprosessing import imextendedmax
@@ -104,16 +105,15 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
     )
 
 
-def get_cell_positions_from_probability_map(
+def estimate_cell_positions_from_probability_map(
         probability_map,
         extended_maxima_h,
-        maximum_value_threshold=.75,
+        region_max_threshold=.75,
         sigma=1,
         visualise_intermediate_results=False):
     assert 0.1 <= extended_maxima_h <= 0.9, f'Extended maxima h must be between .1 and .9 not {extended_maxima_h}'
     from skimage.filters import gaussian
     from skimage import measure
-    from scipy.ndimage import center_of_mass
 
     pm_blurred = gaussian(probability_map, sigma)
     pm_extended_max_bw = imextendedmax(pm_blurred, extended_maxima_h)
@@ -128,12 +128,14 @@ def get_cell_positions_from_probability_map(
     # Notice, the positions from the csv is x,y. The result from the probability is y,x so we swap.
     region_props = measure.regionprops(labeled_img, intensity_image=pm_blurred)
     estimated_cell_positions = np.empty((len(region_props), 2))
-
-    for i, region in enumerate(region_props):
-        if region.max_intensity <= maximum_value_threshold:
+    i = 0
+    for region in region_props:
+        if region.max_intensity <= region_max_threshold:
             continue
         y, x = region.weighted_centroid
         estimated_cell_positions[i] = x, y
+        i += 1
+    estimated_cell_positions = estimated_cell_positions[:i]
 
     if visualise_intermediate_results:
         fig, axes = plt.subplots(1, 3)
@@ -153,7 +155,7 @@ def get_cell_positions_from_probability_map(
                         label='estimated locations')
         axes[2].legend()
 
-    return estimated_cell_positions[1:, ...]
+    return estimated_cell_positions[1:, ...].astype(np.int32)
 
 
 @torch.no_grad()
@@ -260,7 +262,7 @@ class SessionClassifier:
     session: VideoSession
     probability_maps: Dict[int, np.ndarray]
     estimated_locations: Dict[int, np.ndarray]
-    evaluation_results: Dict[int, EvaluationResults]
+    result_evalutations: Dict[int, EvaluationResults]
 
     def __init__(self, video_session, model,
                  patch_size=21,
@@ -289,7 +291,7 @@ class SessionClassifier:
         self.mixed_channels = mixed_channels
         self.temporal_width = temporal_width
 
-        self.evaluation_results = {}
+        self.result_evalutations = {}
         self.probability_maps = {}
         self.estimated_locations = {}
 
@@ -329,73 +331,111 @@ class SessionClassifier:
                 non_cell_patches = self.patch_extractor.non_cell_patches_oa790_at_frame[frame_idx]
 
         dataset = LabeledImageDataset(
-            np.concatenate((cell_patches,                               non_cell_patches), axis=0),
-            np.concatenate((np.ones(len(cell_patches), dtype=np.int32), np.zeros(len(non_cell_patches), dtype=np.int32))),
+            np.concatenate((cell_patches, non_cell_patches), axis=0),
+            np.concatenate(
+                (np.ones(len(cell_patches), dtype=np.int32), np.zeros(len(non_cell_patches), dtype=np.int32))),
             standardize=self.standardise, to_grayscale=self.to_grayscale, data_augmentation_transforms=None,
         )
         return classify_labeled_dataset(dataset, model=self.model)
 
-    def estimate_locations(self, frame_idx,
-                           use_frame_mask=True,
-                           use_vessel_mask=True,
-                           mask=None,
-                           extended_maxima_h=0.5, sigma=1.2):
-        if mask is None:
-            mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
+    def estimate_locations(self, frame_idx: int,
+                           probability_map: np.ndarray = None,
+                           grid_search: bool = False,
+                           extended_maxima_h: float = 0.4,
+                           region_max_threshold: float = 0.2,
+                           sigma: float = 1.,
+                           **patch_extraction_kwargs
+                           ) -> np.ndarray:
+        """ Estimates the location of the frame
 
-        if use_vessel_mask:
-            mask &= self.session.vessel_mask_oa790
+        Args:
+            frame_idx (int): The frame index to get the estimated locations
+            probability_map (np.ndarray):
+             The probability map generated for the frame.
+             Must have same shape as frame.
+             If not provided then it's calculated using the model.
+             If provided then saves time.
+            grid_search (bool):
+                Whether to perform a grid search on the hyperparameters on the localisation of the estimated cell from
+                the probability map.
+                This option only works when the frame is marked
+            extended_maxima_h:
+                Theoextended maxima H for the probability map binarisation.
+            region_max_threshold:
+                The
+            sigma:
+            **patch_extraction_kwargs:
 
-        if use_frame_mask:
-            mask &= self.session.mask_frames_oa790[frame_idx]
+        Returns:
+
+        """
+        if grid_search:
+            # If the frame is marked then we find the best sigma, H and T that maximise dice's coefficient
+            assert self.session.is_marked and frame_idx in self.session.cell_positions, \
+                'Grid search option only works when the video has manual markings and the frame specificied: {frame_idx}'\
+                ' is marked.'
 
         if self.mixed_channels:
-            patches = self.patch_extractor.mixed_channel_cell_patches(frame_idx, mask=mask)
+            patches = self.patch_extractor.all_mixed_channel_patches(frame_idx, ret_mask=True, **patch_extraction_kwargs)
         else:
-            patches = self.patch_extractor.all_patches_oa790(frame_idx, mask=mask)
+            patches, mask = self.patch_extractor.all_patches_oa790(frame_idx, ret_mask=True, **patch_extraction_kwargs)
 
-        probability_map = create_probability_map(patches, self.model, im_shape=mask.shape, mask=mask,
-                                                 standardize=self.standardise, to_grayscale=self.to_grayscale)
+        if probability_map is None:
+            probability_map = create_probability_map(patches, self.model, im_shape=mask.shape, mask=mask,
+                                                     standardize=self.standardise, to_grayscale=self.to_grayscale)
 
-        estimated_positions = get_cell_positions_from_probability_map(probability_map,
-                                                                      extended_maxima_h=extended_maxima_h,
-                                                                      sigma=sigma)
-
-        if False and self.session.is_marked and frame_idx in self.session.cell_positions:
+        # If the frame is marked then we find the best sigma, H and T that maximise dice's coefficient
+        if grid_search and self.session.is_marked and frame_idx in self.session.cell_positions:
             sigmas = np.arange(0.2, 2, step=.1)
             extended_maxima_hs = np.arange(0.1, 0.8, step=.1)
+            region_max_thresholds = np.arange(0., 0.8, step=.1)
 
-            dice_coefficients = np.zeros((len(sigmas), len(extended_maxima_hs)))
-            for i, s in enumerate(sigmas):
+            dice_coefficients = np.zeros((len(sigmas), len(extended_maxima_hs), len(region_max_thresholds)))
+            for i, s in enumerate(tqdm(sigmas)):
                 for j, h in enumerate(extended_maxima_hs):
-                    estimated_positions = get_cell_positions_from_probability_map(probability_map, extended_maxima_h=h,
-                                                                                  sigma=s)
-                    evaluation_results = evaluate_results(ground_truth_positions=self.session.cell_positions[frame_idx],
-                                                          estimated_positions=estimated_positions,
-                                                          image=self.session.frames_oa790[frame_idx],
-                                                          mask=mask,
-                                                          patch_size=self.patch_size)
-                    dice_coefficients[i, j] = evaluation_results.dice
+                    for k, t in enumerate(region_max_thresholds):
+                        estimated_positions = estimate_cell_positions_from_probability_map(
+                            probability_map, extended_maxima_h=h,
+                            region_max_threshold=t,
+                            sigma=s)
 
-            max_idx = np.argmax(dice_coefficients)
-            sigma_idx, h_idx = np.unravel_index(max_idx, dice_coefficients.shape)
+                        if len(estimated_positions) > 0:
+                            evaluation_results = evaluate_results(
+                                ground_truth_positions=self.session.cell_positions[frame_idx],
+                                estimated_positions=estimated_positions,
+                                image=self.session.frames_oa790[frame_idx],
+                                mask=mask,
+                                patch_size=self.patch_size)
+                            dice_coefficients[i, j] = evaluation_results.dice
 
-            best_sigma = sigmas[sigma_idx]
-            best_h = extended_maxima_hs[h_idx]
-            estimated_positions = get_cell_positions_from_probability_map(
-                probability_map, extended_maxima_h=best_h, sigma=best_sigma
-            )
+            max_dice_idx = np.argmax(dice_coefficients)
+            s_idx, h_idx, t_idx = np.unravel_index(max_dice_idx, dice_coefficients.shape)
 
-            self.evaluation_results[frame_idx] = evaluate_results(
-                self.session.cell_positions[self.session.validation_frame_idx],
-                estimated_positions=estimated_positions,
-                image=self.session.frames_oa790[
-                    self.session.validation_frame_idx],
-                mask=mask,
-                patch_size=21)
+            sigma = sigmas[s_idx]
+            extended_maxima_h = extended_maxima_hs[h_idx]
+            region_max_threshold = region_max_thresholds[t_idx]
+
+        estimated_positions = estimate_cell_positions_from_probability_map(
+            probability_map,
+            sigma=sigma,
+            extended_maxima_h=extended_maxima_h,
+            region_max_threshold=region_max_threshold)
+
+        self.result_evalutations[frame_idx] = evaluate_results(
+            self.session.cell_positions[frame_idx],
+            estimated_positions=estimated_positions,
+            image=self.session.frames_oa790[
+                self.session.validation_frame_idx],
+            mask=mask,
+            patch_size=21)
+        self.result_evalutations[frame_idx].probability_map = probability_map
+        self.result_evalutations[frame_idx].sigma = sigma
+        self.result_evalutations[frame_idx].extended_maxima_h = extended_maxima_h
+        self.result_evalutations[frame_idx].region_max_threshold = region_max_threshold
 
         self.estimated_locations[frame_idx] = estimated_positions
         self.probability_maps[frame_idx] = probability_map
+
         return estimated_positions
 
     @property
@@ -405,8 +445,9 @@ class SessionClassifier:
     @temporal_width.setter
     def temporal_width(self, width):
         if width > 0 and self.mixed_channels:
-            raise MutualExclusiveArgumentsException('Temporal width > 0 can not work with mixed channels.'
-                                                    'Set mixed channel to False first.')
+            raise MutualExclusiveArgumentsException(
+                'Temporal width > 0 can not work with mixed channels.'
+                'Set mixed channel to False first.')
 
     @property
     def mixed_channels(self):

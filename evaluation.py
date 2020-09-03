@@ -4,7 +4,6 @@ import numpy as np
 from nearest_neighbors import get_nearest_neighbor_distances
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
-from collections import OrderedDict
 
 
 def get_positions_too_close_to_border(patch_positions, image_shape, patch_size):
@@ -239,8 +238,12 @@ class EvaluationResults:
                  false_discovery_rate, true_positive_dists,
                  false_positive_dists, true_positive_points,
                  false_positive_points, estimated_positions):
-        self.image = image
+        self.extended_maxima_h = None
+        self.region_max_threshold = None
+        self.sigma = None
         self.probability_map = None
+
+        self.image = image
         self.dice = dice
         self.mask = mask
         self.distance_for_true_positive = distance_for_true_positive
@@ -262,11 +265,14 @@ class EvaluationResults:
         self.true_positive_dists = true_positive_dists
         self.false_positive_dists = false_positive_dists
 
-    def visualize(self):
+    def visualize(self, show_probability_map=False):
         import matplotlib.pyplot as plt
         from matplotlib.patches import Circle, ConnectionPatch
         _, ax = plt.subplots(figsize=(60, 60))
-        ax.imshow(self.image * self.mask)
+
+        ax.imshow(self.image * self.mask, cmap='gray', vmin=0, vmax=255)
+        if show_probability_map and self.probability_map is not None:
+            ax.imshow(self.probability_map * self.mask, cmap='hot', vmin=0, vmax=255)
 
         ax.scatter(self.ground_truth_positions[:, 0], self.ground_truth_positions[:, 1],
                    c='blue', s=230, label='Ground truth positions')

@@ -21,6 +21,17 @@ def cvimshow(img, window='', wait_time=0):
             break
 
 
+def savefig_tight(name):
+    plt.gca().set_axis_off()
+    plt.subplots_adjust(top=1, bottom=0, right=1, left=0,
+                        hspace=0, wspace=0)
+    plt.margins(0, 0)
+    plt.gca().xaxis.set_major_locator(plt.NullLocator())
+    plt.gca().yaxis.set_major_locator(plt.NullLocator())
+    plt.tight_layout()
+    plt.savefig(name, bbox_inches='tight', pad_inches=0)
+
+
 def no_ticks(axes=None, hide_numbers=True):
     if axes is not None:
         axes = np.array(axes)

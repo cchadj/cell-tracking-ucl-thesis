@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
-from classificationutils import create_probability_map, get_cell_positions_from_probability_map
+from classificationutils import create_probability_map, estimate_cell_positions_from_probability_map
 from cnnlearning import CNN
 import tqdm
 from tqdm.contrib import tzip
@@ -162,7 +162,7 @@ def main():
         output_csv_file = os.path.join(output_directory, output_csv_file)
         for frame, frame_idx in tzip(frames, frame_indices):
             probability_map = create_probability_map(frame, model, patch_size=patch_size)
-            positions = get_cell_positions_from_probability_map(probability_map, sigma=1., extended_maxima_h=.45)
+            positions = estimate_cell_positions_from_probability_map(probability_map, sigma=1., extended_maxima_h=.45)
             positions_df = pd.DataFrame({'X': positions[:, 0],
                                          'Y': positions[:, 1],
                                          'Slice': np.ones(len(positions)) * frame_idx})

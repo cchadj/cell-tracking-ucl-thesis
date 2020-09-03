@@ -1,12 +1,11 @@
 import warnings
-
+import os
 import re
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
 from os.path import basename
-
 from videoutils import get_frames_from_video
 
 
@@ -21,6 +20,8 @@ class VideoSession(object):
         from sharedvariables import vessel_mask_confocal_files, vessel_mask_oa790_files, vessel_mask_oa850_files
         from sharedvariables import std_image_confocal_files, std_image_oa790_files, std_image_oa850_files
         import pathlib
+
+        self._image_registrator = None
 
         self.is_registered = '_reg_' in video_filename
         self.is_validation = 'validation' in pathlib.PurePath(video_filename).parts
@@ -48,6 +49,8 @@ class VideoSession(object):
         self._validation_frame_idx = None
 
         self.video_file = video_filename
+        self.basename = os.path.join(f'{os.path.splitext(os.path.basename(self.video_file))[0]}')
+
         self.video_oa790_file = find_filename_of_same_source(video_filename, unmarked_video_oa790_filenames)
         self.video_oa850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
         self.video_confocal_file = find_filename_of_same_source(video_filename, unmarked_video_confocal_filenames)
@@ -176,14 +179,17 @@ class VideoSession(object):
 
     @property
     def registered_frames_oa850(self):
-        from imageprosessing import ImageRegistator
+        from imageprosessing import ImageRegistrator
+        from IPython.display import display, clear_output
         if self._registered_frames_oa850 is None:
-            ir = ImageRegistator(source=self.vessel_mask_oa850, target=self.vessel_mask_oa790)
+            ir = ImageRegistrator(source=self.vessel_mask_oa850, target=self.vessel_mask_oa790)
             ir.register_vertically()
+
+            self._image_registrator = ir
 
             self._registered_frames_oa850 = np.empty_like(self.frames_oa850)
             self._registered_mask_frames_oa850 = np.empty_like(self.mask_frames_oa850)
-            self._registered_vessel_mask_oa850 = ir.apply_registration(self.vessel_mask_oa850)
+            self._registered_vessel_mask_oa850 = ir.apply_registration(self.vessel_mask_oa850).astype(np.bool8)
 
             for i, (frame, mask) in enumerate(zip(self.frames_oa850, self.mask_frames_oa850)):
                 self._registered_frames_oa850[i] = ir.apply_registration(frame)
@@ -202,6 +208,54 @@ class VideoSession(object):
         if self._registered_vessel_mask_oa850 is None:
             tmp = self.registered_frames_oa850
         return self._registered_vessel_mask_oa850
+
+    def visualize_registration(self, figsize=(120, 150),
+                               linewidth=15, linestyle='--',
+                               **supbplots_kwargs,):
+        from plotutils import no_ticks
+        import matplotlib.lines
+
+        fig, axes = plt.subplots(1, 4, figsize=figsize, **supbplots_kwargs)
+        plt.rcParams['axes.titlesize'] = 135
+        plt.subplots_adjust(top=50)
+        no_ticks(axes)
+
+        overlay_mask = np.zeros((*self.vessel_mask_oa790.shape, 3))
+        overlay_mask[..., 0] = self.vessel_mask_oa790
+
+        axes[0].imshow(overlay_mask)
+        axes[0].set_title('Vessel mask oa790', pad=25)
+
+        overlay_mask[..., 0] = 0
+        overlay_mask[..., 1] = self.vessel_mask_oa850
+        axes[1].imshow(overlay_mask)
+        axes[1].set_title('Vessel mask oa850', pad=25)
+
+        overlay_mask[..., 1] = self.registered_vessel_mask_oa850
+        axes[2].imshow(overlay_mask)
+        axes[2].set_title('Registered vessel mask oa850', pad=25)
+
+        vessel_mask_oa790 = self.vessel_mask_oa790.copy()
+        vessel_mask_oa790[:self._image_registrator.vertical_displacement, :] = 0
+        overlay_mask[..., 0] = vessel_mask_oa790
+        overlay_mask[..., 1] = self.registered_vessel_mask_oa850
+
+        from evaluation import dice
+        axes[3].imshow(overlay_mask)
+        axes[3].set_title(f'Mask overlap. Dice {dice(vessel_mask_oa790, self.registered_vessel_mask_oa850):.3f}', pad=25)
+
+        plt.tight_layout()
+        fig.canvas.draw()
+        transFigure = fig.transFigure.inverted()
+
+        coord1 = transFigure.transform(axes[0].transData.transform([0, self._image_registrator.vertical_displacement]))
+        coord2 = transFigure.transform(
+            axes[2].transData.transform([self.vessel_mask_oa850.shape[-1], self._image_registrator.vertical_displacement]))
+
+        line = matplotlib.lines.Line2D((coord1[0], coord2[0]), (coord1[1], coord2[1]),
+                                       transform=fig.transFigure, linewidth=linewidth, linestyle=linestyle)
+        fig.lines.append(line)
+        return fig
 
     @property
     def frames_confocal(self):

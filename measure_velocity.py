@@ -164,7 +164,7 @@ def create_average_images(video_session, patch_size=51, sigma=1, average_all_fra
     vessel_mask_oa850 = vs.vessel_mask_oa850
 
 
-    image_registrator = ImageRegistator(source=vessel_mask_oa850, target=vessel_mask_confocal)
+    image_registrator = ImageRegistrator(source=vessel_mask_oa850, target=vessel_mask_confocal)
     image_registrator.register_vertically()
 
     registered_frames_oa850 = vs.frames_oa850.copy()

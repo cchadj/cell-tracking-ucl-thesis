@@ -8,25 +8,30 @@ import matplotlib.patches
 import numpy as np
 import numbers
 
-from sharedvariables import VideoSession
 from nearest_neighbors import get_nearest_neighbor, get_nearest_neighbor_distances
 from plotutils import no_ticks
 
 
 def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None, ret_radii=False):
-    assert 1 <= n_points_per_circle <= 15, f'Points per circle must be between 1 and 15, not {n_points_per_circle}'
+    assert 1 <= n_points_per_circle <= 32, f'Points per circle must be between 1 and 32, not {n_points_per_circle}'
 
     neighbor_distances, neighbor_idxs = get_nearest_neighbor(points, 2)
     npp = n_points_per_circle - 1
 
     uniform_angle_displacements = np.array([
         0, np.math.pi,
+
         1 * .5 * np.math.pi, 3 * np.math.pi * .5,
         1 * np.math.pi * .25, 3 * np.math.pi * .25, 5 * np.math.pi * .25, 7 * np.math.pi * .25,
-        1 * .125 * np.math.pi, 3 * .125 * np.math.pi, 5 * .125 * np.math.pi, 7 * .125 * np.math.pi,
-        9 * .125 * np.math.pi, 11 * .125 * np.math.pi, 13 * .125 * np.math.pi
-    ]).squeeze()
 
+        1 * .125 * np.math.pi, 3 * .125 * np.math.pi, 5 * .125 * np.math.pi, 7 * .125 * np.math.pi,
+        9 * .125 * np.math.pi, 11 * .125 * np.math.pi, 13 * .125 * np.math.pi,
+
+        1 * .0625 * np.math.pi, 3 * .0625 * np.math.pi, 5 * .0625 * np.math.pi, 7 * .0625 * np.math.pi,
+        9 * .0625 * np.math.pi, 11 * .0625 * np.math.pi, 13 * .0625 * np.math.pi, 13 * .0625 * np.math.pi,
+        15 * .0625 * np.math.pi, 17 * .0625 * np.math.pi, 19 * .0625 * np.math.pi, 21 * .0625 * np.math.pi,
+        23 * .0625 * np.math.pi, 25 * .0625 * np.math.pi, 29 * .0625 * np.math.pi, 31 * .0625 * np.math.pi,
+    ]).squeeze()
     c = 0
     rxs = np.zeros(len(points) * npp + 2 * len(points), dtype=np.int32)
     rys = np.zeros(len(points) * npp + 2 * len(points), dtype=np.int32)
@@ -60,7 +65,7 @@ def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None,
         cx, cy = centre_point
 
         angle = np.random.rand() * np.math.pi * 2
-        random_radius_epsilon = 3 * (np.random.rand(len(uniform_angle_displacements)) - 0.5)
+        random_radius_epsilon = 0 * (np.random.rand(len(uniform_angle_displacements)) - 0.5)
         random_angles = np.array(angle + uniform_angle_displacements).squeeze()
 
         rx = np.array([cx + np.cos(random_angles[:npp]) * (r + random_radius_epsilon[:npp])], dtype=np.int32).squeeze()
@@ -169,7 +174,8 @@ def get_patch(im, x, y, patch_size):
 
 def extract_patches(img,
                     patch_size=(21, 21),
-                    padding='valid',
+                    padding=cv2.BORDER_REPLICATE,
+                    padding_value=None,
                     mask=None
                     ):
     """
@@ -194,8 +200,12 @@ def extract_patches(img,
                     cv2.BORDER_REPLICATE,
                     cv2.BORDER_REFLECT,
                     cv2.BORDER_WRAP,
-                    cv2.BORDER_ISOLATED
+                    cv2.BORDER_ISOLATED,
+                    cv2.BORDER_CONSTANT
                 ]
+        padding_value:
+         The value for the padding in case of cv2.BORDER_CONSTANT.
+         If None then uses the mean of the image.
 
     Returns:
         (np.array):  NxHxWxC
@@ -209,13 +219,17 @@ def extract_patches(img,
         assert mask.shape == img.shape[:2], f'Height and width of masks {mask.shape} must much image {img.shape[:2]}'
 
     if padding != 'valid':
+        if padding_value is None:
+            padding_value = img.mean()
         padding_height, padding_width = int((patch_height - 1) / 2), int((patch_width - 1) / 2)
         img = cv2.copyMakeBorder(img,
                                  padding_height,
                                  padding_height,
                                  padding_width,
                                  padding_width,
-                                 padding)
+                                 padding,
+                                 padding_value
+                                 )
     kernel_height, kernel_width = patch_height, patch_width
 
     inp = torch.from_numpy(img)
@@ -308,7 +322,7 @@ def extract_patches_at_positions(image,
                                    padding_width,
                                    padding)
         assert positions[:, 1].max() < image.shape[0] and positions[:, 0].max() < image.shape[1], \
-        'Position coordinates must not go outside of image boundaries.'
+            'Position coordinates must not go outside of image boundaries.'
     if len(image.shape) == 2:
         n_channels = 1
         image = image[:, :, np.newaxis]
@@ -369,7 +383,7 @@ def get_mask_bounds(mask):
         np.uint8(mask),
         top=bordersize,
         bottom=bordersize,
-        left=bordersize + 1, # The flip is detected one pixel earlier from left to right
+        left=bordersize + 1,  # The flip is detected one pixel earlier from left to right
         right=bordersize,
         borderType=cv2.BORDER_CONSTANT,
         value=0,
@@ -397,9 +411,12 @@ class SessionPatchExtractor(object):
                  session,
                  patch_size=21,
                  temporal_width=1,
+
                  n_negatives_per_positive=1,
-                 negative_patch_extraction_radius=21,
                  negative_extraction_mode=CIRCLE,
+                 negative_patch_extraction_radius=21,
+
+                 use_vessel_mask=False,
                  extraction_mode=ALL_MODE
                  ):
         """
@@ -408,11 +425,13 @@ class SessionPatchExtractor(object):
             session (VideoSession):  The video session to extract patches from
         """
         assert negative_extraction_mode in [SessionPatchExtractor.RECTANGLE, SessionPatchExtractor.CIRCLE]
-        assert extraction_mode in [SessionPatchExtractor.ALL_MODE, SessionPatchExtractor.VALIDATION_MODE, SessionPatchExtractor.TRAINING_MODE]
+        assert extraction_mode in [SessionPatchExtractor.ALL_MODE, SessionPatchExtractor.VALIDATION_MODE,
+                                   SessionPatchExtractor.TRAINING_MODE]
         self.session = session
         self._extraction_mode = extraction_mode
         self._negative_extraction_mode = negative_extraction_mode
 
+        self.use_vessel_mask = use_vessel_mask
         self._cell_positions = {}
         self._non_cell_positions = {}
 
@@ -492,28 +511,40 @@ class SessionPatchExtractor(object):
                 if frame_idx >= len(self.session.mask_frames_oa790):
                     break
                 mask = self.session.mask_frames_oa790[frame_idx]
+                if self.use_vessel_mask:
+                    mask = mask & self.session.vessel_mask_oa790
+
                 frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask)
-                self._cell_positions[frame_idx] = frame_cell_positions
+                self._cell_positions[frame_idx] = np.int32(frame_cell_positions)
 
         return self._cell_positions
 
     @property
     def non_cell_positions(self):
+        from skimage.morphology import binary_erosion
         if len(self._non_cell_positions) == 0:
-            for frame_idx, frame_cell_positions in self.session.cell_positions.items():
+            for frame_idx, frame_cell_positions in self.cell_positions.items():
                 if frame_idx >= len(self.session.mask_frames_oa790):
                     break
+
                 mask = self.session.mask_frames_oa790[frame_idx]
+                if self.use_vessel_mask:
+                    # We erode the vessel mask to pick negatives that are mostly perpendicular to the direction of the flow
+                    erosion_iterations = 5
+                    vessel_mask = self.session.vessel_mask_oa790
+                    for _ in range(erosion_iterations):
+                        vessel_mask = binary_erosion(vessel_mask)
+                    mask = mask & vessel_mask
+
                 cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
 
-                frame_cell_positions = self._delete_invalid_positions(frame_cell_positions, mask=mask)
                 if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
-                    print('Why')
                     rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                              n_points_per_rect=self.n_negatives_per_positive)
                 elif self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
                     if len(frame_cell_positions) <= 2:
                         continue
+
                     rx, ry, radii = get_random_points_on_circles(frame_cell_positions,
                                                                  n_points_per_circle=self.n_negatives_per_positive,
                                                                  max_radius=self.negative_patch_extraction_radius,
@@ -582,6 +613,10 @@ class SessionPatchExtractor(object):
 
         if mask is None:
             mask = np.ones_like(frame, dtype=np.bool8)
+
+        if self.use_vessel_mask:
+            mask = mask & self.session.vessel_mask_oa790
+
         no_ticks(ax)
         ax.imshow(frame * mask, cmap='gray', vmin=0, vmax=255)
         ax.set_title(f'Frame {frame_idx}. {mode_str} mode. {shape_mode_str} ', fontsize=20)
@@ -590,7 +625,8 @@ class SessionPatchExtractor(object):
                                      edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
 
         plot_patch_rois_at_positions(non_cell_positions, self.patch_size, ax=ax, label='Non cell patches',
-                                     annotate=annotate, edgecolor=(1, 0, 0, .35), pointcolor='firebrick', linewidth=linewidth * 0.75)
+                                     annotate=annotate, edgecolor=(1, 0, 0, .35), pointcolor='firebrick',
+                                     linewidth=linewidth * 0.75)
 
         if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
             plot_patch_rois_at_positions(cell_positions, self.negative_patch_extraction_radius, ax=ax,
@@ -612,11 +648,12 @@ class SessionPatchExtractor(object):
     def visualize_patch_extraction(self, marked=True, **kwargs):
         if marked:
             frames = self.session.marked_frames_oa790
-        # else:
+        else:
             frames = self.session.frames_oa790
         self._visualize_patch_extraction(frames,
                                          self.marked_cell_patches_oa790_at_frame,
                                          self.marked_non_cell_patches_oa790_at_frame,
+                                         masks=self.session.mask_frames_oa790,
                                          **kwargs)
 
     def visualize_temporal_patch_extraction(self, marked, **kwargs):
@@ -718,15 +755,83 @@ class SessionPatchExtractor(object):
         self._n_negatives_per_positive = n
         self._reset_negative_patches()
 
-    @property
-    def all_patches_oa850(self):
-        if self._all_patches_oa850 is None:
-            self._all_patches_oa850 = np.zeros((0, *self._patch_size), dtype=self.session.frames_oa850.dtype)
-            for frame in self.session.frames_oa850:
-                cur_frame_patches = extract_patches(frame, patch_size=self._patch_size)
-                self._all_patches_oa850 = np.concatenate((self._all_patches_oa850, cur_frame_patches), axis=0)
+    def all_mixed_channel_patches(self, frame_idx,
+                                  mask=None, ret_mask=False, use_frame_mask=True,
+                                  use_vessel_mask=True,
+                                  patch_size=None,
+                                  padding=cv2.BORDER_REPLICATE,
+                                  padding_value=None):
+        """ Extracts a mixed channel patch for every pixel for the frame at frame
 
-        return self._all_patches_oa850
+        The oa850 video is firstly aligned with the oa790nm video and then the mixed channel patches are extracted.
+
+        A patch of patch_size x patch_size is extracted around every pixel of the image.
+        Image is padded so that pixels at the borders also have a patch.
+
+        When use_frame_mask is True then the registered frame mask from the oa850 video is used.
+            This is to get only patches that each channel has something and not just zero pixels.
+
+        Args:
+            ret_mask (bool):  If True also returns the mask used.
+            frame_idx (int): The frame index  of the frame to extract the patches from.
+            mask :
+             A 2D boolean array with True for the pixels to extract patches from.
+             If None then all pixels are valid for patch extraction (unless use_frame_mask or use_vessel mask are True)
+            use_frame_mask (bool):
+                Set True to use the frame mask provided by the masked video.
+                The mask used is the aligned mask from the oa850 mask video.
+            use_vessel_mask (bool): Set True to use the vessel mask for the oa790 video session.
+            patch_size (int|tuple): The extraction patch size.
+            padding: Padding mode for the image. Check opencvs padding modes.
+            padding_value:
+             The padding value in case cv2.BORDER_CONSTANT is used.
+             If None then uses the mean of the frame.
+
+        Returns:
+            Nx patch_size x patch_size (x C) Array of the patches extracted.
+            If no mask is used  then the number of patches extracted should be N = H * W  where H and W are the
+            height and width of the frame.
+        """
+        if patch_size is None:
+            patch_size = self.patch_size
+
+        if mask is None:
+            mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
+
+        if use_vessel_mask:
+            mask &= self.session.vessel_mask_oa790
+
+        if use_frame_mask:
+            mask &= self.session.registered_mask_frames_oa850[frame_idx]
+
+        patches_confocal = extract_patches(self.session.frames_confocal[frame_idx],
+                                           mask=mask,
+                                           patch_size=patch_size,
+                                           padding=padding,
+                                           padding_value=padding_value)
+
+        patches_oa790 = extract_patches(self.session.frames_oa790[frame_idx],
+                                        mask=mask,
+                                        patch_size=patch_size,
+                                        padding=padding,
+                                        padding_value=padding_value)
+
+        patches_oa850 = extract_patches(self.session.registered_frames_oa850[frame_idx],
+                                        mask=mask,
+                                        patch_size=patch_size,
+                                        padding=padding,
+                                        padding_value=padding_value)
+
+        patches = np.empty((*patches_oa790.shape[:3], 3), dtype=np.uint8)
+
+        patches[..., 0] = patches_confocal.squeeze()
+        patches[..., 1] = patches_oa790.squeeze()
+        patches[..., 2] = patches_oa850.squeeze()
+
+        if ret_mask:
+            return patches, mask
+        else:
+            return patches
 
     @property
     def temporal_width(self):
@@ -758,6 +863,10 @@ class SessionPatchExtractor(object):
             # remove positions whose patches get outside the masks
             x_min, x_max, y_min, y_max = get_mask_bounds(mask)
 
+            # delete positions that are outside the mask
+            positions = np.delete(positions, np.where(~mask[positions[:, 1], positions[:, 0]])[0], axis=0)
+
+            # delete positions too close to the borders of the mask (since the mask is rectified it has borders)
             positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0],
                                   axis=0)
             positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < y_min)[0],
@@ -791,9 +900,13 @@ class SessionPatchExtractor(object):
                 break
 
             if self.extraction_mode == SessionPatchExtractor.VALIDATION_MODE and frame_idx != self.session.validation_frame_idx:
-                continue
+                if not self.session.is_validation:
+                    continue
 
             if self.extraction_mode == SessionPatchExtractor.TRAINING_MODE and frame_idx == self.session.validation_frame_idx:
+                continue
+
+            if self.extraction_mode == SessionPatchExtractor.TRAINING_MODE and self.session.is_validation:
                 continue
 
             frame = session_frames[frame_idx]
@@ -878,9 +991,35 @@ class SessionPatchExtractor(object):
         return self._marked_non_cell_patches_oa790_at_frame
 
     def all_patches_oa790(self, frame_idx,
-                          use_frame_mask=False,
-                          use_vessel_mask=False,
-                          mask=None, patch_size=None, padding=cv2.BORDER_REPLICATE, value=0):
+                          mask=None, use_frame_mask=True,
+                          use_vessel_mask=True,
+                          ret_mask=False,
+                          patch_size=None,
+                          padding=cv2.BORDER_REPLICATE,
+                          padding_value=None):
+        """ Extracts a patch for every pixel for the frame at frame index from the oa790nm channel frames.
+
+        A patch of patch_size x patch_size is extracted around every pixel of the image.
+        Image is padded so that pixels at the borders also have a patch.
+
+        Args:
+            frame_idx (int): The frame index  of the frame to extract the patches from.
+            mask :
+             A 2D boolean array with True for the pixels to extract patches from.
+             If None then all pixels are valid for patch extraction (unless use_frame_mask or use_vessel mask are True)
+            use_frame_mask (bool): Set True to use the frame mask provided by the masked video.
+            use_vessel_mask (bool): Set True to use the vessel mask for the oa790 video session.
+            patch_size (int|tuple): The extraction patch size.
+            padding: Padding mode for the image. Check opencvs padding modes.
+            padding_value:
+             The padding value in case cv2.BORDER_CONSTANT is used.
+             If None then uses the mean of the frame.
+
+        Returns:
+            Nx patch_size x patch_size (x C) Array of the patches extracted.
+            If no mask is used  then the number of patches extracted should be N = H * W  where H and W are the
+            height and width of the frame.
+        """
         if patch_size is None:
             patch_size = self.patch_size
 
@@ -892,13 +1031,16 @@ class SessionPatchExtractor(object):
 
         if use_frame_mask:
             mask &= self.session.mask_frames_oa790[frame_idx]
-        plt.imshow(mask)
 
         patches = extract_patches(self.session.frames_oa790[frame_idx],
+                                  mask=mask,
                                   patch_size=patch_size,
                                   padding=padding,
-                                  mask=mask)
-        return patches
+                                  padding_value=padding_value)
+        if ret_mask:
+            return patches, mask
+        else:
+            return patches
 
     def _extract_temporal_patches(self,
                                   session_frames,
@@ -1060,7 +1202,7 @@ class SessionPatchExtractor(object):
         return mixed_channel_cell_patches
 
     @property
-    def mixed_channel_cell_patches(self):
+    def all_mixed_channel_cell_patches(self):
         """
         Returns:
             3 channel patches from the confocal video, the oa790 video and the oa850 video.
@@ -1078,6 +1220,17 @@ class SessionPatchExtractor(object):
         return self._mixed_channel_cell_patches
 
     @property
+    def mixed_channel_cell_patches(self):
+        if self._mixed_channel_cell_patches is None:
+            self._mixed_channel_cell_patches_at_frame = {}
+            self._mixed_channel_cell_patches = self._extract_mixed_channel_cell_patches(
+                self.session.frames_oa790,
+                self.cell_positions,
+                frame_idx_to_patch_dict=self._mixed_channel_cell_patches_at_frame,
+            )
+        return self._mixed_channel_cell_patches
+
+    @property
     def mixed_channel_marked_cell_patches(self):
         if self._mixed_channel_marked_cell_patches is None:
             self._mixed_channel_marked_cell_patches_at_frame = {}
@@ -1086,7 +1239,6 @@ class SessionPatchExtractor(object):
                 self.cell_positions,
                 frame_idx_to_patch_dict=self._mixed_channel_marked_cell_patches_at_frame,
             )
-
         return self._mixed_channel_marked_cell_patches
 
     @property
@@ -1130,36 +1282,6 @@ class SessionPatchExtractor(object):
     def mixed_channel_marked_non_cell_patches_at_frame(self):
         tmp = self.mixed_channel_marked_non_cell_patches
         return self._mixed_channel_marked_non_cell_patches_at_frame
-
-    def all_mixed_channel_patches(self, frame_idx, use_frame_mask=True, use_vessel_mask=False, patch_size=21,
-                                  mask=None, padding=cv2.BORDER_REPLICATE, value=0):
-        if patch_size is None:
-            patch_size = self.patch_size
-
-        if mask is None:
-            mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
-        else:
-            mask = mask.copy()
-
-        if use_vessel_mask:
-            mask &= self.session.vessel_mask_oa790
-
-        if use_frame_mask:
-            mask &= self.session.mask_frames_oa790[frame_idx]
-
-        plt.imshow(mask)
-        plt.show()
-
-        patches_oa790 = extract_patches(self.session.frames_oa790[frame_idx],
-                                        patch_size=patch_size,
-                                        padding=padding,
-                                        mask=mask)
-        patches_oa850 = extract_patches(self.session.registered_frames_oa850[frame_idx],
-                                        patch_size=patch_size,
-                                        padding=padding,
-                                        mask=mask)
-        patches = np.concatenate((patches_oa790, patches_oa850), axis=-1)
-        return patches
 
 
 if __name__ == '__main__':

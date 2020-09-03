@@ -335,7 +335,7 @@ def center_crop_images(images, patch_size):
         return center_cropped_images
 
 
-class ImageRegistator(object):
+class ImageRegistrator(object):
     def __init__(self, source, target):
         self.source = source
         self.target = target
@@ -354,11 +354,12 @@ class ImageRegistator(object):
 
     def register_vertically(self):
         dx = 0
-        dys = np.int32(np.arange(1, 200, 1))
+        dys = np.int32(np.arange(1, self.target.shape[0], 1))
 
         # fig, axes = plt.subplots(len(dys), 1, figsize=(100, 100))
 
         dices = []
+        target_clone = self.target.copy()
         for i, dy in enumerate(dys):
             translation = np.float32([[1, 0, dx],
                                       [0, 1, dy]])
@@ -366,7 +367,12 @@ class ImageRegistator(object):
             height, width = self.source.shape[:2]
 
             translated_source = cv2.warpAffine(self.source, translation, (width, height))
-            dice_v = evaluation.dice(self.target, translated_source)
+
+            # Because translating the source introduces black pixels in the first rows (0 to translation)
+            # we also zero out the same pixels in the target image to have a more accurate dice coefficient
+            target_clone[:dy, :] = 0
+
+            dice_v = evaluation.dice(target_clone, translated_source)
             dices.append(dice_v)
 
         # Get displacement that gives best dice coefficient.

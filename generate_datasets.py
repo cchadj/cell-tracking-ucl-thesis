@@ -33,6 +33,7 @@ def create_cell_and_no_cell_patches(
         video_sessions=None,
         extraction_method=SessionPatchExtractor.ALL_MODE,
 
+        use_vessel_mask=False,
         patch_size=(21, 21),
         temporal_width=0,
 
@@ -90,6 +91,7 @@ def create_cell_and_no_cell_patches(
 
                                                 patch_size=patch_size,
                                                 temporal_width=temporal_width,
+                                                use_vessel_mask=use_vessel_mask,
 
                                                 negative_extraction_mode=negative_extraction_mode,
 
