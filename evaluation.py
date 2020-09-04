@@ -280,7 +280,7 @@ class EvaluationResults:
 
         ax.imshow(self.image * self.mask, cmap='gray', vmin=0, vmax=255)
         if show_probability_map and self.probability_map is not None:
-            ax.imshow(self.probability_map * self.mask, cmap='hot', vmin=0, vmax=255)
+            ax.imshow(self.probability_map * self.mask, cmap='hot', vmin=0, vmax=1)
 
         ax.scatter(self.ground_truth_positions[:, 0], self.ground_truth_positions[:, 1],
                    c='blue', s=230, label='Ground truth positions')
