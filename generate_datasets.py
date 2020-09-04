@@ -163,12 +163,12 @@ def train_test_split_images(images, testset_ratio):
     return train_images, valid_images
 
 
-def create_dataset_from_cell_and_no_cell_images(
-        cell_images,
-        non_cell_images,
+def create_dataset_from_patches(
+        cell_patches,
+        non_cell_patches,
 
-        valid_cell_images=None,
-        valid_non_cell_images=None,
+        valid_cell_patches=None,
+        valid_non_cell_patches=None,
 
         standardize=True,
         to_grayscale=False,
@@ -178,24 +178,23 @@ def create_dataset_from_cell_and_no_cell_images(
         center_crop_patch_size=21,
 
         validset_ratio=0.2,
-
         v=False):
     """ The cell images are labeled as 1 and non cell images are labeled as 0.
 
     The cell and non cell images are split to training and validation according to the validset ratio.
 
-    If valid_cell_images, and valid_non_cell_images are not None, they are appended to the validation set.
+    If valid_cell_patches, and valid_non_cell_patches are not None, they are appended to the validation set.
 
     Args:
-        cell_images: Positive samples to create dataset from. Shape N x H x W (x C)
-        non_cell_images: Negative samples to create dataset from. Shape N x H x W (x C)
+        cell_patches: Positive samples to create dataset from. Shape N x H x W (x C)
+        non_cell_patches: Negative samples to create dataset from. Shape N x H x W (x C)
 
         validset_ratio: The validation set ration to split cell and non cell images to validation and training set.
 
-        valid_cell_images: valid_non_cell_images: If specified, these images are appended to the positive validation set
+        valid_cell_patches: valid_non_cell_patches: If specified, these images are appended to the positive validation set
             If specified they must have be of shape N X H x W (x C) and must have the same H x W (x C) as the rest of
             the images.
-        valid_non_cell_images: If specified, these images are appended to the negative validation set.
+        valid_non_cell_patches: If specified, these images are appended to the negative validation set.
             If specified they must have be of shape N X H x W (x C) and must have the same H x W (x C) as the rest of
             the images.
 
@@ -215,37 +214,46 @@ def create_dataset_from_cell_and_no_cell_images(
             The translation and/or rotation is applied to bigger patches and then their center is cropped to avoid empty pixels.
             Occurs both to training and validation patches.
 
+        v (bool): Verbose flag
+
     """
     if v:
         print('Creating dataset from cell and non cell patches')
         print('-----------------------------------------------')
 
-    if v:
-        print('Splitting into training set and validation set')
-
     # -- positive patches --
-    train_cell_images, valid_cell_images_from_split = train_test_split_images(cell_images, validset_ratio)
+    train_cell_patches, valid_cell_patches_from_split = train_test_split_images(cell_patches, validset_ratio)
 
-    if valid_cell_images is None:
-        valid_cell_images = valid_cell_images_from_split
+    if valid_cell_patches is None:
+        valid_cell_patches = valid_cell_patches_from_split
     else:
-        valid_cell_images = np.concatenate((valid_cell_images, valid_cell_images_from_split), axis=0)
+        valid_cell_patches = np.concatenate((valid_cell_patches, valid_cell_patches_from_split), axis=0)
+
+    if v:
+        print(f'Train cell patches {train_cell_patches.shape}. Valid cell patches {valid_cell_patches.shape}')
 
     # -- negative patches --
-    train_non_cell_images, valid_non_cell_images_from_split = train_test_split_images(non_cell_images, validset_ratio)
+    train_non_cell_patches, valid_non_cell_patches_from_split = train_test_split_images(non_cell_patches, validset_ratio)
 
-    if valid_non_cell_images is None:
-        valid_non_cell_images = valid_non_cell_images_from_split
+    if valid_non_cell_patches is None:
+        valid_non_cell_patches = valid_non_cell_patches_from_split
     else:
-        valid_non_cell_images = np.concatenate((valid_non_cell_images, valid_non_cell_images_from_split), axis=0)
+        valid_non_cell_patches = np.concatenate((valid_non_cell_patches, valid_non_cell_patches_from_split), axis=0)
+    if v:
+        print(f'Train  non cell patches {train_non_cell_patches.shape}. Valid cell patches {valid_non_cell_patches.shape}')
 
     apply_transforms = random_translation_pixels > 0 or random_translation_pixels != 0
     # -- Trainset --
 
     train_transforms = None
     if apply_transforms:
-        initial_patch_size = cell_images.shape[1]
+        initial_patch_size = cell_patches.shape[1]
         translation_ratio = random_translation_pixels / initial_patch_size
+        if v:
+            print('Applying transformations to training set.\n '
+                  ' Rotation degrees:', random_rotation_degrees,
+                  ' Translation pixels:', random_translation_pixels,
+                  ' Translation ratio:', translation_ratio)
         train_transforms = [
             torchvision.transforms.RandomAffine(degrees=random_rotation_degrees,
                                                 translate=(translation_ratio, translation_ratio),
@@ -254,9 +262,9 @@ def create_dataset_from_cell_and_no_cell_images(
         ]
 
     trainset = LabeledImageDataset(
-        images=np.concatenate((train_cell_images, train_non_cell_images), axis=0),
+        images=np.concatenate((train_cell_patches, train_non_cell_patches), axis=0),
         labels=np.concatenate(
-            (np.ones(len(train_cell_images), dtype=np.int32), np.zeros(len(train_non_cell_images), dtype=np.int32)),
+            (np.ones(len(train_cell_patches), dtype=np.int32), np.zeros(len(train_non_cell_patches), dtype=np.int32)),
             axis=0),
 
         standardize=standardize,
@@ -268,13 +276,15 @@ def create_dataset_from_cell_and_no_cell_images(
     # -- Validset --
     valid_transforms = None
     if apply_transforms:
+        if v:
+            print(f'Applying center crop to validation set. Center crop', center_crop_patch_size)
         # Just do center crop on the validation images
         valid_transforms = [torchvision.transforms.CenterCrop(center_crop_patch_size)]
 
     validset = LabeledImageDataset(
-        images=np.concatenate((valid_cell_images, valid_non_cell_images), axis=0),
+        images=np.concatenate((valid_cell_patches, valid_non_cell_patches), axis=0),
         labels=np.concatenate(
-            (np.ones(len(valid_cell_images), dtype=np.int32), np.zeros(len(valid_non_cell_images), dtype=np.int32)),
+            (np.ones(len(valid_cell_patches), dtype=np.int32), np.zeros(len(valid_non_cell_patches), dtype=np.int32)),
             axis=0),
 
         standardize=standardize,
@@ -354,7 +364,7 @@ def get_cell_and_no_cell_patches(
 
     Returns:
         (Dataset, Dataset, np array NxHxW, np array,      np array,           np.array,             , np.array h x w of template)
-        trainset, validset, cell_images, non_cell_images, cell_images_marked, non_cell_images_marked, hist_match_template
+        trainset, validset, cell_patches, non_cell_patches, cell_images_marked, non_cell_images_marked, hist_match_template
 
         Training set and validation set can be used by torch DataLoader.
         Cell images and non cell images are numpy arrays n x patch_height x patch_width and of type uint8.
@@ -517,7 +527,7 @@ def get_cell_and_no_cell_patches(
 
             non_cell_images = hist_match_images(cell_images, hist_match_template)
 
-        trainset, validset = create_dataset_from_cell_and_no_cell_images(
+        trainset, validset = create_dataset_from_patches(
             cell_images, non_cell_images, standardize=standardize_dataset, to_grayscale=dataset_to_grayscale,
             validset_ratio=validset_ratio, v=v,
 
