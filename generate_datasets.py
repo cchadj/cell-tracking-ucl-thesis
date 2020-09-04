@@ -143,6 +143,26 @@ def create_cell_and_no_cell_patches(
     return cell_images, non_cell_images, cell_images_marked, non_cell_images_marked
 
 
+def train_test_split_images(images, testset_ratio):
+    from sklearn.model_selection import train_test_split
+    import random
+
+    image_indices = list(np.arange(len(images)))
+    random.shuffle(image_indices)
+
+    trainset_size = int(len(images) * (1 - testset_ratio))
+    validset_size = len(images) - trainset_size
+    assert trainset_size + validset_size == len(images)
+
+    train_indices, valid_indices = train_test_split(image_indices,
+                                                    train_size=trainset_size,
+                                                    test_size=validset_size)
+    train_images = images[train_indices]
+    valid_images = images[valid_indices]
+
+    return train_images, valid_images
+
+
 def create_dataset_from_cell_and_no_cell_images(
         cell_images,
         non_cell_images,
@@ -164,7 +184,7 @@ def create_dataset_from_cell_and_no_cell_images(
 
     The cell and non cell images are split to training and validation according to the validset ratio.
 
-    If valid_cell_images, and valid_non_cell_images they are appended to the validation set.
+    If valid_cell_images, and valid_non_cell_images are not None, they are appended to the validation set.
 
     Args:
         cell_images: Positive samples to create dataset from. Shape N x H x W (x C)
@@ -199,88 +219,68 @@ def create_dataset_from_cell_and_no_cell_images(
     if v:
         print('Creating dataset from cell and non cell patches')
         print('-----------------------------------------------')
-    import random
-    from sklearn.model_selection import train_test_split
 
     if v:
         print('Splitting into training set and validation set')
 
-    # positive patches
-    cell_images_indices = list(np.arange(len(cell_images)))
-    random.shuffle(cell_images_indices)
+    # -- positive patches --
+    train_cell_images, valid_cell_images_from_split = train_test_split_images(cell_images, validset_ratio)
 
     if valid_cell_images is None:
-        valid_cell_images = np.empty((0, *cell_images.shape[1:]), dtype=cell_images.dtype)
+        valid_cell_images = valid_cell_images_from_split
+    else:
+        valid_cell_images = np.concatenate((valid_cell_images, valid_cell_images_from_split), axis=0)
+
+    # -- negative patches --
+    train_non_cell_images, valid_non_cell_images_from_split = train_test_split_images(non_cell_images, validset_ratio)
 
     if valid_non_cell_images is None:
-        valid_non_cell_images = np.empty((0, *non_cell_images.shape[1:]), dtype=non_cell_images.dtype)
+        valid_non_cell_images = valid_non_cell_images_from_split
+    else:
+        valid_non_cell_images = np.concatenate((valid_non_cell_images, valid_non_cell_images_from_split), axis=0)
 
-    positive_trainset_size = int(len(cell_images) * (1 - validset_ratio))
-    positive_validset_size = len(cell_images) - positive_trainset_size
-    assert positive_trainset_size + positive_validset_size == len(cell_images)
-    train_cell_images_indices, valid_cell_images_indices = train_test_split(cell_images_indices,
-                                                                            train_size=positive_trainset_size,
-                                                                            test_size=positive_validset_size)
-    train_cell_images = cell_images[train_cell_images_indices]
-    valid_cell_images = np.concatenate((valid_cell_images, cell_images[valid_cell_images_indices]), axis=0)
+    apply_transforms = random_translation_pixels > 0 or random_translation_pixels != 0
+    # -- Trainset --
 
-    # negative patches
-    non_cell_images_indices = list(np.arange(len(non_cell_images)))
-    random.shuffle(non_cell_images_indices)
-
-    negative_trainset_size = int(len(non_cell_images) * (1 - validset_ratio))
-    negative_validset_size = len(non_cell_images) - negative_trainset_size
-    assert negative_trainset_size + negative_validset_size == len(non_cell_images)
-    train_non_cell_images_indices, valid_non_cell_images_indices = train_test_split(non_cell_images_indices,
-                                                                                    train_size=negative_trainset_size,
-                                                                                    test_size=negative_validset_size)
-    train_non_cell_images = non_cell_images[train_non_cell_images_indices]
-    valid_non_cell_images = np.concatenate((valid_non_cell_images, non_cell_images[valid_cell_images_indices]), axis=0)
-
-    var = ((np.float32(cell_images) / 255).var() + (np.float32(non_cell_images) / 255).var()) / 2
-    mean = ((np.float32(cell_images) / 255).mean() + (np.float32(non_cell_images) / 255).mean()) / 2
-
-    data_augmentation_transformations = None
-    if random_translation_pixels > 0 or random_translation_pixels != 0:
+    train_transforms = None
+    if apply_transforms:
         initial_patch_size = cell_images.shape[1]
         translation_ratio = random_translation_pixels / initial_patch_size
-        data_augmentation_transformations = [
+        train_transforms = [
             torchvision.transforms.RandomAffine(degrees=random_rotation_degrees,
                                                 translate=(translation_ratio, translation_ratio),
                                                 resample=PIL.Image.LINEAR),
             torchvision.transforms.CenterCrop(center_crop_patch_size)
         ]
 
-    # Trainset
     trainset = LabeledImageDataset(
-        np.concatenate((train_cell_images,                             train_non_cell_images), axis=0),
-        np.concatenate((np.ones(len(train_cell_images), dtype=np.int), np.zeros(len(train_non_cell_images), dtype=np.int)), axis=0),
+        images=np.concatenate((train_cell_images, train_non_cell_images), axis=0),
+        labels=np.concatenate(
+            (np.ones(len(train_cell_images), dtype=np.int32), np.zeros(len(train_non_cell_images), dtype=np.int32)),
+            axis=0),
 
         standardize=standardize,
-        mean=mean,
-        variance=var,
-
         to_grayscale=to_grayscale,
 
-        data_augmentation_transforms=data_augmentation_transformations
+        data_augmentation_transforms=train_transforms
     )
 
-    data_augmentation_transformations = None
-    if random_translation_pixels > 0 or random_translation_pixels != 0:
-        # Just center crop on the validation images
-        data_augmentation_transformations = [torchvision.transforms.CenterCrop(center_crop_patch_size)]
+    # -- Validset --
+    valid_transforms = None
+    if apply_transforms:
+        # Just do center crop on the validation images
+        valid_transforms = [torchvision.transforms.CenterCrop(center_crop_patch_size)]
 
     validset = LabeledImageDataset(
-        np.concatenate((valid_cell_images,                             valid_non_cell_images), axis=0),
-        np.concatenate((np.ones(len(valid_cell_images), dtype=np.int), np.zeros(len(valid_non_cell_images), dtype=np.int)), axis=0),
+        images=np.concatenate((valid_cell_images, valid_non_cell_images), axis=0),
+        labels=np.concatenate(
+            (np.ones(len(valid_cell_images), dtype=np.int32), np.zeros(len(valid_non_cell_images), dtype=np.int32)),
+            axis=0),
 
         standardize=standardize,
-        mean=mean,
-        variance=var,
-
         to_grayscale=to_grayscale,
 
-        data_augmentation_transforms=data_augmentation_transformations,
+        data_augmentation_transforms=valid_transforms,
     )
     return trainset, validset
 
@@ -569,9 +569,9 @@ def get_cell_and_no_cell_patches(
         non_cell_images_marked = center_crop_images(non_cell_images_marked, patch_size)
 
     return trainset, validset, \
-        cell_images, non_cell_images, \
-        cell_images_marked, non_cell_images_marked, \
-        hist_match_template
+           cell_images, non_cell_images, \
+           cell_images_marked, non_cell_images_marked, \
+           hist_match_template
 
 
 def main():
@@ -643,7 +643,6 @@ def main_tmp():
                                      standardize_dataset=standardize_dataset,
                                      v=verbose,
                                      vv=very_verbose)
-
 
 
 if __name__ == '__main__':
