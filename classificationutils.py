@@ -135,7 +135,10 @@ def estimate_cell_positions_from_probability_map(
     for region in region_props:
         if region.max_intensity <= region_max_threshold:
             continue
-        y, x = region.weighted_centroid
+            
+        max_intensity_idx = np.argmax(pm_blurred[region.coords[:,0], region.coords[:, 1]])
+        y, x = region.coords[max_intensity_idx]
+
         estimated_cell_positions[i] = x, y
         i += 1
     estimated_cell_positions = estimated_cell_positions[:i]
