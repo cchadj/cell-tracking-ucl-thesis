@@ -390,6 +390,7 @@ class SessionClassifier:
         sigmas = None
         extended_maxima_hs = None
         region_max_thresholds = None
+        dice_coefficients = None
         # If the frame is marked then we find the best sigma, H and T that maximise dice's coefficient
         if grid_search and self.session.is_marked and frame_idx in self.session.cell_positions:
             sigmas = np.arange(0.2, 2, step=.1)
