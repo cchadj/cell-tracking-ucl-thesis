@@ -390,10 +390,11 @@ class SessionClassifier:
             probability_map = create_probability_map(patches, self.model, im_shape=mask.shape, mask=mask,
                                                      standardize=self.standardise, to_grayscale=self.to_grayscale)
 
-        sigmas = None
-        extended_maxima_hs = None
-        region_max_thresholds = None
-        dice_coefficients = None
+        sigmas = [sigma]
+        extended_maxima_hs = [extended_maxima_h]
+        region_max_thresholds = [region_max_threshold]
+        dice_coefficients = []
+
         # If the frame is marked then we find the best sigma, H and T that maximise dice's coefficient
         if grid_search and self.session.is_marked and frame_idx in self.session.cell_positions:
             sigmas = np.arange(0.2, 2, step=.1)
@@ -434,10 +435,12 @@ class SessionClassifier:
         result_evaluation = evaluate_results(
             self.session.cell_positions[frame_idx],
             estimated_positions=estimated_positions,
-            image=self.session.frames_oa790[
-                self.session.validation_frame_idx],
+            image=self.session.frames_oa790[self.session.validation_frame_idx],
             mask=mask,
-            patch_size=21)
+            patch_size=self.patch_size)
+
+        if len(dice_coefficients) == 0:
+            dice_coefficients = [result_evaluation.dice]
 
         result_evaluation.all_sigmas = sigmas
         result_evaluation.all_extended_maxima_hs = extended_maxima_hs
