@@ -17,8 +17,16 @@ from learningutils import ImageDataset
 from patchextraction import SessionPatchExtractor
 from video_session import VideoSession
 
+from enum import Enum, unique
 NEGATIVE_LABEL = 0
 POSITIVE_LABEL = 1
+
+
+@unique
+class RegionCoordSelectMode(Enum):
+    GEOMETRIC_CENTROID = 0
+    WEIGHTED_CENTROID = 1
+    MAX_INTENSITY_PIXEL = 2
 
 
 class ClassificationResults:
@@ -111,6 +119,7 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
 def estimate_cell_positions_from_probability_map(
         probability_map,
         extended_maxima_h,
+        region_coord_select_mode=RegionCoordSelectMode.MAX_INTENSITY_PIXEL,
         region_max_threshold=.75,
         sigma=1,
         visualise_intermediate_results=False):
@@ -135,9 +144,14 @@ def estimate_cell_positions_from_probability_map(
     for region in region_props:
         if region.max_intensity <= region_max_threshold:
             continue
-            
-        max_intensity_idx = np.argmax(pm_blurred[region.coords[:,0], region.coords[:, 1]])
-        y, x = region.coords[max_intensity_idx]
+
+        if region_coord_select_mode is RegionCoordSelectMode.MAX_INTENSITY_PIXEL:
+            max_intensity_idx = np.argmax(pm_blurred[region.coords[:, 0], region.coords[:, 1]])
+            y, x = region.coords[max_intensity_idx]
+        elif region_coord_select_mode is RegionCoordSelectMode.WEIGHTED_CENTROID:
+            y, x = region.weighted_centroid
+        elif region_coord_select_mode is RegionCoordSelectMode.GEOMETRIC_CENTROID:
+            y, x = region.centroid
 
         estimated_cell_positions[i] = x, y
         i += 1
@@ -347,6 +361,7 @@ class SessionClassifier:
     def estimate_locations(self, frame_idx: int,
                            probability_map: np.ndarray = None,
                            grid_search: bool = False,
+                           region_coord_select_mode=RegionCoordSelectMode.GEOMETRIC_CENTROID,
                            extended_maxima_h: float = 0.4,
                            region_max_threshold: float = 0.2,
                            sigma: float = 1.,
@@ -370,7 +385,11 @@ class SessionClassifier:
             region_max_threshold:
                 The
             sigma:
+            region_coord_select_mode (RegionCoordSelectMode):
+                Selection mode from the filtered probability map regions.
             **patch_extraction_kwargs:
+                Keyword arguments for patch extraction, check SessionPatchExtractor all_mixed_channel_patches
+                and all_patches_oa790
 
         Returns:
 
@@ -407,6 +426,7 @@ class SessionClassifier:
                     for k, t in enumerate(region_max_thresholds):
                         estimated_positions = estimate_cell_positions_from_probability_map(
                             probability_map, extended_maxima_h=h,
+                            region_coord_select_mode=region_coord_select_mode,
                             region_max_threshold=t,
                             sigma=s)
 
@@ -430,7 +450,9 @@ class SessionClassifier:
             probability_map,
             sigma=sigma,
             extended_maxima_h=extended_maxima_h,
-            region_max_threshold=region_max_threshold)
+            region_max_threshold=region_max_threshold,
+            region_coord_select_mode=region_coord_select_mode,
+        )
 
         result_evaluation = evaluate_results(
             self.session.cell_positions[frame_idx],
