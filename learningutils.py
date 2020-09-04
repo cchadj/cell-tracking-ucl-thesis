@@ -89,7 +89,7 @@ class LabeledImageDataset(ImageDataset):
         labels = np.array(labels).squeeze()
         assert len(images) == len(labels), \
             f'Expected to have equal amount of labels and images. n images:{len(images)} n labels:{len(labels)}'
-        assert labels.dtype == [np.int32, np.int64, np.int], f'Labels must be integers not {labels.dtype}'
+        assert labels.dtype in [np.int32, np.int64, np.int], f'Labels must be integers not {labels.dtype}'
         assert len(labels.shape) == 1, f'Labels should be a list of one label for each image, shape given {labels.shape}'
 
         self.labels = torch.from_numpy(labels)
