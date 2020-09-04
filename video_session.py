@@ -49,7 +49,10 @@ class VideoSession(object):
         self._validation_frame_idx = None
 
         self.video_file = video_filename
+
+        self.filename = self.video_file
         self.basename = os.path.join(f'{os.path.splitext(os.path.basename(self.video_file))[0]}')
+        self.uid = int(self.basename.split('_')[5])
 
         self.video_oa790_file = find_filename_of_same_source(video_filename, unmarked_video_oa790_filenames)
         self.video_oa850_file = find_filename_of_same_source(video_filename, unmarked_video_oa850_filenames)
