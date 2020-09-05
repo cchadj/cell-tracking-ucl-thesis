@@ -415,6 +415,8 @@ class SessionClassifier:
 
         if self.mixed_channels:
             patches, mask = self.patch_extractor.all_mixed_channel_patches(frame_idx, ret_mask=True, **patch_extraction_kwargs)
+            if self.drop_confocal:
+                patches = patches[..., 1:]
         else:
             patches, mask = self.patch_extractor.all_patches_oa790(frame_idx, ret_mask=True, **patch_extraction_kwargs)
 
