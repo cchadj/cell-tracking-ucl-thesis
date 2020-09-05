@@ -282,7 +282,7 @@ class SessionClassifier:
     session: VideoSession
     probability_maps: Dict[int, np.ndarray]
     estimated_locations: Dict[int, np.ndarray]
-    result_evalutations: Dict[int, EvaluationResults]
+    result_evaluations: Dict[int, EvaluationResults]
 
     def __init__(self, video_session, model,
                  patch_size=21,
@@ -319,7 +319,7 @@ class SessionClassifier:
         self.mixed_channels = mixed_channels
         self.drop_confocal = drop_confocal
 
-        self.result_evalutations = {}
+        self.result_evaluations = {}
         self.probability_maps = {}
         self.estimated_locations = {}
 
@@ -488,7 +488,7 @@ class SessionClassifier:
         result_evaluation.sigma = sigma
         result_evaluation.extended_maxima_h = extended_maxima_h
         result_evaluation.region_max_threshold = region_max_threshold
-        self.result_evalutations[frame_idx] = result_evaluation
+        self.result_evaluations[frame_idx] = result_evaluation
 
         self.estimated_locations[frame_idx] = estimated_positions
         self.probability_maps[frame_idx] = probability_map
