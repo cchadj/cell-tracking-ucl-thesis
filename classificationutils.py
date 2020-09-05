@@ -470,7 +470,7 @@ class SessionClassifier:
         )
 
         result_evaluation = evaluate_results(
-            self.session.cell_positions[frame_idx],
+            ground_truth_positions=self.session.cell_positions[frame_idx],
             estimated_positions=estimated_positions,
             image=self.session.frames_oa790[self.session.validation_frame_idx],
             mask=mask,

@@ -79,9 +79,9 @@ def evaluate_results(ground_truth_positions,
     distance_for_true_positive = .75 * median_spacing
 
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto', metric='euclidean').fit(ground_truth_positions_pruned)
-    distances, closest_ground_truth_position_indices = nbrs.kneighbors(estimated_positions_pruned)
-    distances, closest_ground_truth_position_indices = distances.squeeze(), closest_ground_truth_position_indices.squeeze()
-    estimated_to_ground_distances = distances.copy()
+    distances_to_closest_ground_truth, indices_of_closest_ground_truth = nbrs.kneighbors(estimated_positions_pruned)
+    distances_to_closest_ground_truth, indices_of_closest_ground_truth = distances_to_closest_ground_truth.squeeze(), indices_of_closest_ground_truth.squeeze()
+    estimated_to_ground_distances = distances_to_closest_ground_truth.copy()
 
     # Each prediction is assigned to it's closest manual position.
     # True Positive:
@@ -94,41 +94,43 @@ def evaluate_results(ground_truth_positions,
     # Manually marked cones that did not have a matching automatically detected cone were considered as false negatives.
 
     # The indices of the manual positions that are assigned to each predicted point
-    closest_ground_truth_position_indices = list(closest_ground_truth_position_indices.flatten())
+    indices_of_closest_ground_truth = list(indices_of_closest_ground_truth.flatten())
 
     # The distance of each predicted point to it's closed manual position
-    distances = list(distances.flatten())
+    distances_to_closest_ground_truth = list(distances_to_closest_ground_truth.flatten())
 
-    # The predicted point indices
-    predicted_point_indices = list(np.arange(len(closest_ground_truth_position_indices)).flatten())
+    # The estimated point indices
+    estimated_indices = list(np.arange(len(indices_of_closest_ground_truth)).flatten())
 
-    # Sorting by closest_assigned_manual_indices to identify duplicates
-    closest_ground_truth_position_indices, distances, predicted_point_indices = zip(*sorted(
-        zip(closest_ground_truth_position_indices, distances, predicted_point_indices)))
+    # Sorting by indices_of_closest_ground_truth to identify duplicates where for one estimated, 2 ground truth
+    # positions
+    indices_of_closest_ground_truth, distances_to_closest_ground_truth, estimated_indices = zip(*sorted(
+        zip(indices_of_closest_ground_truth, distances_to_closest_ground_truth, estimated_indices)))
 
     # Create dictionary with the manual positions and it's matched predicted positions.
-    # The entries are of type match_dict[manual_position_idx] => ([distance_to_point_1, distance_to_point_2, ...],
-    #                                                             [predicted_idx_1,     predicted_idx_2, ...])
+    # The entries are of type ground_truth_to_estimated_idx_dst[ground_truth_idx] =>
+    #                                                         ([dist_to_point_1, dist_to_point2, ...],
+    #                                                          [estimated_idx_1, estimated_idx_2, ...])
 
     estimated_to_ground_truth = {}
     ground_truth_to_estimated = {}
 
-    match_dict = {}
-    for i in range(len(closest_ground_truth_position_indices)):
-        closest_ground_truth_point_idx = closest_ground_truth_position_indices[i]
+    ground_truth_to_estimated_dst_idx = {}
+    for i in range(len(indices_of_closest_ground_truth)):
+        closest_ground_truth_point_idx = indices_of_closest_ground_truth[i]
 
-        distance_to_estimated_point = distances[i]
-        estimated_point_idx = predicted_point_indices[i]
+        dist_to_estimated_point = distances_to_closest_ground_truth[i]
+        estimated_point_idx = estimated_indices[i]
 
         estimated_to_ground_truth[estimated_point_idx] = closest_ground_truth_point_idx
 
-        if closest_ground_truth_point_idx in match_dict.keys():
-            match_dict[closest_ground_truth_point_idx][0].append(distance_to_estimated_point)
-            match_dict[closest_ground_truth_point_idx][1].append(estimated_point_idx)
+        if closest_ground_truth_point_idx in ground_truth_to_estimated_dst_idx.keys():
+            ground_truth_to_estimated_dst_idx[closest_ground_truth_point_idx][0].append(dist_to_estimated_point)
+            ground_truth_to_estimated_dst_idx[closest_ground_truth_point_idx][1].append(estimated_point_idx)
 
             ground_truth_to_estimated[closest_ground_truth_point_idx].append(estimated_point_idx)
         else:
-            match_dict[closest_ground_truth_point_idx] = ([distance_to_estimated_point], [estimated_point_idx])
+            ground_truth_to_estimated_dst_idx[closest_ground_truth_point_idx] = ([dist_to_estimated_point], [estimated_point_idx])
 
             ground_truth_to_estimated[closest_ground_truth_point_idx] = [estimated_point_idx]
 
@@ -138,29 +140,33 @@ def evaluate_results(ground_truth_positions,
     false_positive_points = np.empty((0, 2), dtype=np.int32)
     false_positive_dists = np.empty(0, dtype=np.float32)
 
-    # By now match_dict, can have many predicted positions for each manual position.
-    # We keep the predicted position with the smallest distance.
+    # By now ground_truth_to_estimated_dst_idx, can have many predicted positions for each ground truth position.
+    # We keep the estimated position with the smallest distance.
     n_false_positives_duplicates = 0
-    for key in match_dict.keys():
-        dists = match_dict[key][0]
-        predicted_indices = match_dict[key][1]
-        minimum_dist_idx = np.argmin(dists)
+    for ground_truth_idx in ground_truth_to_estimated_dst_idx.keys():
+        dists_to_ground_truth = ground_truth_to_estimated_dst_idx[ground_truth_idx][0]
+        matched_estimated_indices = ground_truth_to_estimated_dst_idx[ground_truth_idx][1]
 
-        # if predicted positions that are matched to manual position are more than 1,
-        # then we increase the number of false positives.
-        n_false_positives_duplicates += len(predicted_indices) - 1
+        # find the estimated positions that is closest to the ground truth, this index is relative to
+        # matched_estimated_indices and dists_to_ground_truth, not all points
+        minimum_dist_idx = np.argmin(dists_to_ground_truth)
 
-        # Match dict will contain a single distance and the predicted position index that is assigned to that
-        # manual position
-        match_dict[key] = (dists[minimum_dist_idx], predicted_indices[minimum_dist_idx])
+        # if predicted positions that are matched to more than 1 ground truth position,
+        # then we increase the number of false positives by the number of extra estimations.
+        n_false_positives_duplicates += len(matched_estimated_indices) - 1
 
-        ground_truth_point = ground_truth_positions[key]
-        minimum_dist_point = estimated_positions_pruned[predicted_indices[minimum_dist_idx]]
-        mininum_dist = dists[minimum_dist_idx]
+        # ground_truth_to_estimated_dst_idx will now contain a single distance and the estimated
+        # position index that is assigned to the ground truth position
+        ground_truth_to_estimated_dst_idx[ground_truth_idx] = (dists_to_ground_truth[minimum_dist_idx], matched_estimated_indices[minimum_dist_idx])
 
-        false_positive_indices = np.delete(predicted_indices, minimum_dist_idx)
+        ground_truth_point = ground_truth_positions[ground_truth_idx]
+        mininum_dist = dists_to_ground_truth[ground_truth_to_estimated_dst_idx[ground_truth_idx][0]]
+        minimum_dist_point = estimated_positions_pruned[ground_truth_to_estimated_dst_idx[ground_truth_idx][1]]
+
+        # find the false positive indices
+        false_positive_indices = np.delete(matched_estimated_indices, minimum_dist_idx)
         cur_false_positive_points = estimated_positions_pruned[false_positive_indices]
-        cur_false_positive_dists = np.delete(dists, minimum_dist_idx)
+        cur_false_positive_dists = np.delete(dists_to_ground_truth, minimum_dist_idx)
 
         false_positive_points = np.concatenate((false_positive_points, cur_false_positive_points), axis=0)
         false_positive_dists = np.concatenate((false_positive_dists, cur_false_positive_dists), axis=0)
@@ -172,22 +178,29 @@ def evaluate_results(ground_truth_positions,
             false_positive_points = np.concatenate((false_positive_points, minimum_dist_point[None, ...]), axis=0)
             false_positive_dists = np.append(false_positive_dists, mininum_dist)
 
-    # Remove false positives where distance between manual position and automatic position is bigger than median_spacing
+    # Final filtering. Every ground truth point has an estimated position.
+    # Remove false positives where distance between ground truth and estimated is bigger than .75 * median_spacing
     keys_to_delete = []
-    for key in match_dict.keys():
-        distance_to_estimated_point = match_dict[key][0]
-        if distance_to_estimated_point >= distance_for_true_positive:
-            keys_to_delete.append(key)
-    for key in keys_to_delete:
-        del match_dict[key]
+    n_false_positives_too_much_distance = 0
+    for ground_truth_idx in ground_truth_to_estimated_dst_idx.keys():
+        dist_to_estimated_point = ground_truth_to_estimated_dst_idx[ground_truth_idx][0]
+        if dist_to_estimated_point >= distance_for_true_positive:
+            keys_to_delete.append(ground_truth_idx)
+            n_false_positives_too_much_distance += 1
+
+    for ground_truth_idx in keys_to_delete:
+        del ground_truth_to_estimated_dst_idx[ground_truth_idx]
 
     # The remaining entries are true positives.
-    n_true_positives = len(match_dict)
+    n_true_positives = len(ground_truth_to_estimated_dst_idx)
+    assert n_true_positives == len(true_positive_points)
 
-    n_false_positives_unmatched_predictions = len(estimated_positions_pruned) - len(match_dict)
-    n_false_positives = n_false_positives_duplicates + n_false_positives_unmatched_predictions
+    n_false_positives_unmatched_predictions = len(estimated_positions_pruned) - len(ground_truth_to_estimated_dst_idx)
+    n_false_positives = n_false_positives_duplicates + n_false_positives_too_much_distance
+    assert n_false_positives_unmatched_predictions == n_false_positives
+    assert n_false_positives == len(false_positive_points)
 
-    n_false_negatives = len(ground_truth_positions_pruned) - len(match_dict)
+    n_false_negatives = len(ground_truth_positions_pruned) - len(ground_truth_to_estimated_dst_idx)
 
     n_manual = len(ground_truth_positions_pruned)
     n_automatic = len(estimated_positions_pruned)
@@ -219,6 +232,9 @@ def evaluate_results(ground_truth_positions,
         true_positive_points=true_positive_points,
         false_positive_points=false_positive_points,
 
+        n_true_positives=n_true_positives,
+        n_false_positives=n_false_positives,
+
         true_positive_dists=true_positive_dists,
         false_positive_dists=false_positive_dists,
     )
@@ -240,11 +256,16 @@ class EvaluationResults:
                  ground_truth_to_estimated, estimated_to_ground_truth,
                  false_discovery_rate, true_positive_dists,
                  false_positive_dists, true_positive_points,
-                 false_positive_points, estimated_positions):
+                 false_positive_points, estimated_positions,
+                 n_true_positives=None, n_false_positives=None,
+                 ):
         self.extended_maxima_h = None
         self.region_max_threshold = None
         self.sigma = None
         self.probability_map = None
+
+        self.n_true_positives = n_true_positives
+        self.n_false_positives = n_false_positives
 
         self.image = image
         self.dice = dice
