@@ -294,8 +294,9 @@ class SessionClassifier:
                  standardise=True,
                  to_grayscale=False,
 
-                 n_negatives_per_positive=15,
+                 n_negatives_per_positive=32,
                  negative_extraction_mode=SessionPatchExtractor.CIRCLE,
+                 use_vessel_mask=True,
                  ):
         from copy import deepcopy
 
@@ -330,7 +331,8 @@ class SessionClassifier:
             extraction_mode=SessionPatchExtractor.ALL_MODE,
 
             n_negatives_per_positive=n_negatives_per_positive,
-            negative_extraction_mode=negative_extraction_mode
+            negative_extraction_mode=negative_extraction_mode,
+            use_vessel_mask=use_vessel_mask
         )
 
     def classify_cells(self, frame_idx=None):
