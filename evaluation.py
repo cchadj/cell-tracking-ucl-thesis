@@ -160,7 +160,7 @@ def evaluate_results(ground_truth_positions,
         ground_truth_to_estimated_dst_idx[ground_truth_idx] = (dists_to_ground_truth[minimum_dist_idx], matched_estimated_indices[minimum_dist_idx])
 
         ground_truth_point = ground_truth_positions[ground_truth_idx]
-        mininum_dist = dists_to_ground_truth[ground_truth_to_estimated_dst_idx[ground_truth_idx][0]]
+        mininum_dist = ground_truth_to_estimated_dst_idx[ground_truth_idx][0]
         minimum_dist_point = estimated_positions_pruned[ground_truth_to_estimated_dst_idx[ground_truth_idx][1]]
 
         # find the false positive indices
