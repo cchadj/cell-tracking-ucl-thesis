@@ -122,7 +122,9 @@ def estimate_cell_positions_from_probability_map(
         region_coord_select_mode=RegionCoordSelectMode.MAX_INTENSITY_PIXEL,
         region_max_threshold=.75,
         sigma=1,
-        visualise_intermediate_results=False):
+        visualise_intermediate_results=False,
+        s=15
+):
     assert 0.1 <= extended_maxima_h <= 0.9, f'Extended maxima h must be between .1 and .9 not {extended_maxima_h}'
     from skimage.filters import gaussian
     from skimage import measure
@@ -160,7 +162,7 @@ def estimate_cell_positions_from_probability_map(
     estimated_cell_positions = estimated_cell_positions[:i]
 
     if visualise_intermediate_results:
-        fig, axes = plt.subplots(1, 4, figsize=(60, 60))
+        fig, axes = plt.subplots(1, 5, figsize=(60, 60))
         fig_size = fig.get_size_inches()
         fig.set_size_inches((fig_size[0] * 5,
                              fig_size[1] * 5))
@@ -185,7 +187,7 @@ def estimate_cell_positions_from_probability_map(
             pm_extended_max_bw[region.coords] = 0
 
         axes[4].imshow(pm_extended_max_bw)
-        axes[4].scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=4,
+        axes[4].scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=s,
                         label='estimated locations')
         axes[4].legend()
 
