@@ -130,6 +130,8 @@ def get_video_sessions(marked=False,
     uids = []
     for video_filename in unmarked_video_oa790_filenames:
         vs = VideoSession(video_filename, load_vessel_mask_from_file=load_vessel_mask_from_file)
+        if load_vessel_mask_from_file:
+            vs.load_vessel_masks()
 
         # every video session has a unique uid, make sure only one object created per unique video session
         if vs.uid in uids:

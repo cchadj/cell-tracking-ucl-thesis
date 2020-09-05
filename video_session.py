@@ -633,7 +633,7 @@ class VideoSession(object):
 
         return np.bool8(vessel_mask)
 
-    def load_vessel_masks(self, v):
+    def load_vessel_masks(self, v=False):
         try:
             self.vessel_mask_oa790 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa790_file)
             if v:
