@@ -287,7 +287,9 @@ class SessionClassifier:
     def __init__(self, video_session, model,
                  patch_size=21,
                  temporal_width=0,
+
                  mixed_channels=False,
+                 drop_confocal=False,
 
                  standardise=True,
                  to_grayscale=False,
@@ -296,6 +298,9 @@ class SessionClassifier:
                  negative_extraction_mode=SessionPatchExtractor.CIRCLE,
                  ):
         from copy import deepcopy
+
+        if drop_confocal:
+            assert mixed_channels, f'Drop confocal option should only be used with mixed channel option '
 
         self.model = deepcopy(model)
         self.model = self.model.eval()
@@ -308,8 +313,10 @@ class SessionClassifier:
         self._mixed_channels = False
         self._temporal_width = 0
 
-        self.mixed_channels = mixed_channels
         self.temporal_width = temporal_width
+
+        self.mixed_channels = mixed_channels
+        self.drop_confocal = drop_confocal
 
         self.result_evalutations = {}
         self.probability_maps = {}
@@ -349,6 +356,10 @@ class SessionClassifier:
             else:
                 cell_patches = self.patch_extractor.cell_patches_oa790_at_frame[frame_idx]
                 non_cell_patches = self.patch_extractor.non_cell_patches_oa790_at_frame[frame_idx]
+
+        if self.drop_confocal:
+            cell_patches = cell_patches[..., 1:]
+            non_cell_patches = non_cell_patches[..., 1:]
 
         dataset = LabeledImageDataset(
             np.concatenate((cell_patches, non_cell_patches), axis=0),
