@@ -59,7 +59,7 @@ all_video_files = [f for f in all_files if f.lower().endswith(video_file_extensi
 all_csv_files = [f for f in all_files if f.lower().endswith(csv_file_extensions)]
 all_image_files = [f for f in all_files if f.lower().endswith(image_file_extensions)]
 
-# unmarked videos. Must not have '_marked' or 'mask' in them.
+# unmarked videos. Must not have '_marked' or '_mask' in them.
 all_video_files_unmarked = [f for f in all_video_files if
                             '_marked' not in basename(f).lower() and '_mask' not in basename(f)]
 

@@ -110,6 +110,24 @@ class VideoSession(object):
         self._vessel_mask_oa850 = None
         self._vessel_mask_confocal = None
 
+    def save_vessel_masks(self, v=False):
+        import PIL.Image
+
+        output_file_name = f'{os.path.splitext(self.video_oa790_file)[0]}_vessel_mask.png'
+        PIL.Image.fromarray(np.uint8(self.vessel_mask_oa790 * 255)).save(output_file_name)
+        if v:
+            print('saved: ', output_file_name)
+
+        output_file_name = f'{os.path.splitext(self.video_oa850_file)[0]}_vessel_mask.png'
+        PIL.Image.fromarray(np.uint8(self.vessel_mask_oa850 * 255)).save(output_file_name)
+        if v:
+            print('saved: ', output_file_name)
+
+        output_file_name = f'{os.path.splitext(self.video_confocal_file)[0]}_vessel_mask.png'
+        PIL.Image.fromarray(np.uint8(self.vessel_mask_confocal * 255)).save(output_file_name)
+        if v:
+            print('saved: ', output_file_name)
+
     @staticmethod
     def _write_video(frames, filename, fps=24):
         import os
@@ -615,6 +633,31 @@ class VideoSession(object):
 
         return np.bool8(vessel_mask)
 
+    def load_vessel_masks(self, v):
+        try:
+            self.vessel_mask_oa790 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa790_file)
+            if v:
+                print('Loaded', self.vessel_mask_oa790_file)
+        except:
+            if v:
+                print('No vessel mask for oa790nm channel found')
+
+        try:
+            self.vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
+            if v:
+                print('Loaded', self.vessel_mask_oa850_file)
+        except:
+            if v:
+                print('No vessel mask for oa850nm channel found')
+
+        try:
+            self.vessel_mask_confocal = VideoSession._vessel_mask_from_file(self.vessel_mask_confocal_file)
+            if v:
+                print('Loaded', self.vessel_mask_confocal_file)
+        except:
+            if v:
+                print('No vessel mask for confocal video found')
+
     @property
     def vessel_mask_oa790(self):
         from vesseldetection import create_vessel_mask_from_frames
@@ -627,7 +670,10 @@ class VideoSession(object):
 
     @vessel_mask_oa790.setter
     def vessel_mask_oa790(self, val):
-        self._vessel_mask_oa790 = val
+        if len(val.shape) == 3:
+            val = val[..., 0]
+        self._vessel_mask_oa790 = np.bool8(val)
+
         self._vessel_masked_frames_oa790 = None
         self._fully_masked_frames_oa790 = None
 
@@ -646,7 +692,10 @@ class VideoSession(object):
 
     @vessel_mask_oa850.setter
     def vessel_mask_oa850(self, val):
-        self._vessel_mask_oa850 = val
+        if len(val.shape) == 3:
+            val = val[..., 0]
+
+        self._vessel_mask_oa850 = np.bool8(val)
         self._vessel_masked_frames_oa850 = None
         self._fully_masked_frames_oa850 = None
 
@@ -665,7 +714,10 @@ class VideoSession(object):
 
     @vessel_mask_confocal.setter
     def vessel_mask_confocal(self, val):
-        self._vessel_mask_confocal = val
+        if len(val.shape) == 3:
+            val = val[..., 0]
+
+        self._vessel_mask_confocal = np.bool8(val)
         self._vessel_masked_frames_confocal = None
         self._fully_masked_frames_confocal = None
 
