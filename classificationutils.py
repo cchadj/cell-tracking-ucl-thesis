@@ -141,8 +141,10 @@ def estimate_cell_positions_from_probability_map(
     region_props = measure.regionprops(labeled_img, intensity_image=pm_blurred)
     estimated_cell_positions = np.empty((len(region_props), 2))
     i = 0
-    for region in region_props:
+    culled_regions = []
+    for region_idx, region in enumerate(region_props):
         if region.max_intensity <= region_max_threshold:
+            culled_regions.append(region_idx)
             continue
 
         if region_coord_select_mode is RegionCoordSelectMode.MAX_INTENSITY_PIXEL:
@@ -158,12 +160,12 @@ def estimate_cell_positions_from_probability_map(
     estimated_cell_positions = estimated_cell_positions[:i]
 
     if visualise_intermediate_results:
-        fig, axes = plt.subplots(1, 3)
+        fig, axes = plt.subplots(1, 4, figsize=(60, 60))
         fig_size = fig.get_size_inches()
         fig.set_size_inches((fig_size[0] * 5,
                              fig_size[1] * 5))
 
-        axes[0].imshow(probability_map)
+        axes[0].imshow(probability_map, cmap='jet')
         axes[0].set_title('Unprocessed probability map')
 
         axes[1].imshow(pm_blurred)
@@ -171,9 +173,21 @@ def estimate_cell_positions_from_probability_map(
 
         axes[2].imshow(pm_extended_max_bw)
         axes[2].set_title(f'Extended maximum, H={extended_maxima_h}')
-        axes[2].scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=4,
+
+        axes[3].imshow(pm_extended_max_bw)
+        axes[3].set_title(f'Culling regions with max intensity <= {region_max_threshold}')
+        for region_idx in culled_regions:
+            region = region_props[region_idx]
+            minr, minc, maxr, maxc = region.bbox
+            bx = (minc, maxc, maxc, minc, minc)
+            by = (minr, minr, maxr, maxr, minr)
+            axes[3].plot(bx, by, '-b', linewidth=2.5)
+            pm_extended_max_bw[region.coords] = 0
+
+        axes[4].imshow(pm_extended_max_bw)
+        axes[4].scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=4,
                         label='estimated locations')
-        axes[2].legend()
+        axes[4].legend()
 
     return estimated_cell_positions[1:, ...].astype(np.int32)
 
