@@ -341,7 +341,7 @@ class EvaluationResults:
         ax.scatter(self.true_positive_points[:, 0], self.true_positive_points[:, 1],
                    c='green', s=200, label='True positive points')
 
-        ax.set_title(f"Dice's Coefficient {self.dice:.3f}.\n"
+        ax.set_title(f"Dice Coefficient {self.dice:.3f}.\n"
                      f'Distance between ground truth point and estimated point must be less than {self.distance_for_true_positive:.3f} to be TP.\n'
                      f'Mean true positive distance {self.true_positive_dists.mean():3f}\n'
                      f'True positive rate {self.true_positive_rate:3f}.\n'
