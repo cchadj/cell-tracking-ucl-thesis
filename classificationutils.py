@@ -176,14 +176,14 @@ def estimate_cell_positions_from_probability_map(
         axes[2].imshow(pm_extended_max_bw)
         axes[2].set_title(f'Extended maximum, H={extended_maxima_h}')
 
-        axes[3].imshow(pm_extended_max_bw)
+        axes[3].imshow(pm_extended_max_bw * pm_blurred)
         axes[3].set_title(f'Culling regions with max intensity <= {region_max_threshold}')
         for region_idx in culled_regions:
             region = region_props[region_idx]
             minr, minc, maxr, maxc = region.bbox
             bx = (minc, maxc, maxc, minc, minc)
             by = (minr, minr, maxr, maxr, minr)
-            axes[3].plot(bx, by, '-b', linewidth=2.5)
+            axes[3].plot(bx, by, '-b', linewidth=3.5)
             pm_extended_max_bw[region.coords] = 0
 
         axes[4].imshow(pm_extended_max_bw)
