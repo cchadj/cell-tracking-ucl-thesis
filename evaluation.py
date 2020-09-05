@@ -192,21 +192,31 @@ def evaluate_results(ground_truth_positions,
         del ground_truth_to_estimated_dst_idx[ground_truth_idx]
 
     # The remaining entries are true positives.
+    # Only the cells with the smallest distance are considered a true positive.
     n_true_positives = len(ground_truth_to_estimated_dst_idx)
     assert n_true_positives == len(true_positive_points)
 
-    n_false_positives_unmatched_predictions = len(estimated_positions_pruned) - len(ground_truth_to_estimated_dst_idx)
+    # Automatically detected cells that are not matched to a ground truth cell are considered false positives
+    # see cunefare cnn paper
+    n_false_positives_unmatched_estimations = len(estimated_positions_pruned) - len(ground_truth_to_estimated_dst_idx)
     n_false_positives = n_false_positives_duplicates + n_false_positives_too_much_distance
-    assert n_false_positives_unmatched_predictions == n_false_positives
+    assert n_false_positives_unmatched_estimations == n_false_positives,\
+        f'The number of unmatched estimated points {n_false_positives_unmatched_estimations} should be the same as the ' \
+        f'number of duplicates {n_false_positives_duplicates} and number of points that are too far away from the ground '\
+        f'truth point {n_false_positives_too_much_distance}'
     assert n_false_positives == len(false_positive_points)
 
+    # manually marked cells that do not have a matching automatically detected cell are considered as false negatives
+    # see cunefare cnn paper
     n_false_negatives = len(ground_truth_positions_pruned) - len(ground_truth_to_estimated_dst_idx)
 
     n_manual = len(ground_truth_positions_pruned)
     n_automatic = len(estimated_positions_pruned)
 
-    assert n_manual == n_true_positives + n_false_negatives
-    assert n_automatic == n_true_positives + n_false_positives_unmatched_predictions
+    assert n_manual == n_true_positives + n_false_negatives, f'Number of ground truth positions {n_manual} should be same' \
+                                                             f'as number of true positives {n_true_positives} + ' \
+                                                             f'number of false negatives {n_false_negatives} '
+    assert n_automatic == n_true_positives + n_false_positives_unmatched_estimations
 
     true_positive_rate = n_true_positives / n_manual
     false_discovery_rate = n_false_positives / n_automatic
@@ -234,6 +244,7 @@ def evaluate_results(ground_truth_positions,
 
         n_true_positives=n_true_positives,
         n_false_positives=n_false_positives,
+        n_false_negatives=n_false_negatives,
 
         true_positive_dists=true_positive_dists,
         false_positive_dists=false_positive_dists,
@@ -257,7 +268,7 @@ class EvaluationResults:
                  false_discovery_rate, true_positive_dists,
                  false_positive_dists, true_positive_points,
                  false_positive_points, estimated_positions,
-                 n_true_positives=None, n_false_positives=None,
+                 n_true_positives=None, n_false_positives=None, n_false_negatives=None,
                  ):
         self.extended_maxima_h = None
         self.region_max_threshold = None
@@ -265,6 +276,7 @@ class EvaluationResults:
         self.probability_map = None
 
         self.n_true_positives = n_true_positives
+        self.n_false_negatives = n_false_negatives
         self.n_false_positives = n_false_positives
 
         self.image = image
@@ -332,8 +344,8 @@ class EvaluationResults:
         ax.set_title(f"Dice's Coefficient {self.dice:.3f}.\n"
                      f'Distance between ground truth point and estimated point must be less than {self.distance_for_true_positive:.3f} to be TP.\n'
                      f'Mean true positive distance {self.true_positive_dists.mean():3f}\n'
-                     f'True positive Rate {self.true_positive_rate:3f}.\n'
-                     f'False positive Rate {self.false_discovery_rate:3f}.\n')
+                     f'True positive rate {self.true_positive_rate:3f}.\n'
+                     f'False discovery rate {self.false_discovery_rate:3f}.\n')
         ax.legend()
 
     def save(self, filename, v=False):
