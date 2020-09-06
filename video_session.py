@@ -264,8 +264,6 @@ class VideoSession(object):
         axes[2].set_title('Registered vessel mask oa850', pad=25)
 
         vessel_mask_oa790 = self.vessel_mask_oa790.copy()
-        print(vessel_mask_oa790.shape)
-        print(self.image_registrator.vertical_displacement)
         vessel_mask_oa790[:self.image_registrator.vertical_displacement, :] = 0
         overlay_mask[..., 0] = vessel_mask_oa790
         overlay_mask[..., 1] = self.registered_vessel_mask_oa850

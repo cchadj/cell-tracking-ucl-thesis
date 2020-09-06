@@ -526,7 +526,7 @@ class SessionPatchExtractor(object):
                 mask = self.session.mask_frames_oa790[frame_idx]
                 if self.use_vessel_mask:
                     # We erode the vessel mask to pick negatives that are mostly perpendicular to the direction of the flow
-                    erosion_iterations = 5
+                    erosion_iterations = 3
                     vessel_mask = self.session.vessel_mask_oa790
                     for _ in range(erosion_iterations):
                         vessel_mask = binary_erosion(vessel_mask)
