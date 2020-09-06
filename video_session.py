@@ -6,10 +6,14 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 from os.path import basename
+
+from imageprosessing import ImageRegistrator
 from videoutils import get_frames_from_video
 
 
 class VideoSession(object):
+    _image_registrator: ImageRegistrator
+
     def __init__(self, video_filename, load_vessel_mask_from_file=True):
         from sharedvariables import find_filename_of_same_source, files_of_same_source
         from sharedvariables import marked_video_oa790_files, marked_video_oa850_files
@@ -200,35 +204,38 @@ class VideoSession(object):
 
     @property
     def registered_frames_oa850(self):
-        from imageprosessing import ImageRegistrator
-        from IPython.display import display, clear_output
         if self._registered_frames_oa850 is None:
-            ir = ImageRegistrator(source=self.vessel_mask_oa850, target=self.vessel_mask_oa790)
-            ir.register_vertically()
-
-            self._image_registrator = ir
-
+            ir: ImageRegistrator = self.image_registrator
             self._registered_frames_oa850 = np.empty_like(self.frames_oa850)
-            self._registered_mask_frames_oa850 = np.empty_like(self.mask_frames_oa850)
-            self._registered_vessel_mask_oa850 = ir.apply_registration(self.vessel_mask_oa850).astype(np.bool8)
-
-            for i, (frame, mask) in enumerate(zip(self.frames_oa850, self.mask_frames_oa850)):
+            for i, frame in enumerate(self.frames_oa850):
                 self._registered_frames_oa850[i] = ir.apply_registration(frame)
-                self._registered_mask_frames_oa850[i] = ir.apply_registration(mask)
 
         return self._registered_frames_oa850
 
     @property
     def registered_mask_frames_oa850(self):
+        from imageprosessing import ImageRegistrator
         if self._registered_mask_frames_oa850 is None:
-            tmp = self.registered_frames_oa850
+            self._registered_mask_frames_oa850 = np.empty_like(self.mask_frames_oa850)
+            ir: ImageRegistrator = self.image_registrator
+            for i, mask in enumerate(self.mask_frames_oa850):
+                self._registered_mask_frames_oa850[i] = ir.apply_registration(mask)
         return self._registered_mask_frames_oa850
 
     @property
     def registered_vessel_mask_oa850(self):
+        from imageprosessing import ImageRegistrator
         if self._registered_vessel_mask_oa850 is None:
-            tmp = self.registered_frames_oa850
+            ir: ImageRegistrator = self.image_registrator
+            self._registered_vessel_mask_oa850 = ir.apply_registration(self.vessel_mask_oa850).astype(np.bool8)
         return self._registered_vessel_mask_oa850
+
+    @property
+    def image_registrator(self) -> ImageRegistrator:
+        if self._image_registrator is None:
+            self._image_registrator = ImageRegistrator(source=self.vessel_mask_oa850, target=self.vessel_mask_oa790)
+            self._image_registrator.register_vertically()
+        return self._image_registrator
 
     def visualize_registration(self, figsize=(120, 150),
                                linewidth=15, linestyle='--',
@@ -257,7 +264,9 @@ class VideoSession(object):
         axes[2].set_title('Registered vessel mask oa850', pad=25)
 
         vessel_mask_oa790 = self.vessel_mask_oa790.copy()
-        vessel_mask_oa790[:self._image_registrator.vertical_displacement, :] = 0
+        print(vessel_mask_oa790.shape)
+        print(self.image_registrator.vertical_displacement)
+        vessel_mask_oa790[:self.image_registrator.vertical_displacement, :] = 0
         overlay_mask[..., 0] = vessel_mask_oa790
         overlay_mask[..., 1] = self.registered_vessel_mask_oa850
 
@@ -269,9 +278,9 @@ class VideoSession(object):
         fig.canvas.draw()
         transFigure = fig.transFigure.inverted()
 
-        coord1 = transFigure.transform(axes[0].transData.transform([0, self._image_registrator.vertical_displacement]))
+        coord1 = transFigure.transform(axes[0].transData.transform([0, self.image_registrator.vertical_displacement]))
         coord2 = transFigure.transform(
-            axes[2].transData.transform([self.vessel_mask_oa850.shape[-1], self._image_registrator.vertical_displacement]))
+            axes[2].transData.transform([self.vessel_mask_oa850.shape[-1], self.image_registrator.vertical_displacement]))
 
         line = matplotlib.lines.Line2D((coord1[0], coord2[0]), (coord1[1], coord2[1]),
                                        transform=fig.transFigure, linewidth=linewidth, linestyle=linestyle)
@@ -677,6 +686,8 @@ class VideoSession(object):
         self._vessel_masked_frames_oa790 = None
         self._fully_masked_frames_oa790 = None
 
+        self._image_registrator = None
+        self._registered_frames_oa850 = None
         self._registered_mask_frames_oa850 = None
         self._registered_vessel_mask_oa850 = None
 
@@ -685,6 +696,7 @@ class VideoSession(object):
         from vesseldetection import create_vessel_mask_from_frames
         if self._vessel_mask_oa850 is None:
             if not self.vessel_mask_oa850_file or not self.load_vessel_mask_from_file:
+                print('hello?')
                 self._vessel_mask_oa850 = create_vessel_mask_from_frames(self.masked_frames_oa850)
             else:
                 self._vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
@@ -694,11 +706,13 @@ class VideoSession(object):
     def vessel_mask_oa850(self, val):
         if len(val.shape) == 3:
             val = val[..., 0]
-
         self._vessel_mask_oa850 = np.bool8(val)
+
         self._vessel_masked_frames_oa850 = None
         self._fully_masked_frames_oa850 = None
 
+        self._image_registrator = None
+        self._registered_frames_oa850 = None
         self._registered_mask_frames_oa850 = None
         self._registered_vessel_mask_oa850 = None
 

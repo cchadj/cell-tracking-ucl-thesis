@@ -123,7 +123,8 @@ def estimate_cell_positions_from_probability_map(
         region_max_threshold=.75,
         sigma=1,
         visualise_intermediate_results=False,
-        s=15
+        s=215,
+        name='tmp'
 ):
     assert 0.1 <= extended_maxima_h <= 0.9, f'Extended maxima h must be between .1 and .9 not {extended_maxima_h}'
     from skimage.filters import gaussian
@@ -162,34 +163,45 @@ def estimate_cell_positions_from_probability_map(
     estimated_cell_positions = estimated_cell_positions[:i]
 
     if visualise_intermediate_results:
-        fig, axes = plt.subplots(1, 5, figsize=(60, 60))
-        fig_size = fig.get_size_inches()
-        fig.set_size_inches((fig_size[0] * 5,
-                             fig_size[1] * 5))
+        from plotutils import no_ticks, savefig_tight
 
-        axes[0].imshow(probability_map, cmap='jet')
-        axes[0].set_title('Unprocessed probability map')
+        figsize = (50, 35)
+        fontsize=65
+        plt.figure(figsize=figsize)
+        plt.imshow(probability_map, cmap='jet')
+        plt.title('Unprocessed probability map', fontsize=fontsize)
+        savefig_tight(f'{name}_1.png')
 
-        axes[1].imshow(pm_blurred)
-        axes[1].set_title(f'Gaussian Blurring with sigma={sigma}')
+        plt.figure(figsize=figsize)
+        plt.imshow(pm_blurred, cmap='jet')
+        plt.title(f'Gaussian Blur with sigma={sigma}', fontsize=fontsize)
+        savefig_tight(f'{name}_2.png')
 
-        axes[2].imshow(pm_extended_max_bw)
-        axes[2].set_title(f'Extended maximum, H={extended_maxima_h}')
+        plt.figure(figsize=figsize)
+        plt.imshow(pm_extended_max_bw)
+        plt.title(f'Extended maxima transform, H={extended_maxima_h}', fontsize=fontsize)
+        savefig_tight(f'{name}_3.png')
 
-        axes[3].imshow(pm_extended_max_bw * pm_blurred)
-        axes[3].set_title(f'Culling regions with max intensity <= {region_max_threshold}')
+        plt.figure(figsize=figsize)
+        plt.imshow(pm_extended_max_bw * pm_blurred, cmap='jet')
+        plt.title(f'Culling regions with max intensity <= {region_max_threshold}', fontsize=fontsize)
+        ax = plt.gca()
         for region_idx in culled_regions:
             region = region_props[region_idx]
             minr, minc, maxr, maxc = region.bbox
             bx = (minc, maxc, maxc, minc, minc)
             by = (minr, minr, maxr, maxr, minr)
-            axes[3].plot(bx, by, '-b', linewidth=3.5)
-            pm_extended_max_bw[region.coords] = 0
+            ax.plot(bx, by, '-r', linewidth=7.5)
+            pm_extended_max_bw[region.coords[:, 0], region.coords[:, 1]] = 0
+        savefig_tight(f'{name}_4.png')
 
-        axes[4].imshow(pm_extended_max_bw)
-        axes[4].scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=s,
-                        label='estimated locations')
-        axes[4].legend()
+        plt.figure(figsize=figsize)
+        plt.imshow(pm_extended_max_bw)
+        plt.scatter(estimated_cell_positions[:, 0], estimated_cell_positions[:, 1], s=s, edgecolors='b',
+                    label='estimated locations')
+        plt.title(f'Estimated locations. {str(region_coord_select_mode)}', fontsize=fontsize)
+        plt.legend(prop={'size': int(fontsize * .65)})
+        savefig_tight(f'{name}_5.png')
 
     return estimated_cell_positions[1:, ...].astype(np.int32)
 

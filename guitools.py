@@ -175,9 +175,12 @@ def scatter_plot_point_selector(points, ax=None, image=None):
 class CvGuiSelector(object):
     def __init__(self, window_name, image):
         self.window_name = window_name
-        self.image = image.copy()
-        self.empty_image = image.copy()
-        self.modified_image = image.copy()
+        self.image = np.uint8(image).copy()
+        self.modified_image = np.uint8(image).copy()
+        if len(self.modified_image.shape) == 2:
+            self.modified_image = self.modified_image[..., np.newaxis]
+            self.modified_image = np.concatenate((self.modified_image, self.modified_image, self.modified_image), axis=-1)
+        self.empty_image = self.modified_image.copy()
         self.points_selected = []
 
     def point_select(self, event, x, y, flags, param):
@@ -204,7 +207,7 @@ class CvGuiSelector(object):
 
 
 class CvPointSelector(CvGuiSelector):
-    def __init__(self, window_name, image, point_thickness=5):
+    def __init__(self, window_name, image, point_thickness):
         super(CvPointSelector, self).__init__(window_name, image)
         self.points_thickness = point_thickness
 
@@ -212,21 +215,22 @@ class CvPointSelector(CvGuiSelector):
         if event == cv2.EVENT_LBUTTONDOWN:
             refPt = [(x, y)]
             self.points_selected.append((x, y))
-            self.modified_image = cv2.circle(self.modified_image,
-                                             (x, y), radius=0, color=(0, 0, 255), thickness=self.points_thickness)
+            # modified_image = self.empty_image.copy()
+            # # for (x, y) in self.points_selected:
+            # #     modified_image = cv2.circle(modified_image,  (y, x), radius=0, color=(255, 0, 0), thickness=self.points_thickness)
+            # self.modified_image = modified_image
 
 
-class CvRoipolySelector(CvGuiSelector):
-    def __init__(self, window_name, image, point_thickness=5):
-        super(CvRoipolySelector, self).__init__(window_name, image)
+class CvRoipolySelector(CvPointSelector):
+    def __init__(self, window_name, image, point_thickness=5000):
+        super().__init__(window_name, image, point_thickness)
         self.points_thickness = point_thickness
         self._mask = np.zeros(self.image.shape[:2], dtype=np.uint8)
 
     def point_select(self, event, x, y, flags, param):
+        super().point_select(event, x, y, flags, param)
         if event == cv2.EVENT_LBUTTONDOWN:
             refPt = [(x, y)]
-            self.points_selected.append((x, y))
-            self.modified_image = cv2.circle(self.empty_image.copy(), (x, y), radius=0, color=(0, 0, 255), thickness=5)
             if len(self.points_selected) < 3:
                 self.modified_image = cv2.polylines(self.empty_image.copy(), np.int32([self.points_selected]), color=(0, 0, 255), isClosed=False)
             else:

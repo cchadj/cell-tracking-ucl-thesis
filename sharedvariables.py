@@ -11,16 +11,7 @@ def files_of_same_source(f1, f2):
     f1_split = f1.split('_')
     f2_split = f2.split('_')
 
-    are_files_of_same_source = True
-    for i, (s1, s2) in enumerate(zip(f1_split, f2_split)):
-        if i > 4:
-            break
-
-        if s1 != s2:
-            are_files_of_same_source = False
-            break
-
-    return are_files_of_same_source
+    return f1_split[5] == f2_split[5]
 
 
 DATA_FOLDER = os.path.join('.', 'data')
@@ -117,7 +108,8 @@ def find_filename_of_same_source(target_filename, filenames):
 def get_video_sessions(marked=False,
                        registered=False,
                        validation=False,
-                       load_vessel_mask_from_file=False,
+                       load_vessel_mask_from_file=True,
+                       v=False,
                        ):
     """ Get all video sessions
 
@@ -131,7 +123,7 @@ def get_video_sessions(marked=False,
     for video_filename in unmarked_video_oa790_filenames:
         vs = VideoSession(video_filename, load_vessel_mask_from_file=load_vessel_mask_from_file)
         if load_vessel_mask_from_file:
-            vs.load_vessel_masks()
+            vs.load_vessel_masks(v=v)
 
         # every video session has a unique uid, make sure only one object created per unique video session
         if vs.uid in uids:

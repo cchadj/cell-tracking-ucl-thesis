@@ -341,11 +341,7 @@ def extract_patches_at_positions(image,
     patch_count = 0
     for x, y in np.int32(positions):
         if not mask[y, x]:
-            from matplotlib import pyplot as plt
-            plt.imshow(mask)
-            plt.scatter(x, y)
             print('hmm why?')
-
             continue
         # Offset to adjust for padding
         x, y = x + padding_width, y + padding_height

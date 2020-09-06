@@ -21,6 +21,28 @@ def imhmaxima(I, H):
     return skimage.morphology.reconstruction((I - H), I).astype(dtype_orig)
 
 
+def equalize_adapt_hist_masked(frame, mask):
+    """
+
+    Args:
+        frame: Must be np.uint8
+        mask:  Must be same shape as frame
+
+    Returns:
+        Contrast enhanced image only in the part where it's  not masked
+    """
+    from patchextraction import get_mask_bounds
+    from skimage.exposure import equalize_adapthist
+
+    processed_frame = np.zeros_like(frame, dtype=np.float32)
+    x_min, x_max, y_min, y_max = get_mask_bounds(mask)
+    cropped_img = frame[y_min:y_max, x_min:x_max]
+    cropped_img = equalize_adapthist(cropped_img)
+    processed_frame[y_min:y_max, x_min:x_max] = cropped_img
+
+    return np.uint8(processed_frame * 255)
+
+
 def equalize_adapt_hist_stack(frames, masks=None):
     from patchextraction import get_mask_bounds
     from skimage.exposure import equalize_adapthist
