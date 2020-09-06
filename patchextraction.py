@@ -8,7 +8,8 @@ import matplotlib.patches
 import numpy as np
 import numbers
 
-from nearest_neighbors import get_nearest_neighbor, get_nearest_neighbor_distances
+from nearest_neighbors import get_nearest_neighbor
+from skimage.morphology import binary_erosion
 from plotutils import no_ticks
 
 
@@ -433,6 +434,7 @@ class SessionPatchExtractor(object):
 
         assert type(patch_size) is int or type(patch_size) is tuple
 
+        self.erosion_iterations = 2
         if type(patch_size) is tuple:
             self._patch_size = patch_size
         if type(patch_size) is int:
@@ -517,7 +519,6 @@ class SessionPatchExtractor(object):
 
     @property
     def non_cell_positions(self):
-        from skimage.morphology import binary_erosion
         if len(self._non_cell_positions) == 0:
             for frame_idx, frame_cell_positions in self.cell_positions.items():
                 if frame_idx >= len(self.session.mask_frames_oa790):
@@ -526,9 +527,8 @@ class SessionPatchExtractor(object):
                 mask = self.session.mask_frames_oa790[frame_idx]
                 if self.use_vessel_mask:
                     # We erode the vessel mask to pick negatives that are mostly perpendicular to the direction of the flow
-                    erosion_iterations = 3
                     vessel_mask = self.session.vessel_mask_oa790
-                    for _ in range(erosion_iterations):
+                    for _ in range(self.erosion_iterations):
                         vessel_mask = binary_erosion(vessel_mask)
                     mask = mask & vessel_mask
 
@@ -611,7 +611,10 @@ class SessionPatchExtractor(object):
             mask = np.ones_like(frame, dtype=np.bool8)
 
         if self.use_vessel_mask:
-            mask = mask & self.session.vessel_mask_oa790
+            vessel_mask = self.session.vessel_mask_oa790
+            for _ in range(self.erosion_iterations):
+                vessel_mask = binary_erosion(vessel_mask)
+            mask = mask & vessel_mask
 
         no_ticks(ax)
         ax.imshow(frame * mask, cmap='gray', vmin=0, vmax=255)
