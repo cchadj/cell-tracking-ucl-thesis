@@ -571,9 +571,12 @@ class SessionClassifier:
                 print(f'Saved {output_file}')
 
     @classmethod
-    def from_file(cls, file):
+    def from_file(cls, file, v=True):
         with open(file, 'rb') as input_file:
-            return pickle.load(input_file)
+            obj = pickle.load(input_file)
+            if v and obj:
+                print(f'Loaded from', file)
+            return obj
 
 
 if __name__ == '__main__':

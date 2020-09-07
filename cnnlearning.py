@@ -333,6 +333,8 @@ class TrainingTracker:
             results['train loss'] = f'{self.train_losses[self.epoch_count]:.1E}'
         if self.train_accuracies:
             results['train acc'] = self.train_accuracies[self.epoch_count]
+        if self.train_classification_results:
+            results['train balanced acc'] = self.train_classification_results[self.epoch_count].balanced_accuracy
         if self.train_positive_accuracies:
             results['train pos acc'] = self.train_positive_accuracies[self.epoch_count]
         if self.train_negative_accuracies:
@@ -342,6 +344,8 @@ class TrainingTracker:
             results['valid loss'] = f'{self.valid_losses[self.epoch_count]:.1E}'
         if self.valid_accuracies:
             results['valid acc'] = self.valid_accuracies[self.epoch_count]
+        if self.valid_classification_results:
+            results['valid balanced acc'] = self.valid_classification_results[self.epoch_count].balanced_accuracy
         if self.valid_positive_accuracies:
             results['valid pos acc'] = self.valid_positive_accuracies[self.epoch_count]
         if self.valid_negative_accuracies:
