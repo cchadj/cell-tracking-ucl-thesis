@@ -61,7 +61,7 @@ class ClassificationResults:
             'Sensitivity': self.positive_accuracy,
             'Specificity': self.negative_accuracy
         }
-        df = pd.DataFrame(data, columns=list(data.keys()))
+        df = pd.DataFrame(data, columns=list(data.keys()), index=[0])
 
         return df.__repr__()
 
