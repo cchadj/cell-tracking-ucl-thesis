@@ -82,8 +82,11 @@ def binarize_vessel_image(
         # Opening get's rid of small speckles or noisy vessel offshoots with small width.
         opening = cv2.morphologyEx(BW, cv2.MORPH_OPEN, opening_kernel)
 
+        opening = skimage.morphology.binary_dilation(opening)
+        opening = skimage.morphology.binary_dilation(opening)
+
         # Closing connects components connects unconnected components and fills small holes.
-        closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, closing_kernel)
+        closing = cv2.morphologyEx(np.uint8(opening), cv2.MORPH_CLOSE, closing_kernel)
 
         vessel_mask = closing[padding_size:-padding_size, padding_size:-padding_size]
         # Borders are usually problematic so we remove an amount of pixels

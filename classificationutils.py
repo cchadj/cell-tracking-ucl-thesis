@@ -18,6 +18,7 @@ from patchextraction import SessionPatchExtractor
 from video_session import VideoSession
 
 from enum import Enum, unique
+
 NEGATIVE_LABEL = 0
 POSITIVE_LABEL = 1
 
@@ -50,6 +51,19 @@ class ClassificationResults:
 
         self.n_positive = n_positive
         self.n_negative = n_negative
+
+    def __repr__(self):
+        import pandas as pd
+        pd.DataFrame()
+        data = {
+            'Balanced Accuracy': self.balanced_accuracy,
+            'Accuracy': self.accuracy,
+            'Sensitivity': self.positive_accuracy,
+            'Specificity': self.negative_accuracy
+        }
+        df = pd.DataFrame(data, columns=list(data.keys()))
+
+        return df.__repr__()
 
 
 @torch.no_grad()
@@ -166,7 +180,7 @@ def estimate_cell_positions_from_probability_map(
         from plotutils import no_ticks, savefig_tight
 
         figsize = (50, 35)
-        fontsize=65
+        fontsize = 65
         plt.figure(figsize=figsize)
         plt.imshow(probability_map, cmap='jet')
         plt.title('Unprocessed probability map', fontsize=fontsize)
@@ -438,11 +452,12 @@ class SessionClassifier:
         if grid_search:
             # If the frame is marked then we find the best sigma, H and T that maximise dice's coefficient
             assert self.session.is_marked and frame_idx in self.session.cell_positions, \
-                'Grid search option only works when the video has manual markings and the frame specificied: {frame_idx}'\
+                'Grid search option only works when the video has manual markings and the frame specificied: {frame_idx}' \
                 ' is marked.'
 
         if self.mixed_channels:
-            patches, mask = self.patch_extractor.all_mixed_channel_patches(frame_idx, ret_mask=True, **patch_extraction_kwargs)
+            patches, mask = self.patch_extractor.all_mixed_channel_patches(frame_idx, ret_mask=True,
+                                                                           **patch_extraction_kwargs)
             if self.drop_confocal:
                 patches = patches[..., 1:]
         else:

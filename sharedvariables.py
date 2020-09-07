@@ -105,8 +105,8 @@ def find_filename_of_same_source(target_filename, filenames):
     return ''
 
 
-def get_video_sessions(marked=False,
-                       registered=False,
+def get_video_sessions(marked=True,
+                       registered=True,
                        validation=False,
                        load_vessel_mask_from_file=True,
                        v=False,

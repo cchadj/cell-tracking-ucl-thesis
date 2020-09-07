@@ -694,7 +694,6 @@ class VideoSession(object):
         from vesseldetection import create_vessel_mask_from_frames
         if self._vessel_mask_oa850 is None:
             if not self.vessel_mask_oa850_file or not self.load_vessel_mask_from_file:
-                print('hello?')
                 self._vessel_mask_oa850 = create_vessel_mask_from_frames(self.masked_frames_oa850)
             else:
                 self._vessel_mask_oa850 = VideoSession._vessel_mask_from_file(self.vessel_mask_oa850_file)
