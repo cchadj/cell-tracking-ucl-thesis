@@ -88,6 +88,7 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
         labels = labels.to(device)
         ground_truth[c:c + len(labels)] = labels
 
+        print(images.shape)
         pred = model(images)
         pred = torch.nn.functional.softmax(pred, dim=1)
         output_probabilities[c:c + len(pred)] = pred
@@ -381,13 +382,10 @@ class SessionClassifier:
         from cnnlearning import LabeledImageDataset
 
         if frame_idx is None:
-            print('what')
-            print(self.temporal_width)
             if self.mixed_channels:
                 cell_patches = self.patch_extractor.mixed_channel_cell_patches
                 non_cell_patches = self.patch_extractor.mixed_channel_non_cell_patches
             elif self.temporal_width > 0:
-                print('hello')
                 cell_patches = self.patch_extractor.temporal_cell_patches_oa790
                 non_cell_patches = self.patch_extractor.temporal_non_cell_patches_oa790
             else:
@@ -408,8 +406,6 @@ class SessionClassifier:
             cell_patches = cell_patches[..., 1:]
             non_cell_patches = non_cell_patches[..., 1:]
 
-        print(cell_patches.shape)
-        print('Grayscale', self.to_grayscale)
         dataset = LabeledImageDataset(
             np.concatenate((cell_patches, non_cell_patches), axis=0),
             np.concatenate(
