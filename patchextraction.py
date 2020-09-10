@@ -526,7 +526,7 @@ class SessionPatchExtractor(object):
 
                 mask = self.session.mask_frames_oa790[frame_idx]
                 if self.use_vessel_mask:
-                    # We erode the vessel mask to pick negatives that are mostly perpendicular to the direction of the flow
+                    # We erode the vessel mask to pick negatives that are mostly parallel to the direction of the flow
                     vessel_mask = self.session.vessel_mask_oa790
                     for _ in range(self.erosion_iterations):
                         vessel_mask = binary_erosion(vessel_mask)
@@ -655,7 +655,7 @@ class SessionPatchExtractor(object):
                                          masks=self.session.mask_frames_oa790,
                                          **kwargs)
 
-    def visualize_temporal_patch_extraction(self, marked, **kwargs):
+    def visualize_temporal_patch_extraction(self, marked=True, **kwargs):
         assert self.temporal_width == 1, 'Visualising temporal patches only works when temporal width is 1'
         if marked:
             frames = self.session.marked_frames_oa790
@@ -1149,8 +1149,79 @@ class SessionPatchExtractor(object):
         tmp = self.temporal_marked_non_cell_patches_oa790
         return self._temporal_marked_non_cell_patches_oa790_at_frame
 
-    def all_temporal_patches_oa790(self, frame_idx):
-        raise NotImplemented
+    def all_temporal_patches(self, frame_idx,
+                             mask=None,
+                             use_frame_mask=True,
+                             use_vessel_mask=True,
+                             patch_size=None,
+                             ret_mask=False,
+                             padding=cv2.BORDER_REPLICATE,
+                             padding_value=None):
+        """ Extracts a patch for every pixel for the frame at frame index from the oa790nm channel frames.
+
+        A patch of patch_size x patch_size is extracted around every pixel of the image.
+        Image is padded so that pixels at the borders also have a patch.
+
+        Args:
+            frame_idx (int): The frame index  of the frame to extract the patches from.
+            mask :
+             A 2D boolean array with True for the pixels to extract patches from.
+             If None then all pixels are valid for patch extraction (unless use_frame_mask or use_vessel mask are True)
+            use_frame_mask (bool): Set True to use the frame mask provided by the masked video.
+            use_vessel_mask (bool): Set True to use the vessel mask for the oa790 video session.
+            patch_size (int|tuple): The extraction patch size.
+            padding: Padding mode for the image. Check opencvs padding modes.
+            padding_value:
+             The padding value in case cv2.BORDER_CONSTANT is used.
+             If None then uses the mean of the frame.
+            ret_mask (bool): If True returns the mask used
+
+        Returns:
+            Nx patch_size x patch_size (x C) Array of the patches extracted.
+            If no mask is used  then the number of patches extracted should be N = H * W  where H and W are the
+            height and width of the frame.
+        """
+        if self.temporal_width > 1:
+            raise NotImplementedError(f'Currently all temporal patches are extracted for temporal width 1, not {self.temporal_width}')
+
+        if patch_size is None:
+            patch_size = self.patch_size
+
+        if mask is None:
+            mask = np.ones(self.session.frames_oa790.shape[1:3], dtype=np.bool8)
+
+        if use_vessel_mask:
+            mask &= self.session.vessel_mask_oa790
+
+        if use_frame_mask:
+            mask &= self.session.mask_frames_oa790[frame_idx]
+
+        patches_frame_0 = extract_patches(self.session.frames_oa790[frame_idx-1],
+                                          mask=mask,
+                                          patch_size=patch_size,
+                                          padding=padding,
+                                          padding_value=padding_value)
+        patches_frame_1 = extract_patches(self.session.frames_oa790[frame_idx],
+                                          mask=mask,
+                                          patch_size=patch_size,
+                                          padding=padding,
+                                          padding_value=padding_value)
+        patches_frame_2 = extract_patches(self.session.frames_oa790[frame_idx+1],
+                                          mask=mask,
+                                          patch_size=patch_size,
+                                          padding=padding,
+                                          padding_value=padding_value)
+
+        patches = np.empty((*patches_frame_0.shape[:3], 3), dtype=np.uint8)
+
+        patches[..., 0] = patches_frame_0.squeeze()
+        patches[..., 1] = patches_frame_1.squeeze()
+        patches[..., 2] = patches_frame_2.squeeze()
+
+        if ret_mask:
+            return patches, mask
+        else:
+            return patches
 
     def _extract_mixed_channel_cell_patches(self,
                                             frames_oa790,

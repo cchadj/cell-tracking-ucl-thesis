@@ -7,23 +7,6 @@ import cv2
 from skimage import morphology, measure
 
 
-def create_average_and_stdev_image(frames, masks=None):
-    if masks is None:
-        masks = np.ones_like(frames, dtype=np.bool8)
-
-    summation = np.zeros(frames.shape[1:3], dtype=np.float64)
-    votes = np.zeros(frames.shape[1:3], dtype=np.float64)
-    for frame, mask in zip(frames, masks):
-        summation[mask] += frame[mask]
-        votes[mask] += 1
-
-    average_img = summation / votes
-
-    stdev_img = (summation - average_img) ** 2 / votes
-
-    return average_img, stdev_img
-
-
 def binarize_vessel_image(
         vessel_image,
         normalise_fangi=False,

@@ -381,10 +381,13 @@ class SessionClassifier:
         from cnnlearning import LabeledImageDataset
 
         if frame_idx is None:
+            print('what')
+            print(self.temporal_width)
             if self.mixed_channels:
                 cell_patches = self.patch_extractor.mixed_channel_cell_patches
                 non_cell_patches = self.patch_extractor.mixed_channel_non_cell_patches
             elif self.temporal_width > 0:
+                print('hello')
                 cell_patches = self.patch_extractor.temporal_cell_patches_oa790
                 non_cell_patches = self.patch_extractor.temporal_non_cell_patches_oa790
             else:
@@ -405,6 +408,8 @@ class SessionClassifier:
             cell_patches = cell_patches[..., 1:]
             non_cell_patches = non_cell_patches[..., 1:]
 
+        print(cell_patches.shape)
+        print('Grayscale', self.to_grayscale)
         dataset = LabeledImageDataset(
             np.concatenate((cell_patches, non_cell_patches), axis=0),
             np.concatenate(
@@ -460,6 +465,8 @@ class SessionClassifier:
                                                                            **patch_extraction_kwargs)
             if self.drop_confocal:
                 patches = patches[..., 1:]
+        elif self.temporal_width > 0:
+            patches, mask = self.patch_extractor.all_temporal_patches(frame_idx, ret_mask=True, **patch_extraction_kwargs)
         else:
             patches, mask = self.patch_extractor.all_patches_oa790(frame_idx, ret_mask=True, **patch_extraction_kwargs)
 
@@ -548,6 +555,7 @@ class SessionClassifier:
             raise MutualExclusiveArgumentsException(
                 'Temporal width > 0 can not work with mixed channels.'
                 'Set mixed channel to False first.')
+        self._temporal_width = width
 
     @property
     def mixed_channels(self):
