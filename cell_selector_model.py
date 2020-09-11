@@ -1,8 +1,6 @@
 from sharedvariables import *
 
 class CellSelectorModel:
-    video_session: VideoSession
-
     def __init__(self):
         '''
         Initializes the two members the class holds:
@@ -13,6 +11,7 @@ class CellSelectorModel:
         self.fileContent = ""
 
     def create_video_session(self, filename):
+        from video_session import VideoSession
         try:
             f = open(filename, 'r')
             f.close()

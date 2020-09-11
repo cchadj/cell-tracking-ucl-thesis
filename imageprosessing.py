@@ -446,9 +446,7 @@ class ImageRegistrator(object):
 
 
 class SessionPreprocessor(object):
-    from video_session import VideoSession
     preprocess_functions: List[Any]
-    session: VideoSession
 
     def __init__(self, session, preprocess_functions=None):
         if preprocess_functions is None:

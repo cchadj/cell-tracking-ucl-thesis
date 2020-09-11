@@ -16,7 +16,7 @@ from matplotlib.widgets import Button
 from matplotlib import widgets
 import tkinter as tk
 from tkinter import filedialog
-from sharedvariables import VideoSession
+from video_session import VideoSession
 
 # thanks to https://stackoverflow.com/questions/11551049/matplotlib-plot-zooming-with-scroll-wheel
 def zoom_factory(ax, base_scale=2.):

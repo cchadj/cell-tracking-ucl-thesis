@@ -88,7 +88,6 @@ def classify_labeled_dataset(dataset, model, device="cuda"):
         labels = labels.to(device)
         ground_truth[c:c + len(labels)] = labels
 
-        print(images.shape)
         pred = model(images)
         pred = torch.nn.functional.softmax(pred, dim=1)
         output_probabilities[c:c + len(pred)] = pred
@@ -515,26 +514,27 @@ class SessionClassifier:
             region_coord_select_mode=region_coord_select_mode,
         )
 
-        result_evaluation = evaluate_results(
-            ground_truth_positions=self.session.cell_positions[frame_idx],
-            estimated_positions=estimated_positions,
-            image=self.session.frames_oa790[self.session.validation_frame_idx],
-            mask=mask,
-            patch_size=self.patch_size)
+        if frame_idx in self.session.cell_positions:
+            result_evaluation = evaluate_results(
+                ground_truth_positions=self.session.cell_positions[frame_idx],
+                estimated_positions=estimated_positions,
+                image=self.session.frames_oa790[self.session.validation_frame_idx],
+                mask=mask,
+                patch_size=self.patch_size)
 
-        if len(dice_coefficients) == 0:
-            dice_coefficients = [result_evaluation.dice]
+            if len(dice_coefficients) == 0:
+                dice_coefficients = [result_evaluation.dice]
 
-        result_evaluation.all_sigmas = sigmas
-        result_evaluation.all_extended_maxima_hs = extended_maxima_hs
-        result_evaluation.all_region_max_thresholds = region_max_thresholds
-        result_evaluation.all_dice_coefficients = dice_coefficients
+            result_evaluation.all_sigmas = sigmas
+            result_evaluation.all_extended_maxima_hs = extended_maxima_hs
+            result_evaluation.all_region_max_thresholds = region_max_thresholds
+            result_evaluation.all_dice_coefficients = dice_coefficients
 
-        result_evaluation.probability_map = probability_map
-        result_evaluation.sigma = sigma
-        result_evaluation.extended_maxima_h = extended_maxima_h
-        result_evaluation.region_max_threshold = region_max_threshold
-        self.result_evaluations[frame_idx] = result_evaluation
+            result_evaluation.probability_map = probability_map
+            result_evaluation.sigma = sigma
+            result_evaluation.extended_maxima_h = extended_maxima_h
+            result_evaluation.region_max_threshold = region_max_threshold
+            self.result_evaluations[frame_idx] = result_evaluation
 
         self.estimated_locations[frame_idx] = estimated_positions
         self.probability_maps[frame_idx] = probability_map
@@ -581,7 +581,3 @@ class SessionClassifier:
             if v and obj:
                 print(f'Loaded from', file)
             return obj
-
-
-if __name__ == '__main__':
-    from generate_datasets import get_cell_and_no_cell_patches
