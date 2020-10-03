@@ -66,7 +66,7 @@ class MplFrameSelector(object):
         Args:
             frames: NxHxWxC, or NxHxW
             frame_indices:
-            cell_coordinates: dict, where points[frame_index] = Nx2. The cell positions for each frame.
+            cell_coordinates: dict, where points[frame_index] = Nx2. The cell points for each frame.
         """
         self.frames = frames
         self.frame_masks = frame_masks
@@ -298,19 +298,19 @@ def parse_arguments():
             if video_filename == "":
                 print('The retinal video is required. Please select video.')
 
-    # Get the csv with the bloodcell positions filename
+    # Get the csv with the bloodcell points filename
     csv_filename = ""
     try:
         csv_filename = args.coords[0].name
     except:
         root = tk.Tk()
         root.withdraw()
-        print('Select csv file with blood sell positions.')
+        print('Select csv file with blood sell points.')
         while csv_filename == "":
-            csv_filename = tk.filedialog.askopenfilename(title='Select csv file with blood cell positions',
+            csv_filename = tk.filedialog.askopenfilename(title='Select csv file with blood cell points',
                                                          filetypes=[('CSV files', ['*.txt', '*.csv'])])
             if csv_filename == "":
-                print('The csv file with the bloodcell positions is required. Please select csv.')
+                print('The csv file with the bloodcell points is required. Please select csv.')
 
     coordinates_df = pd.read_csv(csv_filename, sep=',')
     cell_positions = coordinates_df[['X', 'Y']].to_numpy()
@@ -354,7 +354,7 @@ def parse_arguments():
 
     frames = get_frames_from_video(video_filename)
 
-    # positions[frame_idx] will contain 2xN_cells_in_frame array for each frame
+    # points[frame_idx] will contain 2xN_cells_in_frame array for each frame
     cell_positions = {}
     [frame_idxs, idxs] = np.unique(frame_indices, return_index=True)
     for i in range(len(frame_idxs)):

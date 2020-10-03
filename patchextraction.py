@@ -7,10 +7,114 @@ import matplotlib.pyplot as plt
 import matplotlib.patches
 import numpy as np
 import numbers
+import enum
 
 from nearest_neighbors import get_nearest_neighbor
 from skimage.morphology import binary_erosion
 from plotutils import no_ticks
+
+from sklearn.neighbors import KDTree
+
+
+def get_parallel_points(points, distance):
+    new_points = []
+
+    _, nearest_points_idx = get_nearest_neighbor(points, k=2)
+
+    edges_idx = []
+    for idx, nearest_indices in enumerate(nearest_points_idx):
+        cur_point = points[idx]
+        nbr0_idx = nearest_indices[0]
+        nbr1_idx = nearest_indices[1]
+
+        if (idx, nbr0_idx) not in edges_idx:
+            edges_idx.append((idx, nbr0_idx))
+        if (idx, nbr1_idx) not in edges_idx:
+            edges_idx.append((idx, nbr1_idx))
+
+    for idx0, idx1 in edges_idx:
+        point0 = points[idx0]
+        point1 = points[idx1]
+
+        edge = point1 - point0
+        length = np.linalg.norm(edge)
+
+        normed_edge = edge / length
+
+        perp_edge0 = [edge[1], -edge[0]]
+        perp_edge0 = perp_edge0 / np.linalg.norm(perp_edge0)
+
+        perp_edge1 = [-edge[1], edge[0]]
+        perp_edge1 = perp_edge1 / np.linalg.norm(perp_edge1)
+
+        midpoint = point0 + normed_edge * length * .5
+
+        new_points.append(np.int32(midpoint + perp_edge0 * distance))
+        new_points.append(np.int32(point0 + perp_edge0 * distance))
+        new_points.append(np.int32(point1 + perp_edge0 * distance))
+
+        new_points.append(np.int32(midpoint + perp_edge1 * distance))
+        new_points.append(np.int32(point0 + perp_edge1 * distance))
+        new_points.append(np.int32(point1 + perp_edge1 * distance))
+
+    new_points = np.array(new_points).squeeze()
+    # remove duplicates
+    new_points = np.unique(new_points, axis=0)
+
+    kdtree = KDTree(new_points, metric='euclidean')
+    distances, nearest_points = kdtree.query(points)
+    # remove new points too close to original points
+    new_points = np.delete(new_points, np.where(distances < (distance * .9))[0], axis=0)
+
+    return new_points[:, 0], new_points[:, 1]
+
+
+def get_perpendicular_points(points, distance, npp=3):
+    new_points = []
+
+    _, nearest_points_idx = get_nearest_neighbor(points, k=2)
+
+    edges_idx = []
+    for idx, nearest_indices in enumerate(nearest_points_idx):
+        cur_point = points[idx]
+        nbr0_idx = nearest_indices[0]
+        nbr1_idx = nearest_indices[1]
+
+        if (idx, nbr0_idx) not in edges_idx:
+            edges_idx.append((idx, nbr0_idx))
+        if (idx, nbr1_idx) not in edges_idx:
+            edges_idx.append((idx, nbr1_idx))
+
+    for idx0, idx1 in edges_idx:
+        point0 = points[idx0]
+        point1 = points[idx1]
+
+        edge = point1 - point0
+        length = np.linalg.norm(edge)
+
+        normed_edge = edge / length
+
+        perp_edge1 = [-edge[1], edge[0]]
+        perp_edge1 = perp_edge1 / np.linalg.norm(perp_edge1)
+
+        midpoint = point0 + normed_edge * length * .5
+
+
+        distances = np.arange(-distance / 2, distance / 2, distance / npp)
+        #         print('hello?', distances)
+        for d in distances:
+            new_points.append(np.int32(midpoint + perp_edge1 * d))
+
+    new_points = np.array(new_points).squeeze()
+    # remove duplicates
+    new_points = np.unique(new_points, axis=0)
+
+    #     kdtree = kd_tree.KDTree(new_points, metric='euclidean')
+    #     distances, nearest_points = kdtree.query(points)
+    # remove new points too close to original points
+    #     new_points = np.delete(new_points, np.where(distances < (distance * .9))[0], axis=0)
+
+    return new_points[:, 0], new_points[:, 1]
 
 
 def get_random_points_on_circles(points, n_points_per_circle=1, max_radius=None, ret_radii=False):
@@ -283,13 +387,13 @@ def extract_patches_at_positions(image,
                                  padding='valid',
                                  mask=None,
                                  visualize_patches=False):
-    """ Extract patches from images at positions
+    """ Extract patches from images at points
 
     Arguments:
         image: HxW or HxWxC image
         mask: A boolean masks HxW (same height and width as image).
             Only patches inside the masks are extracted.
-        positions: shape:(2,) list of (x, y) positions. x left to right, y top to bottom
+        positions: shape:(2,) list of (x, y) points. x left to right, y top to bottom
         patch_size (tuple):  Size of each patch.
         padding:
             'valid' If you want only patches that are entirely inside the image.
@@ -393,12 +497,17 @@ def get_mask_bounds(mask):
     return x_min, x_max, y_min, y_max
 
 
+# Using enum class create enumerations
+class NegativeExtractionMode(enum.Enum):
+    RECTANGLE = 0
+    CIRCLE = 1
+    PARALLEL = 2
+    PERPENDICULAR = 3
+
+
 class SessionPatchExtractor(object):
     _non_cell_positions: Dict[int, np.ndarray]
     _temporal_width: int
-
-    RECTANGLE = 0
-    CIRCLE = 1
 
     TRAINING_MODE = 0
     VALIDATION_MODE = 1
@@ -410,7 +519,7 @@ class SessionPatchExtractor(object):
                  temporal_width=1,
 
                  n_negatives_per_positive=1,
-                 negative_extraction_mode=CIRCLE,
+                 negative_extraction_mode=NegativeExtractionMode.CIRCLE,
                  negative_patch_extraction_radius=21,
 
                  use_vessel_mask=False,
@@ -421,7 +530,6 @@ class SessionPatchExtractor(object):
         Args:
             session (VideoSession):  The video session to extract patches from
         """
-        assert negative_extraction_mode in [SessionPatchExtractor.RECTANGLE, SessionPatchExtractor.CIRCLE]
         assert extraction_mode in [SessionPatchExtractor.ALL_MODE, SessionPatchExtractor.VALIDATION_MODE,
                                    SessionPatchExtractor.TRAINING_MODE]
         self.session = session
@@ -534,10 +642,10 @@ class SessionPatchExtractor(object):
 
                 cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
 
-                if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
+                if repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.RECTANGLE):
                     rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                              n_points_per_rect=self.n_negatives_per_positive)
-                elif self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
+                elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.CIRCLE):
                     if len(frame_cell_positions) <= 2:
                         continue
 
@@ -547,6 +655,12 @@ class SessionPatchExtractor(object):
                                                                  ret_radii=True,
                                                                  )
                     self.frame_negative_search_radii[frame_idx] = radii
+                elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.PARALLEL):
+                    print('parallel')
+                    rx, ry = get_parallel_points(frame_cell_positions, self.patch_size[0])
+                elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.PERPENDICULAR):
+                    print('perpendicular')
+                    rx, ry = get_perpendicular_points(frame_cell_positions, self.patch_size[0] * .65, npp=10)
 
                 non_cell_positions = np.array([rx, ry]).T
                 non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
@@ -560,7 +674,7 @@ class SessionPatchExtractor(object):
                                     frame_idx_to_cell_patch_dict,
                                     frame_idx_to_non_cell_patch_dict, masks=None,
                                     frame_idx=None, ax=None, figsize=(50, 40), linewidth=3, s=60, annotate=False):
-        """ Shows the patch extraction on the first marked frame that has cell positions in it's csv.
+        """ Shows the patch extraction on the first marked frame that has cell points in it's csv.
 
         If in Validation mode then shows the validation frame and frame_idx is ignored.
         """
@@ -598,11 +712,15 @@ class SessionPatchExtractor(object):
         if self.extraction_mode == SessionPatchExtractor.ALL_MODE:
             mode_str = 'All'
 
-        shape_mode_str = ''
-        if self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
-            shape_mode_str = 'Circle negative search'
-        elif self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
-            shape_mode_str = 'Rectangle negative search'
+        negative_extraction_mode_str = ''
+        if self._negative_extraction_mode == NegativeExtractionMode.CIRCLE:
+            negative_extraction_mode_str = 'Circle negative search'
+        elif self._negative_extraction_mode == NegativeExtractionMode.RECTANGLE:
+            negative_extraction_mode_str = 'Rectangle negative search'
+        elif self._negative_extraction_mode == NegativeExtractionMode.PARALLEL:
+            negative_extraction_mode_str = 'Parallel negative search'
+        elif self._negative_extraction_mode == NegativeExtractionMode.PERPENDICULAR:
+            negative_extraction_mode_str = 'Perpendicular negative search'
 
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
@@ -618,26 +736,28 @@ class SessionPatchExtractor(object):
 
         no_ticks(ax)
         ax.imshow(frame * mask, cmap='gray', vmin=0, vmax=255)
-        ax.set_title(f'Frame {frame_idx}. {mode_str} mode. {shape_mode_str} ', fontsize=20)
+        ax.set_title(f'Frame {frame_idx}. {mode_str} mode. {negative_extraction_mode_str} ', fontsize=20)
 
         plot_patch_rois_at_positions(cell_positions, self.patch_size, ax=ax, annotate=annotate,
-                                     edgecolor='g', pointcolor='g', label='Cell positions', linewidth=linewidth)
+                                     edgecolor='g', pointcolor='g', label='Cell points', linewidth=linewidth)
 
         plot_patch_rois_at_positions(non_cell_positions, self.patch_size, ax=ax, label='Non cell patches',
                                      annotate=annotate, edgecolor=(1, 0, 0, .35), pointcolor='firebrick',
                                      linewidth=linewidth * 0.75)
 
-        if self._negative_extraction_mode == SessionPatchExtractor.RECTANGLE:
+        if self._negative_extraction_mode == NegativeExtractionMode.RECTANGLE:
             plot_patch_rois_at_positions(cell_positions, self.negative_patch_extraction_radius, ax=ax,
                                          label='Negative patch extraction radius', linestyle='--',
                                          edgecolor='r', pointcolor='gray', linewidth=linewidth)
-        elif self._negative_extraction_mode == SessionPatchExtractor.CIRCLE:
+        elif self._negative_extraction_mode == NegativeExtractionMode.CIRCLE:
             ax.scatter(non_cell_positions[..., 0], non_cell_positions[..., 1], c='r', s=s)
 
             for pos, r in zip(cell_positions, self.frame_negative_search_radii[frame_idx]):
                 cx, cy = pos
                 ax.add_artist(matplotlib.patches.Circle((cx, cy), r, fill=False, edgecolor='r', linewidth=linewidth,
                                                         linestyle='--'))
+        else:
+            ax.scatter(non_cell_positions[..., 0], non_cell_positions[..., 1], c='r', s=s)
 
         # plot_images_as_grid(cell_patches, title='Cell patches')
         # plot_images_as_grid(non_cell_patches, title='Non cell patches')
@@ -849,7 +969,7 @@ class SessionPatchExtractor(object):
                                   mask=None):
         _, frame_height, frame_width = self.session.frames_oa790.shape
 
-        # remove positions whose patches get outside the frame
+        # remove points whose patches get outside the frame
         positions = np.int32(positions)
         positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < 0)[0], axis=0)
         positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < 0)[0], axis=0)
@@ -861,13 +981,13 @@ class SessionPatchExtractor(object):
                               axis=0)
 
         if mask is not None and not np.all(mask):
-            # remove positions whose patches get outside the masks
+            # remove points whose patches get outside the masks
             x_min, x_max, y_min, y_max = get_mask_bounds(mask)
 
-            # delete positions that are outside the mask
+            # delete points that are outside the mask
             positions = np.delete(positions, np.where(~mask[positions[:, 1], positions[:, 0]])[0], axis=0)
 
-            # delete positions too close to the borders of the mask (since the mask is rectified it has borders)
+            # delete points too close to the borders of the mask (since the mask is rectified it has borders)
             positions = np.delete(positions, np.where(positions[:, 0] - np.ceil(self._patch_size[1] / 2) < x_min)[0],
                                   axis=0)
             positions = np.delete(positions, np.where(positions[:, 1] - np.ceil(self._patch_size[0] / 2) < y_min)[0],
@@ -880,11 +1000,11 @@ class SessionPatchExtractor(object):
         return positions
 
     def _extract_patches_at_positions(self, session_frames, positions, frame_idx_to_patch_dict=None, masks=None):
-        """ Extracts patches for each position and frame in positions dictionary
+        """ Extracts patches for each position and frame in points dictionary
 
         Args:
             session_frames: The frames to extract the patches from
-            positions: A DICTIONARY frame index -> N x 2  of positions per for frames at each frame index
+            positions: A DICTIONARY frame index -> N x 2  of points per for frames at each frame index
             frame_idx_to_patch_dict:
                 A dictionary to get the patches from that frame.
                 Pass an empty dictionary to fill.
@@ -1392,4 +1512,5 @@ if __name__ == '__main__':
     # plot_images_as_grid(patch_extractor.temporal_marked_cell_patches_oa790[:10])
     #
     # plot_images_as_grid(patch_extractor.temporal_non_cell_patches_oa790[:10], title='Temporal non cell patches temporal width 1')
+
     # plot_images_as_grid(patch_extractor.temporal_marked_non_cell_patches_oa790[:10])

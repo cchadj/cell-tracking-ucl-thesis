@@ -32,14 +32,14 @@ def evaluate_results(ground_truth_positions,
 
     Get dice's coefficient, true positive rate and false discovery rate.
     A true positive is when the distance of an estimated position to it's closest ground truth position is less
-    than d where d is .75 * median spacing of the ground truth positions.
+    than d where d is .75 * median spacing of the ground truth points.
 
     Args:
-        ground_truth_positions (np.array): (Nx2( The ground truth positions.
-        estimated_positions (np.array): The estimated positions.
+        ground_truth_positions (np.array): (Nx2( The ground truth points.
+        estimated_positions (np.array): The estimated points.
         image (np.array): The image the cells are in. Used to get the shape for pruning points that are too close to the border.
         patch_size (tuple):  The patch size that the cells are in. Used for pruning points that are too close to the border.
-        visualise_position_comparison (bool): If True  plots estimated positions superimposed on ground truth positions
+        visualise_position_comparison (bool): If True  plots estimated points superimposed on ground truth points
             over the image.
 
     Returns:
@@ -72,7 +72,7 @@ def evaluate_results(ground_truth_positions,
     # )
 
     if len(ground_truth_positions_pruned) == 0 or len(estimated_positions_pruned) == 0:
-        # return -1, -1, -1 for unexpected output. This happens when all positions are near borders.
+        # return -1, -1, -1 for unexpected output. This happens when all points are near borders.
         return -1, -1, -1
 
     median_spacing = np.mean(get_nearest_neighbor_distances(ground_truth_positions_pruned))
@@ -93,7 +93,7 @@ def evaluate_results(ground_truth_positions,
     # False Negatives:
     # Manually marked cones that did not have a matching automatically detected cone were considered as false negatives.
 
-    # The indices of the manual positions that are assigned to each predicted point
+    # The indices of the manual points that are assigned to each predicted point
     indices_of_closest_ground_truth = list(indices_of_closest_ground_truth.flatten())
 
     # The distance of each predicted point to it's closed manual position
@@ -103,11 +103,11 @@ def evaluate_results(ground_truth_positions,
     estimated_indices = list(np.arange(len(indices_of_closest_ground_truth)).flatten())
 
     # Sorting by indices_of_closest_ground_truth to identify duplicates where for one estimated, 2 ground truth
-    # positions
+    # points
     indices_of_closest_ground_truth, distances_to_closest_ground_truth, estimated_indices = zip(*sorted(
         zip(indices_of_closest_ground_truth, distances_to_closest_ground_truth, estimated_indices)))
 
-    # Create dictionary with the manual positions and it's matched predicted positions.
+    # Create dictionary with the manual points and it's matched predicted points.
     # The entries are of type ground_truth_to_estimated_idx_dst[ground_truth_idx] =>
     #                                                         ([dist_to_point_1, dist_to_point2, ...],
     #                                                          [estimated_idx_1, estimated_idx_2, ...])
@@ -140,18 +140,18 @@ def evaluate_results(ground_truth_positions,
     false_positive_points = np.empty((0, 2), dtype=np.int32)
     false_positive_dists = np.empty(0, dtype=np.float32)
 
-    # By now ground_truth_to_estimated_dst_idx, can have many predicted positions for each ground truth position.
+    # By now ground_truth_to_estimated_dst_idx, can have many predicted points for each ground truth position.
     # We keep the estimated position with the smallest distance.
     n_false_positives_duplicates = 0
     for ground_truth_idx in ground_truth_to_estimated_dst_idx.keys():
         dists_to_ground_truth = ground_truth_to_estimated_dst_idx[ground_truth_idx][0]
         matched_estimated_indices = ground_truth_to_estimated_dst_idx[ground_truth_idx][1]
 
-        # find the estimated positions that is closest to the ground truth, this index is relative to
+        # find the estimated points that is closest to the ground truth, this index is relative to
         # matched_estimated_indices and dists_to_ground_truth, not all points
         minimum_dist_idx = np.argmin(dists_to_ground_truth)
 
-        # if predicted positions that are matched to more than 1 ground truth position,
+        # if predicted points that are matched to more than 1 ground truth position,
         # then we increase the number of false positives by the number of extra estimations.
         n_false_positives_duplicates += len(matched_estimated_indices) - 1
 
@@ -213,7 +213,7 @@ def evaluate_results(ground_truth_positions,
     n_manual = len(ground_truth_positions_pruned)
     n_automatic = len(estimated_positions_pruned)
 
-    assert n_manual == n_true_positives + n_false_negatives, f'Number of ground truth positions {n_manual} should be same' \
+    assert n_manual == n_true_positives + n_false_negatives, f'Number of ground truth points {n_manual} should be same' \
                                                              f'as number of true positives {n_true_positives} + ' \
                                                              f'number of false negatives {n_false_negatives} '
     assert n_automatic == n_true_positives + n_false_positives_unmatched_estimations
@@ -316,7 +316,7 @@ class EvaluationResults:
             ax.imshow(self.probability_map * self.mask, cmap='hot', vmin=0, vmax=1)
 
         ax.scatter(self.ground_truth_positions[:, 0], self.ground_truth_positions[:, 1],
-                   c='blue', s=230, label='Ground truth positions')
+                   c='blue', s=230, label='Ground truth points')
 
         for point in self.ground_truth_positions:
             circ = Circle(point, self.distance_for_true_positive, fill=False, linestyle='--', color='blue')

@@ -189,8 +189,8 @@ def create_average_images(video_session, patch_size=51, sigma=1, average_all_fra
                                              registered_frame_oa850[..., None]), axis=-1)
     marked_frame_oa790 = cv2.cvtColor(marked_frame_oa790, cv2.COLOR_GRAY2RGB)
     # all_cell_positions = np.empty((0, 2), dtype=np.int32)
-    # for frame_idx, positions in vs.positions.items():
-    #     all_cell_positions = np.concatenate((all_cell_positions, positions), axis=0)
+    # for frame_idx, points in vs.points.items():
+    #     all_cell_positions = np.concatenate((all_cell_positions, points), axis=0)
 
     for x, y in vs.cell_positions[frame_idx]:
         marked_frame_oa790 = cv2.circle(marked_frame_oa790, (x, y), 1, (255, 0, 0))

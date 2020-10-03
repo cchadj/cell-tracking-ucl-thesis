@@ -142,7 +142,7 @@ class Ui_MainWindow(object):
         self.actionNew.setText(_translate("MainWindow", "New Video"))
         self.actionNew.setShortcut(_translate("MainWindow", "Ctrl+N"))
         self.actionSave.setText(_translate("MainWindow", "Save"))
-        self.actionSave.setStatusTip(_translate("MainWindow", "Save current selected cell positions."))
+        self.actionSave.setStatusTip(_translate("MainWindow", "Save current selected cell points."))
         self.actionSave.setShortcut(_translate("MainWindow", "Ctrl+S"))
         self.actionSave_As.setText(_translate("MainWindow", "Save As"))
         self.actionSave_As.setStatusTip(_translate("MainWindow", "Save file to a new location"))

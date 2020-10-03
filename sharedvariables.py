@@ -21,7 +21,7 @@ CACHED_DATASETS_FOLDER = os.path.join(CACHE_FOLDER, 'datasets')
 CACHED_DICE = os.path.join(CACHE_FOLDER, 'dice')
 
 OUTPUT_FOLDER = os.path.join('.', 'output')
-OUTPUT_ESTIMATED_POSITIONS_FOLDER = os.path.join(OUTPUT_FOLDER, 'estimated-positions')
+OUTPUT_ESTIMATED_POSITIONS_FOLDER = os.path.join(OUTPUT_FOLDER, 'estimated-points')
 
 # Set up file extensions here. All extensions must be lowercase.
 csv_file_extensions = ('.csv', '.txt')

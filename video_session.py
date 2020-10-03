@@ -9,6 +9,7 @@ from os.path import basename
 
 from imageprosessing import ImageRegistrator
 from videoutils import get_frames_from_video
+from collections import OrderedDict
 
 
 class VideoSession(object):
@@ -149,8 +150,11 @@ class VideoSession(object):
             vid_writer.write(frame)
         vid_writer.release()
 
-    def write_video_oa790(self, filename, fps=24):
-        VideoSession._write_video(self.frames_oa790, filename, fps)
+    def write_video_oa790(self, filename, fps=24, masked=False):
+        if masked:
+            VideoSession._write_video(self.frames_oa790 * self.vessel_mask_oa790, filename, fps)
+        else:
+            VideoSession._write_video(self.frames_oa790, filename, fps)
 
     def write_video_oa850(self, filename, fps=24):
         VideoSession._write_video(self.frames_oa850, filename, fps)
@@ -300,7 +304,7 @@ class VideoSession(object):
         self._frames_confocal = new_frames
 
     @staticmethod
-    def _rectify_mask_frames(masks):
+    def _rectify_mask_frames(masks, crop_left=0):
         """ Rectify masks so that they are square.
 
         The original masks shape is irregular which can cause some inconveniences and problems.
@@ -323,7 +327,7 @@ class VideoSession(object):
 
             # clip masks to make it have straight lines
             m = np.bool8(mask_padded)
-            m[:, :left_xs.max() + 15] = False
+            m[:, :left_xs.max() + crop_left] = False
             m[:, right_xs.min():] = 0
 
             # remove the borders
@@ -340,7 +344,8 @@ class VideoSession(object):
             if self.mask_video_oa790_file == '':
                 self.mask_frames_oa790 = np.ones_like(self.frames_oa790, dtype=np.bool8)
             else:
-                self.mask_frames_oa790 = get_frames_from_video(self.mask_video_oa790_file)[..., 0].astype(np.bool8)
+                self.mask_frames_oa790 = VideoSession._rectify_mask_frames(
+                    get_frames_from_video(self.mask_video_oa790_file)[..., 0].astype(np.bool8), crop_left=15)
 
         return self._mask_frames_oa790
 
@@ -360,7 +365,8 @@ class VideoSession(object):
             if self.mask_video_oa850_file == '':
                 self.mask_frames_oa850 = np.ones_like(self.frames_oa850, dtype=np.bool8)
             else:
-                self.mask_frames_oa850 = get_frames_from_video(self.mask_video_oa850_file)[..., 0].astype(np.bool8)
+                self.mask_frames_oa850 = VideoSession._rectify_mask_frames(
+                    get_frames_from_video(self.mask_video_oa850_file)[..., 0].astype(np.bool8), crop_left=15)
 
         return self._mask_frames_oa850
 
@@ -380,8 +386,9 @@ class VideoSession(object):
             if self.mask_video_confocal_file == '':
                 self.mask_frames_confocal = np.ones_like(self.frames_confocal, dtype=np.bool8)
             else:
-                self.mask_frames_confocal = get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(
-                    np.bool8)
+                self.mask_frames_confocal = VideoSession._rectify_mask_frames(
+                    get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(
+                    np.bool8), crop_left=15)
 
         return self._mask_frames_confocal
 
@@ -509,7 +516,7 @@ class VideoSession(object):
 
     @property
     def cell_position_csv_files(self):
-        """ Immutable list of filenames of the csvs with the cell positions.
+        """ Immutable list of filenames of the csvs with the cell points.
         """
         return self._cell_position_csv_files.copy()
 
@@ -537,6 +544,7 @@ class VideoSession(object):
 
             # warning overwriting coordinates in  frame_idx if already exist
             self._cell_positions[frame_idx] = curr_coordinates
+        self._cell_positions = OrderedDict(sorted(self._cell_positions.items()))
 
     @property
     def validation_frame_idx(self):
@@ -545,7 +553,7 @@ class VideoSession(object):
             max_positions_frame_idx = list(self.cell_positions.keys())[0]
 
             for frame_idx in self.cell_positions:
-                # find and assign the frame with the most cell positions as a validation frame.
+                # find and assign the frame with the most cell points as a validation frame.
 
                 # We don't want frame index to be the first frame for the usual case of temporal width 1.
                 # We also  want to have some distance from the last (in case of motion contrast enhanced frames)
@@ -588,7 +596,7 @@ class VideoSession(object):
             self._add_to_cell_positions(csv_file)
 
     def append_cell_position_csv_file(self, csv_file):
-        """ Adds cell positions from the csv file
+        """ Adds cell points from the csv file
         """
         self._cell_position_csv_files.append(csv_file)
         if len(self._cell_positions) == 0:
@@ -597,7 +605,7 @@ class VideoSession(object):
             self._add_to_cell_positions(csv_file)
 
     def pop_cell_position_csv_file(self, idx):
-        """ Remove the csv cell positions from the csv file at index idx
+        """ Remove the csv cell points from the csv file at index idx
         """
         self._cell_position_csv_files.pop(idx)
         if len(self._cell_positions) == 0:
@@ -606,7 +614,7 @@ class VideoSession(object):
             pass
 
     def remove_cell_position_csv_file(self, csv_file):
-        """ Remove the csv cell positions from the csv file at index idx
+        """ Remove the csv cell points from the csv file at index idx
         """
         self._cell_position_csv_files.remove(csv_file)
         if len(self._cell_positions) == 0:
@@ -616,16 +624,16 @@ class VideoSession(object):
 
     @property
     def cell_positions(self):
-        """ A dictionary with {frame index -> Nx2 x,y cell positions}.
+        """ A dictionary with {frame index -> Nx2 x,y cell points}.
 
-        Returns the positions of the blood cells as a dictionary indexed by the frame index as is in the csv file
-        but 0 indexed instead!. To get the first frame do  session.positions[0] instead of session.positions[1].
+        Returns the points of the blood cells as a dictionary indexed by the frame index as is in the csv file
+        but 0 indexed instead!. To get the first frame do  session.points[0] instead of session.points[1].
 
-        To access ith frame's cell positions do:
-        self.positions[i - 1]
+        To access ith frame's cell points do:
+        self.points[i - 1]
         """
         if len(self._cell_position_csv_files) == 0:
-            raise Exception(f"No csv found with cell positions for video session {basename(self.video_oa790_file)}")
+            raise Exception(f"No csv found with cell points for video session {basename(self.video_oa790_file)}")
 
         if len(self._cell_positions) == 0:
             self._initialise_cell_positions()

@@ -298,6 +298,7 @@ def enhance_motion_contrast_j_tam(frames, masks=None, sigma=0, adapt_hist=False)
     frames = gaussian_blur_stack(frames, sigma=sigma)
 
     frames = frames / 255
+    print('hey')
 
     # division frames
     penultimate_frame = frames[-3].copy()
@@ -457,6 +458,7 @@ class SessionPreprocessor(object):
 
     def _apply_preprocessing(self, masked_frames):
         masked_frames = masked_frames.copy()
+        print(self.preprocess_functions)
         for fun in self.preprocess_functions:
             masked_frames = fun(masked_frames)
         return masked_frames
@@ -469,6 +471,7 @@ class SessionPreprocessor(object):
         self.session.mask_frames_oa790 = ~masked_frames.mask
 
     def apply_preprocessing_to_oa850(self):
+        print('how')
         masked_frames = self._apply_preprocessing(self.session.masked_frames_oa850)
         if not np.ma.is_masked(masked_frames):
             masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa850.mask)
@@ -476,6 +479,7 @@ class SessionPreprocessor(object):
         self.session.mask_frames_oa850 = ~masked_frames.mask
 
     def apply_preprocessing_to_confocal(self):
+        print('what')
         masked_frames = self._apply_preprocessing(self.session.masked_frames_confocal)
         if not np.ma.is_masked(masked_frames):
             masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_confocal.mask)

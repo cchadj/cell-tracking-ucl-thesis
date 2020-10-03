@@ -10,7 +10,7 @@ def get_nearest_neighbor(points, k=1):
     # nbrs = NearestNeighbors(n_neighbors=2, algorithm='ball_tree').fit(points)
     # distances, indices = nbrs.kneighbors(points)
 
-    return distances[:, 1:], nearest_points[:, 1:]
+    return distances[:, 1:], nearest_points[:, 1:].squeeze()
 
 
 def get_nearest_neighbor_distances(points, k=1):

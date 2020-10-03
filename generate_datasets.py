@@ -11,7 +11,7 @@ import tqdm
 from imageprosessing import hist_match_images, center_crop_images
 from learningutils import LabeledImageDataset
 from sharedvariables import get_video_sessions, CACHED_DATASETS_FOLDER
-from patchextraction import SessionPatchExtractor
+from patchextraction import SessionPatchExtractor, NegativeExtractionMode
 
 import PIL
 import PIL.Image
@@ -39,7 +39,7 @@ def create_cell_and_no_cell_patches(
 
         mixed_channel_patches=False,
 
-        negative_extraction_mode=SessionPatchExtractor.CIRCLE,
+        negative_extraction_mode=NegativeExtractionMode.CIRCLE,
 
         negative_patch_search_radius=21,
         n_negatives_per_positive=1,
@@ -75,7 +75,7 @@ def create_cell_and_no_cell_patches(
     assert all([vs.has_marked_cells for vs in video_sessions]), 'Not all video sessions have marked cells.'
 
     if v:
-        print('Creating cell and no cell images from videos and cell positions csvs...')
+        print('Creating cell and no cell images from videos and cell points csvs...')
 
     for i, session in enumerate(tqdm.tqdm(video_sessions)):
         assert session.has_marked_video, 'Something went wrong.' \
