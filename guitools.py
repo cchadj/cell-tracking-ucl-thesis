@@ -164,7 +164,7 @@ def scatter_plot_point_selector(points, ax=None, image=None):
     fig = plt.gcf()
     if image is not None:
         ax.imshow(image, cmap='gray')
-    ax.set_title('Select positions to keep.')
+    ax.set_title('Select points to keep.')
 
     point_selector = MplScatterPlotPointSelector(points, fig_ax=(fig, ax))
     point_selector.activate()

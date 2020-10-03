@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 import torch
 from learningutils import ImageDataset
 
-from patchextraction import SessionPatchExtractor
+from patchextraction import SessionPatchExtractor, NegativeExtractionMode
 from video_session import VideoSession
 
 from enum import Enum, unique
@@ -154,7 +154,7 @@ def estimate_cell_positions_from_probability_map(
     pm_extended_max[pm_extended_max_bw] = 0
 
     # print(pm_extended_max)
-    # Notice, the positions from the csv is x,y. The result from the probability is y,x so we swap.
+    # Notice, the points from the csv is x,y. The result from the probability is y,x so we swap.
     region_props = measure.regionprops(labeled_img, intensity_image=pm_blurred)
     estimated_cell_positions = np.empty((len(region_props), 2))
     i = 0
@@ -337,7 +337,7 @@ class SessionClassifier:
                  to_grayscale=False,
 
                  n_negatives_per_positive=32,
-                 negative_extraction_mode=SessionPatchExtractor.CIRCLE,
+                 negative_extraction_mode=NegativeExtractionMode.CIRCLE,
                  use_vessel_mask=True,
                  ):
         from copy import deepcopy
