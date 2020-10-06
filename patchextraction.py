@@ -23,31 +23,31 @@ def get_parallel_points(points, distance):
 
     edges_idx = []
     for idx, nearest_indices in enumerate(nearest_points_idx):
-        cur_point = points[idx]
         nbr0_idx = nearest_indices[0]
-        nbr1_idx = nearest_indices[1]
 
         if (idx, nbr0_idx) not in edges_idx:
-            edges_idx.append((idx, nbr0_idx))
-        if (idx, nbr1_idx) not in edges_idx:
-            edges_idx.append((idx, nbr1_idx))
+            # edges are always (small_idx, big_idx) to facilitate the detection of duplicate edges
+            edges_idx.append((min(idx, nbr0_idx), max(idx, nbr0_idx)))
+
+    # remove edges added twice. For example if edge (0, 1) is added twice keep only one
+    edges_idx = list(set(edges_idx))
 
     for idx0, idx1 in edges_idx:
         point0 = points[idx0]
         point1 = points[idx1]
 
-        edge = point1 - point0
-        length = np.linalg.norm(edge)
+        edge_vector = point1 - point0
+        edge_length = np.linalg.norm(edge_vector)
 
-        normed_edge = edge / length
+        normed_edge = edge_vector / edge_length
 
-        perp_edge0 = [edge[1], -edge[0]]
+        perp_edge0 = [edge_vector[1], -edge_vector[0]]
         perp_edge0 = perp_edge0 / np.linalg.norm(perp_edge0)
 
-        perp_edge1 = [-edge[1], edge[0]]
+        perp_edge1 = [-edge_vector[1], edge_vector[0]]
         perp_edge1 = perp_edge1 / np.linalg.norm(perp_edge1)
 
-        midpoint = point0 + normed_edge * length * .5
+        midpoint = point0 + normed_edge * edge_length * .5
 
         new_points.append(np.int32(midpoint + perp_edge0 * distance))
         new_points.append(np.int32(point0 + perp_edge0 * distance))
@@ -61,10 +61,13 @@ def get_parallel_points(points, distance):
     # remove duplicates
     new_points = np.unique(new_points, axis=0)
 
-    kdtree = KDTree(new_points, metric='euclidean')
-    distances, nearest_points = kdtree.query(points)
+    kdtree = KDTree(points, metric='euclidean')
+    distances, nearest_points = kdtree.query(new_points)
+    distances = distances.squeeze()
+
     # remove new points too close to original points
-    new_points = np.delete(new_points, np.where(distances < (distance * .9))[0], axis=0)
+    distances = distances.squeeze()
+    new_points = np.delete(new_points, np.where(distances < distance * .8)[0], axis=0)
 
     return new_points[:, 0], new_points[:, 1]
 
@@ -76,14 +79,15 @@ def get_perpendicular_points(points, distance, npp=3):
 
     edges_idx = []
     for idx, nearest_indices in enumerate(nearest_points_idx):
-        cur_point = points[idx]
         nbr0_idx = nearest_indices[0]
-        nbr1_idx = nearest_indices[1]
 
         if (idx, nbr0_idx) not in edges_idx:
-            edges_idx.append((idx, nbr0_idx))
-        if (idx, nbr1_idx) not in edges_idx:
-            edges_idx.append((idx, nbr1_idx))
+            edges_idx.append((min(idx, nbr0_idx), max(idx, nbr0_idx)))
+            # edges are always (small_idx, big_idx) to facilitate the detection of duplicate edges
+
+    # remove edges added twice
+    edges_idx = list(set(edges_idx))
+    distances = np.arange(-distance, distance + 1, distance * 2 / npp)
 
     for idx0, idx1 in edges_idx:
         point0 = points[idx0]
@@ -99,9 +103,6 @@ def get_perpendicular_points(points, distance, npp=3):
 
         midpoint = point0 + normed_edge * length * .5
 
-
-        distances = np.arange(-distance / 2, distance / 2, distance / npp)
-        #         print('hello?', distances)
         for d in distances:
             new_points.append(np.int32(midpoint + perp_edge1 * d))
 
@@ -109,10 +110,19 @@ def get_perpendicular_points(points, distance, npp=3):
     # remove duplicates
     new_points = np.unique(new_points, axis=0)
 
-    #     kdtree = kd_tree.KDTree(new_points, metric='euclidean')
-    #     distances, nearest_points = kdtree.query(points)
+
+    kdtree = KDTree(points, metric='euclidean')
+    distances, nearest_points = kdtree.query(new_points)
+    distances = distances.squeeze()
     # remove new points too close to original points
-    #     new_points = np.delete(new_points, np.where(distances < (distance * .9))[0], axis=0)
+    distances = distances.squeeze()
+    new_points = np.delete(new_points, np.where(distances < np.mean(distances) - 4 * np.std(distances))[0], axis=0)
+
+    # Remove new points that are too close to each other
+    kdtree = KDTree(new_points, metric='euclidean')
+    distances, nearest_points = kdtree.query(new_points, k=2)
+    distances = distances[:, 1].squeeze()
+    new_points = np.delete(new_points, np.where(distances < np.mean(distances) - 2 * np.std(distances))[0], axis=0)
 
     return new_points[:, 0], new_points[:, 1]
 
@@ -498,7 +508,7 @@ def get_mask_bounds(mask):
 
 
 # Using enum class create enumerations
-class NegativeExtractionMode(enum.Enum):
+class NegativeExtractionMode(enum.IntEnum):
     RECTANGLE = 0
     CIRCLE = 1
     PARALLEL = 2
@@ -523,7 +533,9 @@ class SessionPatchExtractor(object):
                  negative_patch_extraction_radius=21,
 
                  use_vessel_mask=False,
-                 extraction_mode=ALL_MODE
+                 extraction_mode=ALL_MODE,
+
+                 v=False,
                  ):
         """
 
@@ -536,6 +548,7 @@ class SessionPatchExtractor(object):
         self._extraction_mode = extraction_mode
         self._negative_extraction_mode = negative_extraction_mode
 
+        self.v = v
         self.use_vessel_mask = use_vessel_mask
         self._cell_positions = {}
         self._non_cell_positions = {}
@@ -611,7 +624,7 @@ class SessionPatchExtractor(object):
         self._extraction_mode = mode
 
     @property
-    def cell_positions(self):
+    def cell_positions(self, v=False):
         if len(self._cell_positions) == 0:
             for frame_idx, frame_cell_positions in self.session.cell_positions.items():
                 if frame_idx >= len(self.session.mask_frames_oa790):
@@ -628,6 +641,8 @@ class SessionPatchExtractor(object):
     @property
     def non_cell_positions(self):
         if len(self._non_cell_positions) == 0:
+            if self.v:
+                print('Negative extraction mode, ', self._negative_extraction_mode)
             for frame_idx, frame_cell_positions in self.cell_positions.items():
                 if frame_idx >= len(self.session.mask_frames_oa790):
                     break
@@ -642,7 +657,7 @@ class SessionPatchExtractor(object):
 
                 cx, cy = frame_cell_positions[:, 0], frame_cell_positions[:, 1]
 
-                if repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.RECTANGLE):
+                if self._negative_extraction_mode == NegativeExtractionMode.RECTANGLE:
                     rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                              n_points_per_rect=self.n_negatives_per_positive)
                 elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.CIRCLE):
@@ -655,12 +670,10 @@ class SessionPatchExtractor(object):
                                                                  ret_radii=True,
                                                                  )
                     self.frame_negative_search_radii[frame_idx] = radii
-                elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.PARALLEL):
-                    print('parallel')
+                elif self._negative_extraction_mode == NegativeExtractionMode.PARALLEL:
                     rx, ry = get_parallel_points(frame_cell_positions, self.patch_size[0])
-                elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.PERPENDICULAR):
-                    print('perpendicular')
-                    rx, ry = get_perpendicular_points(frame_cell_positions, self.patch_size[0] * .65, npp=10)
+                elif self._negative_extraction_mode == NegativeExtractionMode.PERPENDICULAR:
+                    rx, ry = get_perpendicular_points(frame_cell_positions, self.patch_size[0] * .35, npp=10)
 
                 non_cell_positions = np.array([rx, ry]).T
                 non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
