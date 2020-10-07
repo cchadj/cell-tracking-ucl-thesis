@@ -937,6 +937,8 @@ class SessionPatchExtractor(object):
 
         if use_frame_mask:
             mask &= self.session.registered_mask_frames_oa850[frame_idx]
+        print('hello?')
+        plt.imshow(mask)
 
         patches_confocal = extract_patches(self.session.frames_confocal[frame_idx],
                                            mask=mask,
@@ -1167,6 +1169,9 @@ class SessionPatchExtractor(object):
 
         if use_frame_mask:
             mask &= self.session.mask_frames_oa790[frame_idx]
+
+        plt.imshow(mask)
+        plt.show()
 
         patches = extract_patches(self.session.frames_oa790[frame_idx],
                                   mask=mask,
