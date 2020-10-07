@@ -16,7 +16,12 @@ from plotutils import no_ticks
 from sklearn.neighbors import KDTree
 
 
-def get_parallel_points(points, distance):
+def lerp(point_a, point_b, t):
+    direction = point_b - point_a
+    return point_a + direction * t
+
+
+def get_parallel_points(points, distance, npp=3):
     new_points = []
 
     _, nearest_points_idx = get_nearest_neighbor(points, k=2)
@@ -47,15 +52,22 @@ def get_parallel_points(points, distance):
         perp_edge1 = [-edge_vector[1], edge_vector[0]]
         perp_edge1 = perp_edge1 / np.linalg.norm(perp_edge1)
 
-        midpoint = point0 + normed_edge * edge_length * .5
+        parallel_point_0 = np.int32(point0 + perp_edge0 * distance)
+        parallel_point_2 = np.int32(point1 + perp_edge0 * distance)
 
-        new_points.append(np.int32(midpoint + perp_edge0 * distance))
-        new_points.append(np.int32(point0 + perp_edge0 * distance))
-        new_points.append(np.int32(point1 + perp_edge0 * distance))
+        step_size = 1 / npp
+        for i in range(npp):
+            t = step_size * i
+            new_points.append(lerp(parallel_point_0, parallel_point_2, t))
 
-        new_points.append(np.int32(midpoint + perp_edge1 * distance))
-        new_points.append(np.int32(point0 + perp_edge1 * distance))
-        new_points.append(np.int32(point1 + perp_edge1 * distance))
+        parallel_point_0 = np.int32(point0 + perp_edge1 * distance)
+        parallel_point_2 = np.int32(point1 + perp_edge1 * distance)
+
+        step_size = 1 / npp
+        for i in range(npp):
+            t = step_size * i
+            new_points.append(lerp(parallel_point_0, parallel_point_2, t))
+        new_points.append(lerp(parallel_point_0, parallel_point_2, t))
 
     new_points = np.array(new_points).squeeze()
     # remove duplicates
@@ -67,7 +79,13 @@ def get_parallel_points(points, distance):
 
     # remove new points too close to original points
     distances = distances.squeeze()
-    new_points = np.delete(new_points, np.where(distances < distance * .8)[0], axis=0)
+    new_points = np.delete(new_points, np.where(distances < distance * .9)[0], axis=0)
+
+    # Remove new points that are too close to each other
+    kdtree = KDTree(new_points, metric='euclidean')
+    distances, nearest_points = kdtree.query(new_points, k=2)
+    distances = distances[:, 1].squeeze()
+    new_points = np.delete(new_points, np.where(distances < np.mean(distances) - np.std(distances))[0], axis=0)
 
     return new_points[:, 0], new_points[:, 1]
 
@@ -530,7 +548,7 @@ class SessionPatchExtractor(object):
 
                  n_negatives_per_positive=1,
                  negative_extraction_mode=NegativeExtractionMode.CIRCLE,
-                 negative_patch_extraction_radius=21,
+                 negative_extraction_radius=None,
 
                  use_vessel_mask=False,
                  extraction_mode=ALL_MODE,
@@ -565,7 +583,10 @@ class SessionPatchExtractor(object):
 
         self.frame_negative_search_radii = {}
 
-        self._negative_patch_extraction_radius = negative_patch_extraction_radius
+        if negative_extraction_radius is None:
+            self._negative_patch_extraction_radius = self._patch_size[0]
+        else:
+            self._negative_patch_extraction_radius = negative_extraction_radius
 
         self.n_negatives_per_positive = n_negatives_per_positive
 
@@ -660,7 +681,7 @@ class SessionPatchExtractor(object):
                 if self._negative_extraction_mode == NegativeExtractionMode.RECTANGLE:
                     rx, ry = get_random_points_on_rectangles(cx, cy, rect_size=self.negative_patch_extraction_radius,
                                                              n_points_per_rect=self.n_negatives_per_positive)
-                elif repr(self._negative_extraction_mode) == repr(NegativeExtractionMode.CIRCLE):
+                elif self._negative_extraction_mode == NegativeExtractionMode.CIRCLE:
                     if len(frame_cell_positions) <= 2:
                         continue
 
@@ -671,9 +692,9 @@ class SessionPatchExtractor(object):
                                                                  )
                     self.frame_negative_search_radii[frame_idx] = radii
                 elif self._negative_extraction_mode == NegativeExtractionMode.PARALLEL:
-                    rx, ry = get_parallel_points(frame_cell_positions, self.patch_size[0])
+                    rx, ry = get_parallel_points(frame_cell_positions, self.negative_patch_extraction_radius)
                 elif self._negative_extraction_mode == NegativeExtractionMode.PERPENDICULAR:
-                    rx, ry = get_perpendicular_points(frame_cell_positions, self.patch_size[0] * .35, npp=10)
+                    rx, ry = get_perpendicular_points(frame_cell_positions, self.negative_patch_extraction_radius, npp=10)
 
                 non_cell_positions = np.array([rx, ry]).T
                 non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)

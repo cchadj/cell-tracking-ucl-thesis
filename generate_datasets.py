@@ -86,17 +86,18 @@ def create_cell_and_no_cell_patches(
         marked_video_file = session.marked_video_oa790_file
         csv_cell_coord_files = session.cell_position_csv_files
 
-        patch_extractor = SessionPatchExtractor(session,
-                                                extraction_mode=extraction_mode,
+        patch_extractor = SessionPatchExtractor(
+            session,
+            extraction_mode=extraction_mode,
 
-                                                patch_size=patch_size,
-                                                temporal_width=temporal_width,
-                                                use_vessel_mask=use_vessel_mask,
+            patch_size=patch_size,
+            temporal_width=temporal_width,
+            use_vessel_mask=use_vessel_mask,
 
-                                                negative_extraction_mode=negative_extraction_mode,
-
-                                                n_negatives_per_positive=n_negatives_per_positive,
-                                                negative_patch_extraction_radius=negative_patch_search_radius)
+            negative_extraction_mode=negative_extraction_mode,
+            negative_extraction_radius=negative_patch_search_radius,
+            n_negatives_per_positive=n_negatives_per_positive,
+        )
 
         if vv:
             print('Unmarked', basename(video_file), '<->')
@@ -233,14 +234,16 @@ def create_dataset_from_patches(
         print(f'Train cell patches {train_cell_patches.shape}. Valid cell patches {valid_cell_patches.shape}')
 
     # -- negative patches --
-    train_non_cell_patches, valid_non_cell_patches_from_split = train_test_split_images(non_cell_patches, validset_ratio)
+    train_non_cell_patches, valid_non_cell_patches_from_split = train_test_split_images(non_cell_patches,
+                                                                                        validset_ratio)
 
     if valid_non_cell_patches is None:
         valid_non_cell_patches = valid_non_cell_patches_from_split
     else:
         valid_non_cell_patches = np.concatenate((valid_non_cell_patches, valid_non_cell_patches_from_split), axis=0)
     if v:
-        print(f'Train  non cell patches {train_non_cell_patches.shape}. Valid cell patches {valid_non_cell_patches.shape}')
+        print(
+            f'Train  non cell patches {train_non_cell_patches.shape}. Valid cell patches {valid_non_cell_patches.shape}')
 
     apply_transforms = random_translation_pixels > 0 or random_translation_pixels != 0
     # -- Trainset --
