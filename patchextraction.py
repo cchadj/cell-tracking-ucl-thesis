@@ -692,9 +692,13 @@ class SessionPatchExtractor(object):
                                                                  )
                     self.frame_negative_search_radii[frame_idx] = radii
                 elif self._negative_extraction_mode == NegativeExtractionMode.PARALLEL:
-                    rx, ry = get_parallel_points(frame_cell_positions, self.negative_patch_extraction_radius)
+                    rx, ry = get_parallel_points(frame_cell_positions,
+                                                 self.negative_patch_extraction_radius,
+                                                 npp=self.n_negatives_per_positive)
                 elif self._negative_extraction_mode == NegativeExtractionMode.PERPENDICULAR:
-                    rx, ry = get_perpendicular_points(frame_cell_positions, self.negative_patch_extraction_radius, npp=10)
+                    rx, ry = get_perpendicular_points(frame_cell_positions,
+                                                      self.negative_patch_extraction_radius,
+                                                      npp=self.n_negatives_per_positive)
 
                 non_cell_positions = np.array([rx, ry]).T
                 non_cell_positions = self._delete_invalid_positions(non_cell_positions, mask)
