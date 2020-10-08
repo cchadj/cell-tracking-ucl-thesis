@@ -761,7 +761,8 @@ class SessionPatchExtractor(object):
             negative_extraction_mode_str = 'Perpendicular negative search'
 
         if ax is None:
-            _, ax = plt.subplots(figsize=figsize)
+            self.subplots = plt.subplots(figsize=figsize)
+            _, ax = self.subplots
 
         if mask is None:
             mask = np.ones_like(frame, dtype=np.bool8)

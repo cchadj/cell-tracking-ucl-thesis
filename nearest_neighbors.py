@@ -1,9 +1,9 @@
-from sklearn.neighbors import kd_tree
+from sklearn.neighbors import KDTree
 
 
 def get_nearest_neighbor(points, k=1):
     assert k >= 1, f'Number of nearest neighbors must be bigger than 1, not {k}'
-    kdtree = kd_tree.KDTree(points, metric='euclidean')
+    kdtree = KDTree(points, metric='euclidean')
     distances, nearest_points = kdtree.query(points, k=k+1)
 
     # points = ground_truth_cell_positions
