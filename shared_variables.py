@@ -1,9 +1,9 @@
 import os
 import sys
 from os.path import basename
-import re
 import glob
 from typing import List
+import pathlib
 
 
 def files_of_same_source(f1, f2):
@@ -17,11 +17,14 @@ def files_of_same_source(f1, f2):
 DATA_FOLDER = os.path.join('.', 'data')
 CACHE_FOLDER = os.path.join('.', 'cache')
 CACHED_MODELS_FOLDER = os.path.join(CACHE_FOLDER, 'models')
-CACHED_DATASETS_FOLDER = os.path.join(CACHE_FOLDER, 'datasets')
 CACHED_DICE = os.path.join(CACHE_FOLDER, 'dice')
+CACHED_DATASETS_FOLDER = os.path.join(CACHE_FOLDER, 'datasets')
 
 OUTPUT_FOLDER = os.path.join('.', 'output')
 OUTPUT_ESTIMATED_POSITIONS_FOLDER = os.path.join(OUTPUT_FOLDER, 'estimated-points')
+
+pathlib.Path(OUTPUT_FOLDER).mkdir(exist_ok=True, parents=True)
+pathlib.Path(OUTPUT_ESTIMATED_POSITIONS_FOLDER).mkdir(exist_ok=True, parents=True)
 
 # Set up file extensions here. All extensions must be lowercase.
 csv_file_extensions = ('.csv', '.txt')
@@ -103,44 +106,6 @@ def find_filename_of_same_source(target_filename, filenames):
         if files_of_same_source(target_filename, filename):
             return filename
     return ''
-
-
-def get_video_sessions(marked=True,
-                       registered=True,
-                       validation=False,
-                       load_vessel_mask_from_file=True,
-                       v=False,
-                       ):
-    """ Get all video sessions
-
-    Returns:
-        List[VideoSession] List of video sessions
-    """
-    from video_session import VideoSession
-    video_sessions: List[VideoSession] = []
-
-    uids = []
-    for video_filename in unmarked_video_oa790_filenames:
-        vs = VideoSession(video_filename, load_vessel_mask_from_file=load_vessel_mask_from_file)
-        if load_vessel_mask_from_file:
-            vs.load_vessel_masks(v=v)
-
-        # every video session has a unique uid, make sure only one object created per unique video session
-        if vs.uid in uids:
-            continue
-
-        if marked and not vs.is_marked:
-            continue
-        elif registered and not vs.is_registered:
-            continue
-        elif validation and not vs.is_validation:
-            continue
-        elif not validation and vs.is_validation:
-            continue
-
-        video_sessions.append(vs)
-
-    return video_sessions
 
 
 if __name__ == '__main__':

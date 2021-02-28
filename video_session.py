@@ -1,29 +1,42 @@
 import warnings
 import os
 import re
+from typing import List
+
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
 from os.path import basename
 
-from imageprosessing import ImageRegistrator
+from image_processing import ImageRegistrator
 from videoutils import get_frames_from_video
 from collections import OrderedDict
 
 
 class VideoSession(object):
+    """ A VideoSession represents the Confocal, oa790, oa850 video files.
+
+    Use to retrieve:
+        * the video file names
+        * the frames for each video of the same session as a numpy array.
+        * the oa850 channel frames registered to the oa790 channel (using the corresponding vessel masks)
+        * the vessel masks of each video
+        * the std deviation image of each video
+        * the csv(s) with the cell locations
+
+    """
     _image_registrator: ImageRegistrator
 
     def __init__(self, video_filename, load_vessel_mask_from_file=True):
-        from sharedvariables import find_filename_of_same_source, files_of_same_source
-        from sharedvariables import marked_video_oa790_files, marked_video_oa850_files
-        from sharedvariables import csv_cell_cords_oa790_filenames
-        from sharedvariables import unmarked_video_oa790_filenames, unmarked_video_oa850_filenames
-        from sharedvariables import unmarked_video_confocal_filenames, mask_video_oa790_files
-        from sharedvariables import mask_video_oa850_files, mask_video_confocal_files
-        from sharedvariables import vessel_mask_confocal_files, vessel_mask_oa790_files, vessel_mask_oa850_files
-        from sharedvariables import std_image_confocal_files, std_image_oa790_files, std_image_oa850_files
+        from shared_variables import find_filename_of_same_source, files_of_same_source
+        from shared_variables import marked_video_oa790_files, marked_video_oa850_files
+        from shared_variables import csv_cell_cords_oa790_filenames
+        from shared_variables import unmarked_video_oa790_filenames, unmarked_video_oa850_filenames
+        from shared_variables import unmarked_video_confocal_filenames, mask_video_oa790_files
+        from shared_variables import mask_video_oa850_files, mask_video_confocal_files
+        from shared_variables import vessel_mask_confocal_files, vessel_mask_oa790_files, vessel_mask_oa850_files
+        from shared_variables import std_image_confocal_files, std_image_oa790_files, std_image_oa850_files
         import pathlib
 
         self._image_registrator = None
@@ -218,7 +231,7 @@ class VideoSession(object):
 
     @property
     def registered_mask_frames_oa850(self):
-        from imageprosessing import ImageRegistrator
+        from image_processing import ImageRegistrator
         if self._registered_mask_frames_oa850 is None:
             self._registered_mask_frames_oa850 = np.empty_like(self.mask_frames_oa850)
             ir: ImageRegistrator = self.image_registrator
@@ -228,7 +241,7 @@ class VideoSession(object):
 
     @property
     def registered_vessel_mask_oa850(self):
-        from imageprosessing import ImageRegistrator
+        from image_processing import ImageRegistrator
         if self._registered_vessel_mask_oa850 is None:
             ir: ImageRegistrator = self.image_registrator
             self._registered_vessel_mask_oa850 = ir.apply_registration(self.vessel_mask_oa850).astype(np.bool8)
@@ -241,9 +254,9 @@ class VideoSession(object):
             self._image_registrator.register_vertically()
         return self._image_registrator
 
-    def visualize_registration(self, figsize=(120, 150),
+    def visualize_registration(self, figsize=(120, 150), fontsize=50,
                                linewidth=15, linestyle='--',
-                               **supbplots_kwargs,):
+                               **supbplots_kwargs, ):
         from plotutils import no_ticks
         import matplotlib.lines
 
@@ -256,16 +269,16 @@ class VideoSession(object):
         overlay_mask[..., 0] = self.vessel_mask_oa790
 
         axes[0].imshow(overlay_mask)
-        axes[0].set_title('Vessel mask oa790', pad=25)
+        axes[0].set_title('Vessel mask oa790', pad=25, fontsize=fontsize)
 
         overlay_mask[..., 0] = 0
         overlay_mask[..., 1] = self.vessel_mask_oa850
         axes[1].imshow(overlay_mask)
-        axes[1].set_title('Vessel mask oa850', pad=25)
+        axes[1].set_title('Vessel mask oa850', pad=25, fontsize=fontsize)
 
         overlay_mask[..., 1] = self.registered_vessel_mask_oa850
         axes[2].imshow(overlay_mask)
-        axes[2].set_title('Registered vessel mask oa850', pad=25)
+        axes[2].set_title('Registered vessel mask oa850', pad=25, fontsize=fontsize)
 
         vessel_mask_oa790 = self.vessel_mask_oa790.copy()
         vessel_mask_oa790[:self.image_registrator.vertical_displacement, :] = 0
@@ -274,7 +287,9 @@ class VideoSession(object):
 
         from evaluation import dice
         axes[3].imshow(overlay_mask)
-        axes[3].set_title(f'Mask overlap. Dice {dice(vessel_mask_oa790, self.registered_vessel_mask_oa850):.3f}', pad=25)
+        axes[3].set_title(f'Mask overlap. Dice {dice(vessel_mask_oa790, self.registered_vessel_mask_oa850):.3f}',
+                          pad=25, fontsize=fontsize)
+
 
         plt.tight_layout()
         fig.canvas.draw()
@@ -388,7 +403,7 @@ class VideoSession(object):
             else:
                 self.mask_frames_confocal = VideoSession._rectify_mask_frames(
                     get_frames_from_video(self.mask_video_confocal_file)[..., 0].astype(
-                    np.bool8), crop_left=15)
+                        np.bool8), crop_left=15)
 
         return self._mask_frames_confocal
 
@@ -675,7 +690,7 @@ class VideoSession(object):
 
     @property
     def vessel_mask_oa790(self):
-        from vesseldetection import create_vessel_mask_from_frames
+        from vessel_detection import create_vessel_mask_from_frames
         if self._vessel_mask_oa790 is None:
             if not self.vessel_mask_oa790_file or not self.load_vessel_mask_from_file:
                 self._vessel_mask_oa790 = create_vessel_mask_from_frames(self.masked_frames_oa790)
@@ -699,7 +714,7 @@ class VideoSession(object):
 
     @property
     def vessel_mask_oa850(self):
-        from vesseldetection import create_vessel_mask_from_frames
+        from vessel_detection import create_vessel_mask_from_frames
         if self._vessel_mask_oa850 is None:
             if not self.vessel_mask_oa850_file or not self.load_vessel_mask_from_file:
                 self._vessel_mask_oa850 = create_vessel_mask_from_frames(self.masked_frames_oa850)
@@ -723,7 +738,7 @@ class VideoSession(object):
 
     @property
     def vessel_mask_confocal(self):
-        from vesseldetection import create_vessel_mask_from_frames
+        from vessel_detection import create_vessel_mask_from_frames
         if self._vessel_mask_confocal is None:
             if not self.vessel_mask_confocal_file or not self.load_vessel_mask_from_file:
                 self._vessel_mask_confocal = create_vessel_mask_from_frames(self.masked_frames_confocal)
@@ -745,7 +760,7 @@ class VideoSession(object):
 
     @staticmethod
     def _std_image_from_file(file):
-        from imageprosessing import normalize_data
+        from image_processing import normalize_data
         std_image = plt.imread(file)
         if len(std_image.shape) == 3:
             std_image = std_image[..., 0]
@@ -782,8 +797,58 @@ class VideoSession(object):
         return self._std_image_confocal
 
 
+def get_video_sessions(
+        marked=True,
+        registered=True,
+        validation=False,
+        load_vessel_mask_from_file=True,
+        v=False,
+):
+    """ Get video sessions
+
+    Please see VideoSession.
+
+    Args:
+        marked (bool): If True returns only video sessions that have a csv with the cell locations
+        registered (bool): If True returns only video sessions that have videos that are registered
+        validation (bool): If True returns videos that should be used for validation
+        load_vessel_mask_from_file (bool):
+         If True loads the vessel masks from an existing video if it exists to save time on calculating the vessel mask
+         for the training, validation and confocal videos.
+        v (bool): If true have verbose output
+
+    Returns:
+        List[VideoSession] List of video sessions
+    """
+    from shared_variables import unmarked_video_oa790_filenames
+    video_sessions: List[VideoSession] = []
+
+    uids = []
+    for video_filename in unmarked_video_oa790_filenames:
+        vs = VideoSession(video_filename, load_vessel_mask_from_file=load_vessel_mask_from_file)
+        if load_vessel_mask_from_file:
+            vs.load_vessel_masks(v=v)
+
+        # every video session has a unique uid, make sure only one object created per unique video session
+        if vs.uid in uids:
+            continue
+
+        if marked and not vs.is_marked:
+            continue
+        elif registered and not vs.is_registered:
+            continue
+        elif validation and not vs.is_validation:
+            continue
+        elif not validation and vs.is_validation:
+            continue
+
+        video_sessions.append(vs)
+
+    return video_sessions
+
+
 if __name__ == '__main__':
-    from sharedvariables import get_video_sessions
+    from shared_variables import get_video_sessions, unmarked_video_oa790_filenames
 
     vs = get_video_sessions(registered=True)[0]
     vs.mask_frames_oa790

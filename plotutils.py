@@ -123,7 +123,7 @@ def plot_dataset_as_grid(dataset, title=None):
         plt.show()
 
 
-def plot_images_as_grid(images, ax=None, title=None, fontsize=30):
+def plot_images_as_grid(images, ax=None, title=None, figsize=(20, 5), fontsize=30):
     """
     Plots a stack of images in a grid.
 
@@ -139,7 +139,7 @@ def plot_images_as_grid(images, ax=None, title=None, fontsize=30):
     batch_tensor = batch_tensor.permute(0, -1, 1, 2)
     grid_img = torchvision.utils.make_grid(batch_tensor, nrow=90)
     if ax is None:
-        _, ax = plt.subplots(num=None, figsize=(70, 50), dpi=80, facecolor='w', edgecolor='k')
+        _, ax = plt.subplots(num=None, figsize=figsize, dpi=80, facecolor='w', edgecolor='k')
     if title is not None:
         ax.set_title(title, fontsize=fontsize)
 

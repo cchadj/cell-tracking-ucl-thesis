@@ -1,7 +1,7 @@
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import  QApplication, QMainWindow
 
-from sharedvariables import *
+from shared_variables import *
 import argparse
 import pathlib
 import re
@@ -14,7 +14,7 @@ from classificationutils import create_probability_map, estimate_cell_positions_
 from cnnlearning import CNN
 import tqdm
 from tqdm.contrib import tzip
-from sharedvariables import unmarked_video_oa790_filenames
+from shared_variables import unmarked_video_oa790_filenames
 
 DEFAULT_N_FRAMES_PER_VIDEO = 10
 

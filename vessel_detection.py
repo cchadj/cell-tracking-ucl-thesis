@@ -120,8 +120,8 @@ def binarize_vessel_image(
 
 
 def create_vessel_image_from_frames(frames, masks=None, de_castro=True, sigma=1, adapt_hist=True):
-    from imageprosessing import enhance_motion_contrast_j_tam, enhance_motion_contrast_de_castro
-    from imageprosessing import stack_to_masked_array, gaussian_blur_stack
+    from image_processing import enhance_motion_contrast_j_tam, enhance_motion_contrast_de_castro
+    from image_processing import stack_to_masked_array, gaussian_blur_stack
     frames = stack_to_masked_array(frames, masks)
 
     frames = gaussian_blur_stack(frames, sigma=sigma)
@@ -147,8 +147,8 @@ def create_vessel_mask_from_frames(frames, masks=None, vessel_img=None, de_castr
 
 if __name__ == '__main__':
     from plotutils import no_ticks
-    from imageprosessing import ImageRegistrator
-    from sharedvariables import get_video_sessions
+    from image_processing import ImageRegistrator
+    from shared_variables import get_video_sessions
     import matplotlib.pyplot as plt
     import matplotlib.lines
 

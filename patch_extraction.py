@@ -128,7 +128,6 @@ def get_perpendicular_points(points, distance, npp=3):
     # remove duplicates
     new_points = np.unique(new_points, axis=0)
 
-
     kdtree = KDTree(points, metric='euclidean')
     distances, nearest_points = kdtree.query(new_points)
     distances = distances.squeeze()
@@ -541,20 +540,21 @@ class SessionPatchExtractor(object):
     VALIDATION_MODE = 1
     ALL_MODE = 2
 
-    def __init__(self,
-                 session,
-                 patch_size=21,
-                 temporal_width=1,
+    def __init__(
+            self,
+            session,
+            patch_size=21,
+            temporal_width=1,
 
-                 n_negatives_per_positive=1,
-                 negative_extraction_mode=NegativeExtractionMode.CIRCLE,
-                 negative_extraction_radius=None,
+            n_negatives_per_positive=1,
+            negative_extraction_mode=NegativeExtractionMode.CIRCLE,
+            negative_extraction_radius=None,
 
-                 use_vessel_mask=False,
-                 extraction_mode=ALL_MODE,
+            limit_to_vessel_mask=False,
+            extraction_mode=ALL_MODE,
 
-                 v=False,
-                 ):
+            v=False,
+    ):
         """
 
         Args:
@@ -567,7 +567,7 @@ class SessionPatchExtractor(object):
         self._negative_extraction_mode = negative_extraction_mode
 
         self.v = v
-        self.use_vessel_mask = use_vessel_mask
+        self.use_vessel_mask = limit_to_vessel_mask
         self._cell_positions = {}
         self._non_cell_positions = {}
 
@@ -1194,7 +1194,6 @@ class SessionPatchExtractor(object):
         if use_frame_mask:
             mask &= self.session.mask_frames_oa790[frame_idx]
 
-
         patches = extract_patches(self.session.frames_oa790[frame_idx],
                                   mask=mask,
                                   patch_size=patch_size,
@@ -1342,7 +1341,8 @@ class SessionPatchExtractor(object):
             height and width of the frame.
         """
         if self.temporal_width > 1:
-            raise NotImplementedError(f'Currently all temporal patches are extracted for temporal width 1, not {self.temporal_width}')
+            raise NotImplementedError(
+                f'Currently all temporal patches are extracted for temporal width 1, not {self.temporal_width}')
 
         if patch_size is None:
             patch_size = self.patch_size
@@ -1356,7 +1356,7 @@ class SessionPatchExtractor(object):
         if use_frame_mask:
             mask &= self.session.mask_frames_oa790[frame_idx]
 
-        patches_frame_0 = extract_patches(self.session.frames_oa790[frame_idx-1],
+        patches_frame_0 = extract_patches(self.session.frames_oa790[frame_idx - 1],
                                           mask=mask,
                                           patch_size=patch_size,
                                           padding=padding,
@@ -1366,7 +1366,7 @@ class SessionPatchExtractor(object):
                                           patch_size=patch_size,
                                           padding=padding,
                                           padding_value=padding_value)
-        patches_frame_2 = extract_patches(self.session.frames_oa790[frame_idx+1],
+        patches_frame_2 = extract_patches(self.session.frames_oa790[frame_idx + 1],
                                           mask=mask,
                                           patch_size=patch_size,
                                           padding=padding,
@@ -1519,7 +1519,7 @@ class SessionPatchExtractor(object):
 
 
 if __name__ == '__main__':
-    from sharedvariables import get_video_sessions
+    from shared_variables import get_video_sessions
     from matplotlib.colors import NoNorm
 
     video_sessions = get_video_sessions(marked=True, registered=False)

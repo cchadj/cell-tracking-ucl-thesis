@@ -5,7 +5,7 @@ import os
 from os.path import basename
 from typing import Dict
 
-from sharedvariables import OUTPUT_FOLDER
+from shared_variables import OUTPUT_FOLDER
 import argparse
 from matplotlib import pyplot as plt
 import pandas as pd

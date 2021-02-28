@@ -1,3 +1,11 @@
-pytorch
-torchvision
+# pytorch
+# torchvision
 sklearn
+matplotlib
+scipy
+numpy
+scikit-image
+opencv-python
+mahotas
+tqdm
+pandas

@@ -12,7 +12,7 @@ import numpy as np
 from cnnlearning import CNN, train, TrainingTracker
 from generate_datasets import get_cell_and_no_cell_patches
 from classificationutils import classify_labeled_dataset
-from sharedvariables import CACHED_MODELS_FOLDER
+from shared_variables import CACHED_MODELS_FOLDER
 
 
 def extract_value_from_string(string, value_prefix, delimiter='_'):
@@ -350,7 +350,7 @@ def main_tmp():
     import collections
     from copy import deepcopy
 
-    from sharedvariables import get_video_sessions
+    from shared_variables import get_video_sessions
 
     train_params = collections.OrderedDict(
         epochs=250,
@@ -388,7 +388,7 @@ def main_tmp():
 
 if __name__ == '__main__':
     import sys
-    from sharedvariables import get_video_sessions
+    from shared_variables import get_video_sessions
 
     video_sessions = get_video_sessions(registered=True, marked=True)
 

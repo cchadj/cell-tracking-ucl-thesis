@@ -1,12 +1,12 @@
 from cnnlearning import *
-from learningutils import *
-from patchextraction import *
-from imageprosessing import *
+from learning_utils import *
+from patch_extraction import *
+from image_processing import *
 from nearest_neighbors import *
 from evaluation import *
 from classificationutils import *
-from sharedvariables import *
-from vesseldetection import *
+from shared_variables import *
+from vessel_detection import *
 from generate_datasets import *
 from plotutils import no_ticks, plot_images_as_grid
 from guitools import CvRoipolySelector, CvPointSelector

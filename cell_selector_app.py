@@ -8,7 +8,7 @@ from PyQt5.QtCore import QUrl
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
 from cell_selector import MplFrameSelector
-from sharedvariables import csv_file_extensions, video_file_extensions, DATA_FOLDER, OUTPUT_FOLDER
+from shared_variables import csv_file_extensions, video_file_extensions, DATA_FOLDER, OUTPUT_FOLDER
 
 from cell_selector_ui import Ui_MainWindow
 from cell_selector_model import CellSelectorModel

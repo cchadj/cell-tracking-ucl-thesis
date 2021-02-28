@@ -1,2 +1,1 @@
-This folder is used to contain output models and training
-run metadata.
+This folder is used to contain estimated locations

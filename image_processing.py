@@ -9,7 +9,7 @@ from skimage.exposure import match_histograms
 from plotutils import cvimshow
 
 import cv2
-from learningutils import ImageDataset
+from learning_utils import ImageDataset
 import torch.utils.data
 import torchvision
 import skimage
@@ -31,7 +31,7 @@ def equalize_adapt_hist_masked(frame, mask):
     Returns:
         Contrast enhanced image only in the part where it's  not masked
     """
-    from patchextraction import get_mask_bounds
+    from patch_extraction import get_mask_bounds
     from skimage.exposure import equalize_adapthist
 
     processed_frame = np.zeros_like(frame, dtype=np.float32)
@@ -44,7 +44,7 @@ def equalize_adapt_hist_masked(frame, mask):
 
 
 def equalize_adapt_hist_stack(frames, masks=None):
-    from patchextraction import get_mask_bounds
+    from patch_extraction import get_mask_bounds
     from skimage.exposure import equalize_adapthist
 
     frames = stack_to_masked_array(frames, masks)
@@ -493,7 +493,7 @@ class SessionPreprocessor(object):
 
 
 if __name__ == '__main__':
-    from sharedvariables import get_video_sessions
+    from shared_variables import get_video_sessions
     import numpy as np
 
     video_sessions = get_video_sessions(marked=True, registered=True)

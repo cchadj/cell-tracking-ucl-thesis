@@ -11,7 +11,7 @@ from torch import nn
 import copy
 
 from classificationutils import ClassificationResults
-from learningutils import ImageDataset, LabeledImageDataset
+from learning_utils import ImageDataset, LabeledImageDataset
 from IPython.display import clear_output
 from IPython.display import display
 

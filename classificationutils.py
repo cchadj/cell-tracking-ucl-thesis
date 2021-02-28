@@ -8,13 +8,13 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from evaluation import evaluate_results, EvaluationResults
-from imageprosessing import imextendedmax
+from image_processing import imextendedmax
 from matplotlib import pyplot as plt
 
 import torch
-from learningutils import ImageDataset
+from learning_utils import ImageDataset
 
-from patchextraction import SessionPatchExtractor, NegativeExtractionMode
+from patch_extraction import SessionPatchExtractor, NegativeExtractionMode
 from video_session import VideoSession
 
 from enum import Enum, unique
@@ -374,7 +374,7 @@ class SessionClassifier:
 
             n_negatives_per_positive=n_negatives_per_positive,
             negative_extraction_mode=negative_extraction_mode,
-            use_vessel_mask=use_vessel_mask
+            limit_to_vessel_mask=use_vessel_mask
         )
 
     def classify_cells(self, frame_idx=None):

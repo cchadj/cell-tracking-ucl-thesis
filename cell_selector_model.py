@@ -1,4 +1,4 @@
-from sharedvariables import *
+from shared_variables import *
 
 class CellSelectorModel:
     def __init__(self):

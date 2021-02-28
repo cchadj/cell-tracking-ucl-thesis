@@ -8,11 +8,12 @@ import torch
 import torchvision
 import tqdm
 
-from imageprosessing import hist_match_images, center_crop_images
-from learningutils import LabeledImageDataset
-from sharedvariables import get_video_sessions, CACHED_DATASETS_FOLDER
-from patchextraction import SessionPatchExtractor, NegativeExtractionMode
+from image_processing import hist_match_images, center_crop_images
+from learning_utils import LabeledImageDataset
+from shared_variables import CACHED_DATASETS_FOLDER
+from patch_extraction import SessionPatchExtractor, NegativeExtractionMode
 
+import video_session
 import PIL
 import PIL.Image
 
@@ -33,7 +34,7 @@ def create_cell_and_no_cell_patches(
         video_sessions=None,
         extraction_mode=SessionPatchExtractor.ALL_MODE,
 
-        use_vessel_mask=False,
+        limit_extraction_to_vessel_mask=False,
         patch_size=(21, 21),
         temporal_width=0,
 
@@ -45,7 +46,8 @@ def create_cell_and_no_cell_patches(
         n_negatives_per_positive=1,
 
         v=False,
-        vv=False):
+        vv=False
+):
     assert type(patch_size) == int or type(patch_size) == tuple or (type(patch_size) == np.ndarray)
     if type(patch_size) == int:
         patch_size = patch_size, patch_size
@@ -71,7 +73,7 @@ def create_cell_and_no_cell_patches(
     non_cell_images_marked = np.zeros_like(cell_images)
 
     if video_sessions is None:
-        video_sessions = get_video_sessions(marked=True)
+        video_sessions = video_session.get_video_sessions(marked=True)
     assert all([vs.has_marked_cells for vs in video_sessions]), 'Not all video sessions have marked cells.'
 
     if v:
@@ -92,7 +94,7 @@ def create_cell_and_no_cell_patches(
 
             patch_size=patch_size,
             temporal_width=temporal_width,
-            use_vessel_mask=use_vessel_mask,
+            limit_to_vessel_mask=limit_extraction_to_vessel_mask,
 
             negative_extraction_mode=negative_extraction_mode,
             negative_extraction_radius=negative_patch_search_radius,
