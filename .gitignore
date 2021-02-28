@@ -1,3 +1,7 @@
+
+output/
+tmp/
+
 *.jpg
 *.JPG
 *.jpeg
