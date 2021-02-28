@@ -1,5 +1,11 @@
 
-output/
+# ignore cache and output folder except the README file
+cache/*
+!cache/README.md
+
+output/*
+!output/README.md
+
 tmp/
 
 *.jpg
