@@ -6,6 +6,9 @@ cache/*
 output/*
 !output/README.md
 
+data/*
+!data/README.md
+
 tmp/
 
 *.jpg
