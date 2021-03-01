@@ -174,6 +174,8 @@ def create_dataset_from_patches(
         valid_non_cell_patches=None,
 
         standardize=True,
+        standardize_mean=.5,
+        standardize_std=.5,
         to_grayscale=False,
 
         random_translation_pixels=0,
@@ -227,10 +229,18 @@ def create_dataset_from_patches(
     # -- positive patches --
     train_cell_patches, valid_cell_patches_from_split = train_test_split_images(cell_patches, validset_ratio)
 
+    if v:
+        print(f'{len(train_cell_patches)} training patches')
+        print(f'{len(valid_cell_patches_from_split)} validation patches from split')
+
     if valid_cell_patches is None:
         valid_cell_patches = valid_cell_patches_from_split
     else:
+        if v:
+            print(f'{len(valid_cell_patches)} validation patches from files')
         valid_cell_patches = np.concatenate((valid_cell_patches, valid_cell_patches_from_split), axis=0)
+        if v:
+            print(f'{len(valid_cell_patches)} total validation patches')
 
     if v:
         print(f'Train cell patches {train_cell_patches.shape}. Valid cell patches {valid_cell_patches.shape}')
@@ -273,6 +283,8 @@ def create_dataset_from_patches(
             axis=0),
 
         standardize=standardize,
+        mean=standardize_mean,
+        std=standardize_std,
         to_grayscale=to_grayscale,
 
         data_augmentation_transforms=train_transforms
