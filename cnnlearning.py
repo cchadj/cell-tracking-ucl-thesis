@@ -764,12 +764,15 @@ def train(cnn, params, criterion=torch.nn.CrossEntropyLoss(), device='cuda', add
         sampler=sampler,
     )
 
-    validset = params['validset']
-    valid_loader = torch.utils.data.DataLoader(
-        validset,
-        batch_size=batch_size,
-        shuffle=False
-    )
+    validset = None
+    valid_loader = None
+    if 'validset' in  params:
+        validset = params['validset']
+        valid_loader = torch.utils.data.DataLoader(
+            validset,
+            batch_size=batch_size,
+            shuffle=False
+        )
 
     epochs = params['epochs']
     if 'evaluation_epochs' in params:

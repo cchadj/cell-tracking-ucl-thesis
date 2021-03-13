@@ -14,6 +14,7 @@ from skimage.morphology import binary_erosion
 from plotutils import no_ticks
 
 from sklearn.neighbors import KDTree
+from video_session import VideoSession
 
 
 def lerp(point_a, point_b, t):
@@ -304,12 +305,13 @@ def get_patch(im, x, y, patch_size):
            int(x - width / 2):int(x + width / 2), ...]
 
 
-def extract_patches(img,
-                    patch_size=(21, 21),
-                    padding=cv2.BORDER_REPLICATE,
-                    padding_value=None,
-                    mask=None
-                    ):
+def extract_patches(
+        img,
+        patch_size=(21, 21),
+        padding=cv2.BORDER_REPLICATE,
+        padding_value=None,
+        mask=None
+):
     """
     Extract patches around every pixel of the image.
 
@@ -408,12 +410,14 @@ def extract_patches(img,
     return patches
 
 
-def extract_patches_at_positions(image,
-                                 positions,
-                                 patch_size=(21, 21),
-                                 padding='valid',
-                                 mask=None,
-                                 visualize_patches=False):
+def extract_patches_at_positions(
+        image,
+        positions,
+        patch_size=(21, 21),
+        padding='valid',
+        mask=None,
+        visualize_patches=False
+):
     """ Extract patches from images at points
 
     Arguments:
@@ -542,13 +546,13 @@ class SessionPatchExtractor(object):
 
     def __init__(
             self,
-            session,
+            session: VideoSession,
             patch_size=21,
             temporal_width=1,
 
             n_negatives_per_positive=1,
             negative_extraction_mode=NegativeExtractionMode.CIRCLE,
-            negative_extraction_radius=None,
+            negative_extraction_radius: int = None,
 
             limit_to_vessel_mask=False,
             extraction_mode=ALL_MODE,
@@ -562,7 +566,7 @@ class SessionPatchExtractor(object):
         """
         assert extraction_mode in [SessionPatchExtractor.ALL_MODE, SessionPatchExtractor.VALIDATION_MODE,
                                    SessionPatchExtractor.TRAINING_MODE]
-        self.session = session
+        self._session = session
         self._extraction_mode = extraction_mode
         self._negative_extraction_mode = negative_extraction_mode
 
@@ -630,6 +634,21 @@ class SessionPatchExtractor(object):
         self._marked_non_cell_patches_oa790_at_frame = {}
 
         self._reset_patches()
+
+    def with_session(self, vs: VideoSession):
+        self.session = vs
+
+        return self
+
+    @property
+    def session(self):
+        return self._session
+
+    @session.setter
+    def session(self, vs: VideoSession):
+        if self._session != vs:
+            self._reset_patches()
+            self._session = vs
 
     @property
     def extraction_mode(self):
@@ -820,10 +839,12 @@ class SessionPatchExtractor(object):
             frames = self.session.marked_frames_oa790
         else:
             frames = self.session.frames_oa790
-        self._visualize_patch_extraction(self.session.marked_frames_oa790,
-                                         self.temporal_marked_cell_patches_oa790_at_frame,
-                                         self.temporal_marked_non_cell_patches_oa790_at_frame,
-                                         **kwargs)
+        self._visualize_patch_extraction(
+            self.session.marked_frames_oa790,
+            self.temporal_marked_cell_patches_oa790_at_frame,
+            self.temporal_marked_non_cell_patches_oa790_at_frame,
+            **kwargs
+        )
 
     def visualize_mixed_channel_patch_extraction(self, channel=1, **kwargs):
         assert channel in [0, 1, 2], f'Channel must be 0 for confocal, 1 for oa850 or 2 for oa790, not{channel}.'
@@ -835,11 +856,13 @@ class SessionPatchExtractor(object):
             frames = self.session.registered_frames_oa850
 
         masks = self.session.registered_mask_frames_oa850
-        self._visualize_patch_extraction(frames,
-                                         self.mixed_channel_marked_cell_patches_at_frame,
-                                         self.mixed_channel_marked_non_cell_patches_at_frame,
-                                         masks=masks,
-                                         **kwargs)
+        self._visualize_patch_extraction(
+            frames,
+            self.mixed_channel_marked_cell_patches_at_frame,
+            self.mixed_channel_marked_non_cell_patches_at_frame,
+            masks=masks,
+            **kwargs
+        )
 
     def _reset_positive_patches(self):
         self._cell_patches_oa790 = None
@@ -868,16 +891,17 @@ class SessionPatchExtractor(object):
 
         self._non_cell_positions = {}
 
-    def _reset_patches(self):
-        self._reset_positive_patches()
-        self._reset_negative_patches()
-        self._reset_temporal_patches()
-
     def _reset_temporal_patches(self):
         self._temporal_cell_patches_oa790 = None
         self._temporal_non_cell_patches_oa790 = None
         self._temporal_marked_cell_patches_oa790 = None
         self._temporal_marked_non_cell_patches_oa790 = None
+
+    def _reset_patches(self):
+        """ reset cached patches to create new ones, useful when new patches should be created, i.e when changing video session"""
+        self._reset_positive_patches()
+        self._reset_negative_patches()
+        self._reset_temporal_patches()
 
     @property
     def patch_size(self):
@@ -1516,6 +1540,7 @@ class SessionPatchExtractor(object):
     def mixed_channel_marked_non_cell_patches_at_frame(self):
         tmp = self.mixed_channel_marked_non_cell_patches
         return self._mixed_channel_marked_non_cell_patches_at_frame
+
 
 
 if __name__ == '__main__':

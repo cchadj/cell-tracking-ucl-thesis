@@ -1,7 +1,7 @@
 import warnings
 import os
 import re
-from typing import List
+from typing import List, Any
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from os.path import basename
 
-from image_processing import ImageRegistrator
 from videoutils import get_frames_from_video
 from collections import OrderedDict
 
@@ -26,7 +25,8 @@ class VideoSession(object):
         * the csv(s) with the cell locations
 
     """
-    _image_registrator: ImageRegistrator
+    import image_processing
+    _image_registrator: image_processing.ImageRegistrator
 
     def __init__(self, video_filename, load_vessel_mask_from_file=True):
         from shared_variables import find_filename_of_same_source, files_of_same_source
@@ -191,7 +191,7 @@ class VideoSession(object):
 
     @frames_oa790.setter
     def frames_oa790(self, new_frames):
-        VideoSession._assert_frame_assignment(self.frames_oa790, new_frames)
+        # VideoSession._assert_frame_assignment(self.frames_oa790, new_frames)
 
         self._masked_frames_oa790 = None
         self._vessel_masked_frames_oa790 = None
@@ -221,6 +221,7 @@ class VideoSession(object):
 
     @property
     def registered_frames_oa850(self):
+        from image_processing import ImageRegistrator
         if self._registered_frames_oa850 is None:
             ir: ImageRegistrator = self.image_registrator
             self._registered_frames_oa850 = np.empty_like(self.frames_oa850)
@@ -248,7 +249,8 @@ class VideoSession(object):
         return self._registered_vessel_mask_oa850
 
     @property
-    def image_registrator(self) -> ImageRegistrator:
+    def image_registrator(self) -> image_processing.ImageRegistrator:
+        from image_processing import ImageRegistrator
         if self._image_registrator is None:
             self._image_registrator = ImageRegistrator(source=self.vessel_mask_oa850, target=self.vessel_mask_oa790)
             self._image_registrator.register_vertically()
@@ -847,8 +849,74 @@ def get_video_sessions(
     return video_sessions
 
 
-if __name__ == '__main__':
-    from shared_variables import get_video_sessions, unmarked_video_oa790_filenames
+class SessionPreprocessor(object):
+    _preprocess_functions: List[Any]
 
-    vs = get_video_sessions(registered=True)[0]
-    vs.mask_frames_oa790
+    def __init__(self, session: VideoSession, preprocess_functions=None):
+        if preprocess_functions is None:
+            preprocess_functions = []
+
+        self._preprocess_functions = preprocess_functions
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    @session.setter
+    def session(self, vs: VideoSession):
+        self._session = vs
+
+    def reset_preprocess(self):
+        self._preprocess_functions = []
+
+    def with_session(self, vs: VideoSession):
+        self.session = vs
+        return self
+
+    def with_preprocess(self, preprocess_functions):
+        try:
+            self._preprocess_functions.extend(preprocess_functions)
+        except TypeError:
+            # if not a list just append
+            self._preprocess_functions.append(preprocess_functions)
+        return self
+
+    def map(self):
+        for preprocessing_func in self._preprocess_functions:
+            self.session.frames_oa790 = np.array(list(map(preprocessing_func, self.session.frames_oa790)))
+
+    def _apply_preprocessing(self, masked_frames):
+        masked_frames = masked_frames.copy()
+        print(self._preprocess_functions)
+        for fun in self._preprocess_functions:
+            masked_frames = fun(masked_frames)
+        return masked_frames
+
+    def apply_preprocessing_to_oa790(self):
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa790)
+        if not np.ma.is_masked(masked_frames):
+            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa790.mask)
+        self.session.frames_oa790 = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_oa790 = ~masked_frames.mask
+
+    def apply_preprocessing_to_oa850(self):
+        print('how')
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa850)
+        if not np.ma.is_masked(masked_frames):
+            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa850.mask)
+        self.session.frames_oa850 = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_oa850 = ~masked_frames.mask
+
+    def apply_preprocessing_to_confocal(self):
+        print('what')
+        masked_frames = self._apply_preprocessing(self.session.masked_frames_confocal)
+        if not np.ma.is_masked(masked_frames):
+            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_confocal.mask)
+        self.session.frames_confocal = masked_frames.filled(masked_frames.mean())
+        self.session.mask_frames_confocal = masked_frames.mask
+
+    def apply_preprocessing(self):
+        self.apply_preprocessing_to_confocal()
+        self.apply_preprocessing_to_oa790()
+        self.apply_preprocessing_to_oa850()

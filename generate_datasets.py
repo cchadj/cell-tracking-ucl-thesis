@@ -12,6 +12,7 @@ from image_processing import hist_match_images, center_crop_images
 from learning_utils import LabeledImageDataset
 from shared_variables import CACHED_DATASETS_FOLDER
 from patch_extraction import SessionPatchExtractor, NegativeExtractionMode
+from matplotlib import pyplot as plt
 
 import video_session
 import PIL
@@ -79,27 +80,28 @@ def create_cell_and_no_cell_patches(
     if v:
         print('Creating cell and no cell images from videos and cell points csvs...')
 
+    patch_extractor = SessionPatchExtractor(
+        video_sessions[0],
+        extraction_mode=extraction_mode,
+
+        patch_size=patch_size,
+        temporal_width=temporal_width,
+        limit_to_vessel_mask=limit_to_vessel_mask,
+
+        negative_extraction_mode=negative_extraction_mode,
+        negative_extraction_radius=negative_patch_search_radius,
+        n_negatives_per_positive=n_negatives_per_positive,
+    )
+
     for i, session in enumerate(tqdm.tqdm(video_sessions)):
         assert session.has_marked_video, 'Something went wrong.' \
                                          ' get_video_sessions() should have ' \
                                          ' returned that have corresponding marked videos.'
+        patch_extractor.session = session
 
         video_file = session.video_file
         marked_video_file = session.marked_video_oa790_file
         csv_cell_coord_files = session.cell_position_csv_files
-
-        patch_extractor = SessionPatchExtractor(
-            session,
-            extraction_mode=extraction_mode,
-
-            patch_size=patch_size,
-            temporal_width=temporal_width,
-            limit_to_vessel_mask=limit_to_vessel_mask,
-
-            negative_extraction_mode=negative_extraction_mode,
-            negative_extraction_radius=negative_patch_search_radius,
-            n_negatives_per_positive=n_negatives_per_positive,
-        )
 
         if vv:
             print('Unmarked', basename(video_file), '<->')
@@ -120,9 +122,9 @@ def create_cell_and_no_cell_patches(
 
         if i == 0:
             patch_extractor.visualize_patch_extraction()
-            from matplotlib import pyplot as plt
             plt.show()
 
+        # Marked patches (useful for debugging)
         if vv:
             print('Marked', basename(marked_video_file), '<->')
             print(*[basename(f) for f in csv_cell_coord_files], sep='\n')
@@ -138,9 +140,7 @@ def create_cell_and_no_cell_patches(
             cur_session_marked_non_cell_images = patch_extractor.marked_non_cell_patches_oa790
 
         cell_images_marked = np.concatenate((cell_images_marked, cur_session_marked_cell_images), axis=0)
-        non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_marked_non_cell_images),
-                                                axis=0)
-
+        non_cell_images_marked = np.concatenate((non_cell_images_marked, cur_session_marked_non_cell_images), axis=0)
     if v:
         print(f'Created {len(cell_images)} cell patches and {len(non_cell_images)} non cell patches')
     return cell_images, non_cell_images, cell_images_marked, non_cell_images_marked
@@ -255,7 +255,7 @@ def create_dataset_from_patches(
         valid_non_cell_patches = np.concatenate((valid_non_cell_patches, valid_non_cell_patches_from_split), axis=0)
     if v:
         print(
-            f'Train  non cell patches {train_non_cell_patches.shape}. Valid cell patches {valid_non_cell_patches.shape}')
+            f'✔ Train non cell patches {train_non_cell_patches.shape}. Valid cell patches {valid_non_cell_patches.shape}')
 
     apply_transforms = random_translation_pixels > 0 or random_translation_pixels != 0
     # -- Trainset --

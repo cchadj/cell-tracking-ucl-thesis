@@ -1,18 +1,15 @@
-from typing import List, Any
-
-import evaluation
-import numpy as np
-import mahotas as mh
-import tqdm
-from skimage.morphology import extrema
-from skimage.exposure import match_histograms
-from plotutils import cvimshow
-
 import cv2
-from learning_utils import ImageDataset
+import mahotas as mh
+import skimage
 import torch.utils.data
 import torchvision
-import skimage
+import tqdm
+from skimage.exposure import match_histograms
+from skimage.morphology import extrema
+
+import evaluation
+from learning_utils import ImageDataset
+import numpy as np
 
 
 def imhmaxima(I, H):
@@ -444,52 +441,6 @@ class ImageRegistrator(object):
             dices.append(dice_v)
 
         return translated_source, dy
-
-
-class SessionPreprocessor(object):
-    preprocess_functions: List[Any]
-
-    def __init__(self, session, preprocess_functions=None):
-        if preprocess_functions is None:
-            preprocess_functions = []
-
-        self.preprocess_functions = preprocess_functions
-        self.session = session
-
-    def _apply_preprocessing(self, masked_frames):
-        masked_frames = masked_frames.copy()
-        print(self.preprocess_functions)
-        for fun in self.preprocess_functions:
-            masked_frames = fun(masked_frames)
-        return masked_frames
-
-    def apply_preprocessing_to_oa790(self):
-        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa790)
-        if not np.ma.is_masked(masked_frames):
-            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa790.mask)
-        self.session.frames_oa790 = masked_frames.filled(masked_frames.mean())
-        self.session.mask_frames_oa790 = ~masked_frames.mask
-
-    def apply_preprocessing_to_oa850(self):
-        print('how')
-        masked_frames = self._apply_preprocessing(self.session.masked_frames_oa850)
-        if not np.ma.is_masked(masked_frames):
-            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_oa850.mask)
-        self.session.frames_oa850 = masked_frames.filled(masked_frames.mean())
-        self.session.mask_frames_oa850 = ~masked_frames.mask
-
-    def apply_preprocessing_to_confocal(self):
-        print('what')
-        masked_frames = self._apply_preprocessing(self.session.masked_frames_confocal)
-        if not np.ma.is_masked(masked_frames):
-            masked_frames = np.ma.masked_array(masked_frames, self.session.masked_frames_confocal.mask)
-        self.session.frames_confocal = masked_frames.filled(masked_frames.mean())
-        self.session.mask_frames_confocal = masked_frames.mask
-
-    def apply_preprocessing(self):
-        self.apply_preprocessing_to_confocal()
-        self.apply_preprocessing_to_oa790()
-        self.apply_preprocessing_to_oa850()
 
 
 if __name__ == '__main__':

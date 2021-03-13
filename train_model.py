@@ -346,46 +346,6 @@ def main():
     )
 
 
-def main_tmp():
-    import collections
-    from copy import deepcopy
-
-    from shared_variables import get_video_sessions
-
-    train_params = collections.OrderedDict(
-        epochs=250,
-        lr=.001,
-
-        weight_decay=0.01,
-        batch_size=512,  # can be a number or None/'all' to train all trainset at once.
-        do_early_stop=True,  # Optional default True
-        early_stop_patience=60,  # How many epochs with no validation accuracy improvement before stopping early
-        learning_rate_scheduler_patience=20,
-        # How many epochs with no validation accuracy improvement before lowering learning rate
-        evaluate_epochs=10,
-
-        shuffle=True)
-
-    video_sessions_registered = get_video_sessions(marked=True, registered=True)
-    model, results = train_model_demo(
-        patch_size=31,
-        temporal_width=0,
-
-        mixed_channel_patches=True,
-        drop_confocal_channel=True,
-
-        do_hist_match=False,
-        n_negatives_per_positive=1,
-        standardize_dataset=True,
-
-        video_sessions=video_sessions_registered,
-        train_params=deepcopy(train_params),
-        try_load_data_from_cache=True,
-        try_load_model_from_cache=False,
-    )
-    print(results.best_valid_accuracy)
-
-
 if __name__ == '__main__':
     import sys
     from shared_variables import get_video_sessions

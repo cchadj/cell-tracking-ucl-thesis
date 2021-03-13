@@ -1,8 +1,6 @@
-from typing import List, Tuple
-
+import numpy as np
 import torch
 import torchvision
-import numpy as np
 from torch.utils.data import Dataset
 
 
@@ -109,7 +107,7 @@ class LabeledImageDataset(ImageDataset):
 
 def test_1():
     # A test to check that the LabeledImageDataset and ImageDataset yields the same results
-    from generate_datasets import get_cell_and_no_cell_patches, create_dataset_from_patches
+    from generate_datasets import get_cell_and_no_cell_patches
 
     _, _, cell_images, non_cell_images, _, _, _ = get_cell_and_no_cell_patches()
 
@@ -148,7 +146,7 @@ def test_1():
 
 
 def test_transformations():
-    from generate_datasets import get_cell_and_no_cell_patches, create_dataset_from_patches
+    from generate_datasets import get_cell_and_no_cell_patches
 
     translation_pixels = 4
     final_patch_size = 31
